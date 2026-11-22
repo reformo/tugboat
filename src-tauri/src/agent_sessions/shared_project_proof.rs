@@ -66,7 +66,7 @@ fn shared_guest_launches_use_the_agent_adapter_and_explicit_executable() {
             "--session-id",
             &id.argument(),
             "--permission-mode",
-            "manual"
+            "auto"
         ]
     );
     let command = AgentKind::ClaudeCode

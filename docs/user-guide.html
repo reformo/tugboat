@@ -104,7 +104,7 @@
 
     <section id="sessions">
       <h2>Work with chats and terminals</h2>
-      <p>Start a separate conversation with <strong>New Chat</strong>. Select a running chat in the sidebar to switch its terminal into view. Other chats continue running. Codex can show a working indicator beside its title. For Claude Code, read the terminal to see progress and permission requests.</p>
+      <p>Start a separate conversation with <strong>New Chat</strong>. Select a running chat in the sidebar to switch its terminal into view. Other chats continue running. Codex can show a working indicator beside its title. For Claude Code, read the terminal to see progress and any permission requests.</p>
       <p>Tugboat shows the name you set in Claude Code. If you have not named the chat, Tugboat uses Claude’s generated title or your first message. A chat with only local commands shows <strong>Untitled Claude chat</strong> until a title is available.</p>
       <p>A new chat shows its agent in the sidebar until its saved title is available. A number distinguishes additional untitled chats for the same agent.</p>
       <p>Use the mouse wheel or trackpad to read earlier output. A full-screen agent scrolls its conversation view. Shells and command results scroll their saved terminal output. New output preserves your position in terminal history. Typing returns the terminal to its latest output.</p>
@@ -159,7 +159,7 @@
       <h3>Understand agent permissions</h3>
       <p>Under <strong>File and network boundaries</strong>, Codex starts with <strong>Use the Brig boundary with the agent sandbox disabled</strong> selected. In that mode Codex has full access inside the guest. Brig still controls Mac folder sharing and guest network traffic. Codex does not ask for command approval.</p>
       <p>To use the extra Codex workspace sandbox, clear that option before you start or resume a chat. Codex can write within the workspace and disables network access from its commands. The approval setting remains <code>never</code>. Check the option again after changing the project or plan. A running chat keeps the mode it started with.</p>
-      <p>Claude Code uses the Brig boundary and asks for permission in its terminal when required. Read the proposed action before answering. Tugboat offers the workspace sandbox control for Codex only.</p>
+      <p>Claude Code uses the Brig boundary. A new Claude Code chat starts in auto mode. In this mode, Claude Code decides which actions to approve without a permission request. A resumed chat uses manual mode and asks for permission in its terminal when required. Read the proposed action before answering. Tugboat offers the workspace sandbox control for Codex only.</p>
       <p><strong>Check Brig boundaries</strong> tests file sharing and network behavior in the current environment. Compare the expected and observed results. An inconclusive result can mean two hosts share an address or the active policy has no suitable comparison host. The check reports observations. It does not change the policy. Hosted tools such as Codex web search operate separately from guest commands. A hosted result cannot establish that the guest reached that site.</p>
     </section>
 

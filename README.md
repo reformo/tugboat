@@ -108,7 +108,7 @@ The private renewable record is `<records folder>/claude/session.json`, with dir
 
 Stopping an environment clears its memory copy. The shared account remains connected. Starting a chat restores the copy after checking the account and network policy. Transcripts remain in that environment's guest home. **Check connection** renews the shared account. **Sign out of Tugboat** requires Claude chats and guest terminals to end. It clears managed copies and reports unconfirmed remote revocation. Removing one environment preserves the shared account.
 
-Claude uses the Brig boundary and manual permission requests. The Codex sandbox option does not apply to Claude. The Mac manages provider authorization. Retest browser authorization and access copies when updating guest agents.
+Claude uses the Brig boundary. New Claude chats start in auto permission mode. Resumed Claude chats use manual permission requests. The Codex sandbox option does not apply to Claude. The Mac manages provider authorization. Retest browser authorization and access copies when updating guest agents.
 
 ### Chats and environments
 

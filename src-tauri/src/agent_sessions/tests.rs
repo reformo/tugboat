@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 const SESSION: &str = "1a5bc5b5-af21-432d-bf07-e2218dd9f9bf";
 const OTHER_SESSION: &str = "2a5bc5b5-af21-432d-bf07-e2218dd9f9bf";
-const HELP: &str = "  --session-id <uuid>  New chat\n  --resume <uuid>  Resume chat\n  --permission-mode <mode>  Mode (choices: \"manual\", \"plan\")\n  --other  Something else\n";
+const HELP: &str = "  --session-id <uuid>  New chat\n  --resume <uuid>  Resume chat\n  --permission-mode <mode>  Mode (choices: \"auto\", \"manual\", \"plan\")\n  --other  Something else\n";
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 #[test]
@@ -273,9 +273,9 @@ fn claude_chat_and_shell_commands_use_only_the_selected_guest_reference() {
         claude::arguments(checked, Action::Shell, None, None).unwrap(),
         vec!["sh", &checked.project.reference()]
     );
-    for (action, option) in [
-        (Action::NewChat, "--session-id"),
-        (Action::Resume, "--resume"),
+    for (action, option, mode) in [
+        (Action::NewChat, "--session-id", "auto"),
+        (Action::Resume, "--resume", "manual"),
     ] {
         let arguments = claude::arguments(checked, action, Some(&session), Some(true)).unwrap();
         assert_eq!(
@@ -287,7 +287,7 @@ fn claude_chat_and_shell_commands_use_only_the_selected_guest_reference() {
                 option,
                 SESSION,
                 "--permission-mode",
-                "manual"
+                mode
             ]
         );
     }
@@ -420,12 +420,27 @@ fn unprepared_offline_unsigned_and_unsupported_guests_do_not_start_claude_chats(
     fixture.set("AUTH_EXIT", "0");
     for help in [
         "--session-id <uuid> --resume <uuid>",
-        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: default\n --other manual",
-        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: manual-beta",
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: default\n --other auto",
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: auto-beta",
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"manual\"",
     ] {
         fixture.set("HELP", help);
-        assert!(claude::arguments(&fixture.checked, Action::NewChat, Some(&session), None).unwrap_err().contains("required session and manual"));
+        assert!(claude::arguments(&fixture.checked, Action::NewChat, Some(&session), None).unwrap_err().contains("required session and auto"));
     }
+    fixture.set(
+        "HELP",
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"manual\"",
+    );
+    assert!(claude::arguments(&fixture.checked, Action::Resume, Some(&session), None).is_ok());
+    fixture.set(
+        "HELP",
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"auto\"",
+    );
+    assert!(
+        claude::arguments(&fixture.checked, Action::Resume, Some(&session), None)
+            .unwrap_err()
+            .contains("required session and manual")
+    );
 }
 
 #[test]

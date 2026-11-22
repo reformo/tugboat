@@ -36,7 +36,7 @@ function renderSessionRows(body: HTMLElement, sessions: Conversation[], state: S
     }
     const date = document.createElement('span'); date.className = 'session-date';
     const agent = document.createElement('span'); agent.className = 'session-agent-tag'; agent.textContent = agentName(conversation.agentKind);
-    let description = new Date(conversation.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    let description = new Date(conversation.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     if (conversation.subagentCount && !readOnly) description += ' · Includes ' + conversation.subagentCount + ' subagent' + (conversation.subagentCount === 1 ? '' : 's');
     if (readOnly) description += ' · ' + (conversation.relationStatus === 'orphan' ? 'Parent session unavailable' : conversation.relationStatus === 'invalid' ? 'Invalid session relationship' : 'Unverified subagent relationship') + ' · Recorded state: ' + conversation.state;
     if (conversation.available === false) description += unverified ? ' · Session availability not verified' : ' · Session file unavailable';

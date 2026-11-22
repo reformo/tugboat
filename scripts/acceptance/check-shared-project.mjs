@@ -151,8 +151,9 @@ try {
   await guest(codex, 'sandbox', '-c', 'sandbox_mode="danger-full-access"', '--', '/bin/sh', '-ec',
     'printf guest > /root/phase1-brig-boundary; test ! -e "$1"', 'phase1', evidence);
   const help = await guest('claude', '--help');
+  assert.match(help.stdout, /--permission-mode[^]*?"auto"/);
   assert.match(help.stdout, /--permission-mode[^]*?"manual"/);
-  check('Codex sandbox modes and the Claude manual permission option', [codexVersion, claudeVersion]);
+  check('Codex sandbox modes and the Claude auto and manual permission options', [codexVersion, claudeVersion]);
 
   const curlOptions = ['-q', '--noproxy', '*', '--connect-timeout', '8', '--max-time', '12', '-sS', '-o', '/dev/null', '-w', '%{http_code}'];
   const providerCodes = {};

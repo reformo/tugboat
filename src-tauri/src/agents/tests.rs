@@ -139,7 +139,7 @@ fn claude_commands_match_the_live_cli_contract_and_require_a_new_session_id() {
         (AgentCommand::Logout, vec!["auth", "logout"]),
         (
             AgentCommand::NewChat(Some(&session)),
-            vec!["--session-id", SESSION, "--permission-mode", "manual"],
+            vec!["--session-id", SESSION, "--permission-mode", "auto"],
         ),
         (
             AgentCommand::Resume(&session),

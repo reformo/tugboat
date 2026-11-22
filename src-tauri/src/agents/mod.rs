@@ -1,4 +1,4 @@
-mod claude;
+pub(crate) mod claude;
 pub(crate) mod codex;
 mod command;
 mod session_id;

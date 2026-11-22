@@ -1,6 +1,6 @@
 use super::Action;
 use crate::{
-    agents::{AgentCommand, AgentKind, SessionId},
+    agents::{claude as claude_agent, AgentCommand, AgentKind, SessionId},
     environment::{shared_runtime, CheckedProject},
 };
 use serde::Deserialize;
@@ -35,7 +35,7 @@ fn read_authentication(output: &crate::platform::command::CommandOutput) -> Resu
     Ok(authentication.logged_in)
 }
 
-fn supports_manual(help: &str) -> bool {
+fn supports_permission_mode(help: &str, mode: &str) -> bool {
     let Some((_, options)) = help.split_once("--permission-mode") else {
         return false;
     };
@@ -43,7 +43,7 @@ fn supports_manual(help: &str) -> bool {
         .lines()
         .take_while(|line| !line.trim_start().starts_with('-'))
         .flat_map(str::split_whitespace)
-        .any(|word| word.trim_matches(['"', '\'', ',', '[', ']', '(', ')']) == "manual")
+        .any(|word| word.trim_matches(['"', '\'', ',', '[', ']', '(', ')']) == mode)
 }
 
 pub(super) fn arguments(
@@ -64,10 +64,16 @@ pub(super) fn arguments(
         "Prepare the selected Claude environment first.",
     )?;
     let require_session = || session.ok_or("Choose a Claude chat session ID.");
-    let command = match action {
+    let (command, permission_mode) = match action {
         Action::Shell => return admission.prepare(vec!["sh".into(), checked.project.reference()]),
-        Action::NewChat => AgentCommand::NewChat(Some(require_session()?)),
-        Action::Resume => AgentCommand::Resume(require_session()?),
+        Action::NewChat => (
+            AgentCommand::NewChat(Some(require_session()?)),
+            claude_agent::NEW_CHAT_PERMISSION_MODE,
+        ),
+        Action::Resume => (
+            AgentCommand::Resume(require_session()?),
+            claude_agent::RESUME_PERMISSION_MODE,
+        ),
     };
     admission.online(
         &checked.settings.network,
@@ -94,12 +100,11 @@ pub(super) fn arguments(
     )?;
     if !help.stdout.contains("--session-id")
         || !help.stdout.contains("--resume")
-        || !supports_manual(&help.stdout)
+        || !supports_permission_mode(&help.stdout, permission_mode)
     {
-        return Err(
-            "Guest Claude does not support the required session and manual permission options."
-                .into(),
-        );
+        return Err(format!(
+            "Guest Claude does not support the required session and {permission_mode} permission options."
+        ));
     }
     admission.capabilities()?;
     let command = AgentKind::ClaudeCode.command(command)?;

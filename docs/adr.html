@@ -166,7 +166,7 @@
 
       <article id="adr-007">
         <h3>ADR-007 · Keep agent permission modes in each agent adapter</h3>
-        <p>Both agents run inside Brig. New and resumed Codex chats default to <code>--sandbox danger-full-access --ask-for-approval never</code>. The alternative uses <code>workspace-write</code> with command network access disabled and the same approval setting. Claude Code uses <code>--permission-mode manual</code>.</p>
+        <p>Both agents run inside Brig. New and resumed Codex chats default to <code>--sandbox danger-full-access --ask-for-approval never</code>. The alternative uses <code>workspace-write</code> with command network access disabled and the same approval setting. Claude Code uses <code>--permission-mode manual</code>. <a href="#adr-026">ADR-026</a> replaces the Claude mode for new chats.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>Brig supplies the outer file and network boundary. Codex supports a second workspace restriction. Claude supplies its own interactive permission flow.</dd>
@@ -351,6 +351,17 @@
           <dd>After verification, Tugboat checks active sessions while it blocks new terminal starts. It asks again if a new session started. The existing shutdown sequence runs before replacement. The restart process waits for the old app to release its records lock. It checks that the approved version opens its window and the original records. It can show recovery if the new app fails to start. Publication checks that the signed disk image and update archive contain the same app.</dd>
         </dl>
         <p class="source"><a href="../src-tauri/src/desktop/update/mod.rs">Update checks</a> · <a href="../src-tauri/src/desktop/lifecycle/update.rs">Update shutdown</a> · <a href="../.github/workflows/macos-release.yml">Signed publication</a></p>
+      </article>
+      <article id="adr-026">
+        <h3>ADR-026 · Start new Claude Code chats in auto mode</h3>
+        <p>This decision replaces the Claude mode for new chats in <a href="#adr-007">ADR-007</a>. New Claude Code chats start with <code>--permission-mode auto</code>. Resumed chats continue to use <code>--permission-mode manual</code>.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users want new chats to start in auto mode by default. Brig still supplies the outer file and network boundary.</dd>
+          <dt>Consequence</dt>
+          <dd>Claude Code decides which actions to approve without a permission request in the terminal. The user can change the mode in the running chat. The launch path checks that the guest program supports the mode for the selected action. A guest without <code>auto</code> cannot start a new chat.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agent_sessions/claude.rs">Claude capability check</a></p>
       </article>
     </section>
 

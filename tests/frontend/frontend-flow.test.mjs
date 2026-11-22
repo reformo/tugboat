@@ -2877,6 +2877,23 @@ test('main session counts use singular and plural subagent labels in the table a
   harness.dom.window.close();
 });
 
+test('session dates use the client time zone and a 24-hour clock', async () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = 'Europe/Istanbul';
+  try {
+    const conversation = conversationFixture({ id: 'afternoon', title: 'Afternoon chat', updatedAt: Date.UTC(2026, 10, 22, 11, 5) });
+    const harness = await interfaceHarness({ project_dashboard: () => sessionDashboard([conversation]) });
+    await harness.ready; harness.element('choose-folder').click(); await flush();
+    const date = harness.element('session-table-body').querySelector('[data-session-id="' + fixtureConversationKey(conversation.id) + '"] .session-date');
+    assert.match(date.textContent, /Nov 22, 14:05/);
+    assert.doesNotMatch(date.textContent, /AM|PM/);
+    harness.dom.window.close();
+  } finally {
+    if (previousZone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousZone;
+  }
+});
+
 test('root archive, Trash and restore preserve descendant raw states and unique project totals', async () => {
   const family = contractExample('root-two-children-grandchild-followup');
   const main = family.conversations[0];

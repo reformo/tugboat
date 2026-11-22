@@ -1,4 +1,8 @@
 use super::{AgentCommand, GuestCommand};
+
+pub(crate) const NEW_CHAT_PERMISSION_MODE: &str = "auto";
+pub(crate) const RESUME_PERMISSION_MODE: &str = "manual";
+
 pub fn command(command: AgentCommand<'_>) -> Result<GuestCommand, String> {
     let arguments = match command {
         AgentCommand::Version => vec!["--version".into()],
@@ -9,7 +13,7 @@ pub fn command(command: AgentCommand<'_>) -> Result<GuestCommand, String> {
             "--session-id".into(),
             session.argument(),
             "--permission-mode".into(),
-            "manual".into(),
+            NEW_CHAT_PERMISSION_MODE.into(),
         ],
         AgentCommand::NewChat(None) => {
             return Err("Choose a UUID for the new Claude Code session.".into())
@@ -18,7 +22,7 @@ pub fn command(command: AgentCommand<'_>) -> Result<GuestCommand, String> {
             "--resume".into(),
             session.argument(),
             "--permission-mode".into(),
-            "manual".into(),
+            RESUME_PERMISSION_MODE.into(),
         ],
     };
     Ok(GuestCommand::new(
