@@ -11,10 +11,6 @@ pub struct PolicyEditor {
 }
 
 impl PolicyEditor {
-    pub fn create(name: &str, hosts: &[String]) -> Result<Self, String> {
-        Self::egress(name, false, hosts)
-    }
-
     // Brig ignores allowed hosts under an allow default. Tugboat keeps them so the choice survives.
     pub(crate) fn egress(
         name: &str,

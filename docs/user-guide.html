@@ -131,7 +131,8 @@
 
     <section id="settings">
       <h2>Set resources and network access</h2>
-      <p><strong>Settings → General</strong> supplies app defaults. Open <strong>Project settings</strong> to check a project’s Brig reference and change its resources, agent options, and network access. The left menu has these sections: <strong>Overview</strong>, <strong>General</strong>, <strong>Agents</strong>, <strong>Network</strong>, <strong>GitHub</strong>, <strong>Web preview</strong>, <strong>Guest image</strong>, and <strong>Environment</strong>.</p>
+      <p>Select <strong>Settings</strong> at the bottom of the sidebar, or press <kbd>⌘,</kbd>. Settings opens as a dark dialog above the current view. Use the menu on the left side of the dialog to open a section: <strong>General</strong>, <strong>Providers</strong>, <strong>Brig</strong>, <strong>System Checks</strong>, and the <strong>New projects</strong> group with <strong>Resources</strong>, <strong>Network</strong>, and <strong>Agents</strong>. Press <kbd>Esc</kbd> or select the close button to close the dialog.</p>
+      <p>The <strong>New projects</strong> group supplies the values that a new project starts with. Open <strong>Project settings</strong> to check a project’s Brig reference and change its resources, agent options, and network access. The left menu has these sections: <strong>Overview</strong>, <strong>General</strong>, <strong>Agents</strong>, <strong>Network</strong>, <strong>GitHub</strong>, <strong>Web preview</strong>, <strong>Guest image</strong>, and <strong>Environment</strong>.</p>
       <div class="table-wrap" role="region" aria-labelledby="settings-scope-caption" tabindex="0">
         <table>
           <caption id="settings-scope-caption">Where settings take effect</caption>
@@ -146,6 +147,16 @@
           </tbody>
         </table>
       </div>
+      <h3>Set the values for new projects</h3>
+      <ol>
+        <li>Open <strong>Settings</strong>. Select a section in the <strong>New projects</strong> group.</li>
+        <li>Change the values. Select <strong>Save settings</strong>. One save stores the values of all three sections and the <strong>Brig</strong> section.</li>
+      </ol>
+      <ul>
+        <li><strong>Resources</strong>: A project uses the CPU count and memory until you save its own values in <strong>Project settings → General</strong>. Tugboat copies the network mode into a project when you add the project.</li>
+        <li><strong>Network</strong>: Tugboat writes the agent domains, the public internet switch, the package manager switch, and the additional domains to the project policy when it prepares a new project for the first time. A project that already has a policy keeps it.</li>
+        <li><strong>Agents</strong>: Tugboat copies the Claude Code and Codex options into a project when you add the project. A project that you added before keeps its own options. To change one project, use <strong>Project settings → Agents</strong>.</li>
+      </ul>
       <p>The default Codex host list contains <code>auth.openai.com</code>, <code>chatgpt.com</code>, and <code>api.openai.com</code>. Claude Code starts with <code>api.anthropic.com</code>, <code>platform.claude.com</code>, and <code>claude.ai</code>. A project that downloads dependencies can require additional destinations.</p>
       <h3>Change network access for one existing environment</h3>
       <ol>
@@ -167,7 +178,7 @@
         <li>If a process is working, Tugboat shows <strong>Stop the environment to apply this change?</strong> with the list of processes. Select <strong>Stop and apply</strong> or <strong>Stop and save</strong> to end them and continue. Select <strong>Cancel</strong> to keep them running. Tugboat then applies nothing.</li>
       </ul>
       <p>Working processes are Codex chats that are busy, all Claude Code chats, guest terminals, environment startup, sign-in, Git commands, and project tests. Tugboat cannot read whether a Claude Code chat is busy, so it always asks. A terminal on the Mac does not block a change.</p>
-      <p>The agent domains from <strong>Settings → General</strong> are always allowed. The Network section lists them below the options. Tugboat keeps your package manager and domain choices while all public internet access is on, so they apply again when you turn it off.</p>
+      <p>The agent domains from <strong>Settings → Network</strong> are always allowed. The Network section lists them below the options. Tugboat keeps your package manager and domain choices while all public internet access is on, so they apply again when you turn it off.</p>
       <p>All public internet access works only when the project policy is the only policy for the environment. Revoke GitHub access first, because the GitHub access policy denies other destinations. If another policy denies other destinations, the Network section tells you that public access is not in effect.</p>
       <p>A policy shared with other sessions, an externally managed policy, or one with advanced rules is read-only in this section. Have its owner review requested changes. Expand <strong>Policy document and binding</strong> to read the document. If an external change was intentional, read its current document before choosing <strong>Accept this policy version</strong>. Use <strong>Attach to this session</strong> for a detached policy. A detached policy blocks environment preparation.</p>
       <h3>Understand agent permissions</h3>
@@ -178,7 +189,7 @@
           <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Command effect</th></tr></thead>
           <tbody>
             <tr><th scope="row">Claude Code → Model</th><td>Default (Claude Opus 5.5)</td><td>Adds <code>--model</code> with the full model ID. The list shows Claude Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2, the <code>opusplan</code> mode, and older models.</td></tr>
-            <tr><th scope="row">Claude Code → Effort</th><td>Default</td><td>Adds <code>--effort</code> with low, medium, high, xhigh, or max.</td></tr>
+            <tr><th scope="row">Claude Code → Effort</th><td>Default</td><td>Adds <code>--effort</code> with low, medium, high, xhigh, or max. Claude Code lowers xhigh and max to high for models that do not support them. The status line shows the effort that Claude Code uses.</td></tr>
             <tr><th scope="row">Claude Code → Fallback model</th><td>None</td><td>Adds <code>--fallback-model</code>. Claude Code uses this model when the main model is overloaded or not available.</td></tr>
             <tr><th scope="row">Claude Code → Append to system prompt</th><td>Empty</td><td>Adds <code>--append-system-prompt</code> with up to 4000 characters. Claude Code records the prompt at the first request of a chat and reuses it on resume.</td></tr>
             <tr><th scope="row">Claude Code → Auto mode</th><td>On</td><td>On starts chats with <code>--permission-mode auto</code>. Claude Code decides which actions to approve without a permission request. Off starts chats with <code>--permission-mode manual</code>, and Claude Code asks before actions.</td></tr>
@@ -366,7 +377,7 @@
         <dt>macOS cannot verify the downloaded app</dt>
         <dd>Check that the disk image is for Apple silicon. Check how the distributor signed and notarized that specific build. A development image with an ad hoc signature can fail Gatekeeper. Obtain a verified distribution build or use the local development installation instructions. <a href="../README.md">Installation notes</a>.</dd>
         <dt>“Brig not found”, “Unsupported Brig version”, or a bundled tool fails verification</dt>
-        <dd>Open <strong>Settings → General</strong>. Check <strong>Brig CLI path</strong>. Clear an obsolete custom path to select bundled Brig. Select <strong>Save settings</strong>. Run <strong>System Checks → Check this Mac</strong> again. If a bundled tool is missing or damaged, reinstall the app from a trusted copy. Changing guest settings cannot repair the Mac package.</dd>
+        <dd>Open <strong>Settings → Brig</strong>. Check <strong>Brig CLI path</strong>. Clear an obsolete custom path to select bundled Brig. Select <strong>Save settings</strong>. Run <strong>System Checks → Check this Mac</strong> again. If a bundled tool is missing or damaged, reinstall the app from a trusted copy. Changing guest settings cannot repair the Mac package.</dd>
         <dt>The Mac check times out or shows an old result</dt>
         <dd>Read the status above <strong>Brig doctor results</strong>. A cancelled or timed-out check can leave the previous completed check visible for the same Brig path. Run <strong>Check this Mac</strong> again and wait for completion. A boot-image download finding on a fresh Mac can coexist with a valid installed runtime.</dd>
       </dl>
@@ -439,7 +450,7 @@
           </tbody>
         </table>
       </div>
-      <p>Drag the sidebar’s right edge to resize it. With the divider focused, the arrow keys adjust its width. <kbd>Home</kbd> and <kbd>End</kbd> select its minimum and maximum. In Settings, the arrow keys move between the four tabs. Hover over a shortened project or chat title to see its full text.</p>
+      <p>Drag the sidebar’s right edge to resize it. With the divider focused, the arrow keys adjust its width. <kbd>Home</kbd> and <kbd>End</kbd> select its minimum and maximum. In Settings and Project settings, <kbd>Tab</kbd> moves through the section menu and <kbd>Esc</kbd> closes the dialog. Hover over a shortened project or chat title to see its full text.</p>
     </section>
   </main>
   <footer>

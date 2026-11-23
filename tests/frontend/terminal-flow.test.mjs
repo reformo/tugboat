@@ -146,7 +146,7 @@ test('double launch creates one Codex process and navigation returns to that pro
   assert.equal(harness.calls.filter(call => call.command === 'start_agent_session').length, 1);
   finishStart(); await flush();
   harness.element('settings-navigation').click(); await flush();
-  assert.equal(harness.element('project-view').hidden, true);
+  assert.equal(harness.element('settings-view').hidden, false);
   assert.ok(harness.calls.some(call => call.command === 'terminal_layout' && call.args.identifier === 42 && call.args.layout.visible === false));
   harness.element('sidebar-current-project').click(); await flush();
   assert.ok(harness.calls.some(call => call.command === 'terminal_focus' && call.args.identifier === 42));
@@ -429,7 +429,8 @@ test('an already running chat stays reachable while the plan is checked', async 
   assert.equal(harness.calls.filter(call => call.command === 'start_agent_session').length, 0);
   assert.equal(harness.element('start-codex').disabled, true);
   harness.element('settings-navigation').click(); await flush();
-  assert.equal(harness.element('workspace-status-bar').hidden, true);
+  // The project view stays below the Settings modal, so its plan status stays in the status bar.
+  assert.equal(harness.element('workspace-status-bar').hidden, false);
   assert.equal(harness.calls.filter(call => call.command === 'terminal_layout').at(-1).args.layout.visible, false);
   harness.element('sidebar-session-list').querySelector('button').click(); await flush();
   assert.equal(harness.element('terminal-panel').hidden, false);

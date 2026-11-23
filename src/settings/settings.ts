@@ -4,6 +4,7 @@ import { setBusy, setLoading } from '../ui/loading';
 import { FormState } from '../ui/form-state';
 import { renderWorkspaceStatus, setWorkspaceStatus } from '../app/workspace-status';
 import { createStore } from 'zustand/vanilla';
+import { currentFieldValue, hostLines, initialProjectDefaults, initializeProjectDefaults, limitDefaultReasoning, projectDefaultFields, readProjectDefaults, showFieldValue, type ProjectDefaults } from './project-defaults';
 
 interface AgentDefaults { profile: string; allowedHosts: string[] }
 
@@ -17,6 +18,8 @@ export interface Settings {
   verification: 'require' | 'warn' | 'off';
   network: 'isolated' | 'offline';
   telemetry: boolean;
+  // Rust leaves out an unchanged record, so an earlier Tugboat can still read settings.json.
+  projectDefaults?: ProjectDefaults;
 }
 
 interface TelemetryStatus { recorded: string | null; effective: string; message: string | null }
@@ -24,30 +27,24 @@ interface TelemetryStatus { recorded: string | null; effective: string; message:
 function input(id: string): HTMLInputElement { return document.getElementById(id) as HTMLInputElement; }
 function select(id: string): HTMLSelectElement { return document.getElementById(id) as HTMLSelectElement; }
 
-export function selectSettingsTab(name: 'general' | 'providers' | 'system-checks'): void {
-  for (const tab of document.querySelectorAll<HTMLButtonElement>('#settings-tabs [role="tab"]')) {
+export type SettingsSection = 'general' | 'providers' | 'brig' | 'system-checks' | 'resources' | 'network' | 'agents';
+
+// The left menu shows one section. The save controls appear only for sections in the settings form.
+export function selectSettingsTab(name: SettingsSection): void {
+  for (const tab of document.querySelectorAll<HTMLButtonElement>('#settings-tabs button')) {
     const selected = tab.id === 'settings-tab-' + name;
-    tab.setAttribute('aria-selected', String(selected));
-    tab.tabIndex = selected ? 0 : -1;
+    tab.setAttribute('aria-current', String(selected));
     document.getElementById(tab.getAttribute('aria-controls')!)!.hidden = !selected;
   }
+  document.getElementById('settings-form-footer')!.hidden = !document.getElementById('settings-panel-' + name)!.closest('form');
   renderWorkspaceStatus();
 }
 
 export function initializeSettingsTabs(): void {
-  const tabs = [...document.querySelectorAll<HTMLButtonElement>('#settings-tabs [role="tab"]')];
-  for (const tab of tabs) {
-    tab.addEventListener('click', () => selectSettingsTab(tab.id.replace('settings-tab-', '') as Parameters<typeof selectSettingsTab>[0]));
-    tab.addEventListener('keydown', event => {
-      const index = tabs.indexOf(tab);
-      const destinations: Record<string, number> = { ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 };
-      const destination = destinations[event.key];
-      if (destination === undefined) return;
-      event.preventDefault();
-      tabs[destination].click();
-      tabs[destination].focus();
-    });
+  for (const tab of document.querySelectorAll<HTMLButtonElement>('#settings-tabs button')) {
+    tab.addEventListener('click', () => { selectSettingsTab(tab.id.replace('settings-tab-', '') as SettingsSection); });
   }
+  initializeProjectDefaults();
 }
 
 function renderTelemetry(status: TelemetryStatus): void {
@@ -55,7 +52,7 @@ function renderTelemetry(status: TelemetryStatus): void {
   document.getElementById('telemetry-status')!.textContent = 'Saved Brig preference: ' + (names[status.recorded ?? ''] ?? 'Unavailable') + '. Effective for app commands: ' + names[status.effective] + '.' + (status.message ? ' ' + status.message : '');
 }
 
-function settingsFields(settings: Settings): Record<string, string> {
+function settingsFields(settings: Settings): Record<string, string | boolean> {
   return {
     'cli-path': settings.cliPath ?? '',
     'cpu-count': String(settings.cpus),
@@ -63,18 +60,19 @@ function settingsFields(settings: Settings): Record<string, string> {
     'network-preference': settings.network,
     'allowed-hosts': settings.codex.allowedHosts.join('\n'),
     'claude-code-allowed-hosts': settings.claudeCode.allowedHosts.join('\n'),
+    'telemetry-preference': settings.telemetry,
+    ...projectDefaultFields(settings.projectDefaults ?? initialProjectDefaults),
   };
 }
 
+// A field that the user changed since the previous read keeps the local edit.
 function renderSettings(settings: Settings, previous: Settings | null): void {
   const values = settingsFields(settings), original = previous ? settingsFields(previous) : null;
   for (const [id, value] of Object.entries(values)) {
-    const field = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-    if (original && field.value !== original[id]) continue;
-    field.value = value;
+    if (original && currentFieldValue(id) !== original[id]) continue;
+    showFieldValue(id, value);
   }
-  const telemetry = input('telemetry-preference');
-  if (!previous || telemetry.checked === previous.telemetry) telemetry.checked = settings.telemetry;
+  limitDefaultReasoning();
 }
 
 export async function initializeSettings(): Promise<void> {
@@ -142,8 +140,8 @@ export async function initializeSettings(): Promise<void> {
     if (control.form !== form) return;
     const firstInvalid = [...form.elements].find(element => (element as HTMLInputElement).willValidate && !(element as HTMLInputElement).validity.valid);
     if (control !== firstInvalid) return;
-    const panel = control.closest<HTMLElement>('[role="tabpanel"]')!;
-    selectSettingsTab(panel.id.replace('settings-panel-', '') as Parameters<typeof selectSettingsTab>[0]);
+    const panel = control.closest<HTMLElement>('.settings-panel')!;
+    selectSettingsTab(panel.id.replace('settings-panel-', '') as SettingsSection);
     control.focus();
   }, true);
   form.addEventListener('submit', async event => {
@@ -158,18 +156,13 @@ export async function initializeSettings(): Promise<void> {
       ...submission.value,
       schemaVersion: 2,
       cliPath: input('cli-path').value.trim() || null,
-      codex: {
-        profile: submission.value.codex.profile,
-        allowedHosts: [...new Set((document.getElementById('allowed-hosts') as HTMLTextAreaElement).value.split('\n').map(value => value.trim()).filter(Boolean))],
-      },
-      claudeCode: {
-        profile: submission.value.claudeCode.profile,
-        allowedHosts: [...new Set((document.getElementById('claude-code-allowed-hosts') as HTMLTextAreaElement).value.split('\n').map(value => value.trim()).filter(Boolean))],
-      },
+      codex: { profile: submission.value.codex.profile, allowedHosts: hostLines('allowed-hosts') },
+      claudeCode: { profile: submission.value.claudeCode.profile, allowedHosts: hostLines('claude-code-allowed-hosts') },
       cpus: input('cpu-count').valueAsNumber,
       memoryMb: input('memory-mb').valueAsNumber,
       network: network.value as Settings['network'],
       telemetry: input('telemetry-preference').checked,
+      projectDefaults: readProjectDefaults(),
     };
     try {
       const telemetry = await invoke<TelemetryStatus>('save_settings', { settings });

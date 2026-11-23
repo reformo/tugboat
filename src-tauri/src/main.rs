@@ -30,6 +30,7 @@ unsafe extern "C" {
 #[tauri::command]
 fn frontend_ready(window: WebviewWindow) -> Result<(), String> {
     let app = window.app_handle().clone();
+    terminal::hide_views(&app)?;
     startup::ready(window)?;
     app.state::<lifecycle::RelaunchConfirmation>().confirm(&app);
     update::start(&app);

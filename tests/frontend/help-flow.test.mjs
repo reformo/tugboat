@@ -29,11 +29,13 @@ test('Help opens the complete bundled user guide above Settings and supports vie
   const identifiers = [...document.querySelectorAll('[id]')].map(element => element.id);
   assert.equal(new Set(identifiers).size, identifiers.length);
   harness.element('settings-navigation').click(); await flush();
-  assert.equal(help.hidden, true);
+  assert.equal(help.hidden, false);
   assert.equal(harness.element('settings-view').hidden, false);
-  assert.equal(harness.element('help-navigation').hasAttribute('aria-current'), false);
+  assert.equal(harness.element('help-navigation').getAttribute('aria-current'), 'page');
   assert.equal(document.activeElement, harness.element('settings-heading'));
+  assert.equal(help.hasAttribute('inert'), true);
   harness.element('project-navigation').click(); await flush();
+  assert.equal(harness.element('settings-view').hidden, true);
   assert.equal(help.hidden, true);
   assert.equal(harness.element('project-view').hidden, false);
   assert.equal(harness.element('project-navigation').getAttribute('aria-current'), 'page');

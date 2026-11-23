@@ -412,3 +412,36 @@ fn an_active_record_cannot_select_an_old_profile_or_a_sibling_reference() {
         project.reference()
     );
 }
+
+#[test]
+fn a_new_project_starts_with_the_project_defaults_and_a_known_project_keeps_its_choices() {
+    let fixture = Fixture::new();
+    let mut registry = Registry::default();
+    let existing = fixture.register(&mut registry, "existing");
+    let mut defaults = settings::Settings {
+        network: settings::Network::Offline,
+        ..settings::Settings::default()
+    };
+    defaults.project_defaults = serde_json::from_value(json!({"agents": {
+        "claude": {"permissionMode": "manual", "attribution": "shown", "options": {"model": "claude-sonnet-5-5"}},
+        "codex": {"boundary": "workspace", "options": {"reasoningEffort": "high"}}
+    }}))
+    .unwrap();
+    let path = fixture.0.join("added");
+    fs::create_dir(&path).unwrap();
+    let added = registry.register_with_defaults(&path, &defaults).unwrap();
+    assert_eq!(added.network, settings::Network::Offline);
+    assert_eq!(added.agent_settings(), defaults.project_defaults.agents);
+    assert_eq!(
+        registry.project(&added.id).unwrap().agent_settings(),
+        defaults.project_defaults.agents
+    );
+    let reopened = registry
+        .register_with_defaults(&existing.path, &defaults)
+        .unwrap();
+    assert_eq!(reopened.network, existing.network);
+    assert_eq!(
+        reopened.agent_settings(),
+        crate::agents::AgentSettings::default()
+    );
+}

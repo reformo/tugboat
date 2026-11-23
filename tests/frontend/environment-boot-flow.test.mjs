@@ -208,7 +208,8 @@ test('a late environment start response preserves Help and Settings navigation',
     assert.equal(harness.dom.window.document.activeElement, heading);
     response.resolve(70); await flush();
     assert.equal(harness.element(view + '-view').hidden, false);
-    assert.equal(harness.element('project-view').hidden, true);
+    // Settings is a modal above the project view. Help replaces the project view.
+    assert.equal(harness.element('project-view').hidden, view === 'help');
     assert.equal(harness.element('environment-boot-overlay').hidden, true);
     assert.equal(harness.dom.window.document.activeElement, heading);
     assert.equal(harness.calls.filter(call => call.command === 'terminal_focus').length, 0);

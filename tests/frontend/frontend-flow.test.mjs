@@ -306,7 +306,7 @@ test('status bar follows the visible view and keeps plan errors and retry action
   await harness.ready; harness.element('recent-project-list').querySelector('.recent-project').click(); await flush();
   const bar = harness.element('workspace-status-bar');
   assert.match(bar.textContent, /execution plan/i);
-  harness.element('settings-navigation').click(); await flush();
+  harness.element('help-navigation').click(); await flush();
   assert.equal(bar.hidden, true);
   harness.element('sidebar-current-project').click(); await flush();
   assert.equal(bar.hidden, false);
@@ -439,10 +439,14 @@ test('network defaults survive tab changes without an agent profile selector', a
   await harness.ready;
   harness.element('settings-navigation').click();
   assert.equal(harness.element('settings-tab-agent-profile'), null);
+  harness.element('settings-tab-network').click();
   harness.element('allowed-hosts').value = 'codex.example';
-  harness.element('settings-tab-general').dispatchEvent(new harness.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }));
-  assert.equal(harness.dom.window.document.activeElement, harness.element('settings-tab-providers'));
-  harness.element('settings-tab-general').click();
+  harness.element('settings-tab-providers').click();
+  assert.equal(harness.element('settings-tab-providers').getAttribute('aria-current'), 'true');
+  assert.equal(harness.element('settings-panel-network').hidden, true);
+  assert.equal(harness.element('settings-form-footer').hidden, true);
+  harness.element('settings-tab-network').click();
+  assert.equal(harness.element('settings-form-footer').hidden, false);
   assert.equal(harness.element('allowed-hosts').value, 'codex.example');
   harness.element('save-settings').click(); await flush();
   const request = harness.calls.find(call => call.command === 'save_settings');
@@ -753,14 +757,14 @@ test('General settings load and save each agent host list independently', async 
   harness.element('settings-navigation').click();
   for (const [id, agent, hosts] of [['allowed-hosts', 'Codex', saved.codex.allowedHosts], ['claude-code-allowed-hosts', 'Claude Code', saved.claudeCode.allowedHosts]]) {
     const control = harness.element(id);
-    assert.equal(control.closest('[role="tabpanel"]').id, 'settings-panel-general');
+    assert.equal(control.closest('.settings-panel').id, 'settings-panel-network');
     assert.match(control.labels[0].textContent, new RegExp('Default ' + agent + ' destinations'));
     assert.equal(control.value, hosts.join('\n'));
   }
   harness.element('allowed-hosts').value = ' codex.example\n\ncodex.example\napi.openai.com ';
   harness.element('claude-code-allowed-hosts').value = ' claude.example\n\nclaude.example\napi.anthropic.com ';
   harness.element('settings-tab-providers').click();
-  harness.element('settings-tab-general').click();
+  harness.element('settings-tab-network').click();
   harness.element('save-settings').click(); await flush();
   const request = harness.calls.find(call => call.command === 'save_settings');
   assert.equal(request.args.settings.schemaVersion, 2);
@@ -814,6 +818,7 @@ test('settings use skeletons for reads and a button loader for saves with error 
   harness.element('allowed-hosts').value = 'codex.example';
   harness.element('claude-code-allowed-hosts').value = 'claude.example';
   harness.element('settings-navigation').click();
+  harness.element('settings-tab-network').click();
   harness.element('save-settings').click(); await flush();
   assert.equal(harness.element('save-settings').getAttribute('aria-busy'), 'true');
   assert.equal(harness.element('save-settings').disabled, true);

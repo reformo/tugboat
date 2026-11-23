@@ -4,7 +4,8 @@ use crate::{
     projects::{self, EnvironmentId, Project, Projects, Registry},
     storage, terminal,
 };
-use access::{Egress, NetworkAccess};
+use access::Egress;
+pub(crate) use access::NetworkAccess;
 pub(crate) use editor::PolicyEditor;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

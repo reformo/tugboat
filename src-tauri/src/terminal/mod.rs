@@ -511,6 +511,26 @@ pub(crate) async fn on_main<T: Send + 'static>(
     .map_err(|error| error.to_string())?
 }
 
+/// A reloaded page has no layout for the native views of running terminals. Hide them until
+/// the page shows one again through `terminal_layout`, so they cannot cover a dialog.
+pub(crate) fn hide_views(app: &AppHandle) -> Result<(), String> {
+    app.run_on_main_thread(|| {
+        // Hiding a view is safe even if another thread panicked while it held the lock.
+        let states = sessions()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for state in states.values() {
+            let pointer = state.view.pointer();
+            if pointer != 0 {
+                unsafe {
+                    brig_terminal_show(pointer as *mut c_void, false);
+                }
+            }
+        }
+    })
+    .map_err(|error| error.to_string())
+}
+
 pub(crate) async fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
     on_main(app, move || {
         unsafe { brig_terminal_copy_text(text.as_ptr(), text.len()) };

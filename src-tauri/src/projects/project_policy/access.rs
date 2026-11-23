@@ -76,7 +76,8 @@ impl Egress {
 }
 
 /// The network choices that the project settings show for one policy.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+/// The default value denies public internet access and adds no hosts.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NetworkAccess {
     public_internet: bool,
@@ -84,7 +85,7 @@ pub struct NetworkAccess {
 }
 
 /// The destinations that the policy allows in addition to the default agent hosts.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AllowedHosts {
     package_managers: bool,
@@ -110,6 +111,17 @@ impl NetworkAccess {
                 additional,
             },
         }
+    }
+
+    /// Checks the domains and the limit without the agent hosts.
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        self.egress(&[]).map(|_| ())
+    }
+
+    /// The default rule and the allowed hosts of a new project policy.
+    pub(crate) fn rules(&self, defaults: &[String]) -> Result<(bool, Vec<String>), String> {
+        let egress = self.egress(defaults)?;
+        Ok((egress.public_internet, egress.hosts))
     }
 
     pub(super) fn egress(&self, defaults: &[String]) -> Result<Egress, String> {
@@ -242,6 +254,21 @@ mod tests {
                 hosts: defaults()
             }
         );
+    }
+
+    #[test]
+    fn new_policy_rules_start_closed_and_follow_the_selected_defaults() {
+        assert_eq!(
+            NetworkAccess::default().rules(&defaults()).unwrap(),
+            (false, defaults())
+        );
+        let open = access(json!({"publicInternet": true, "hosts": {"packageManagers": false, "additional": ["example.com"]}}));
+        let (public_internet, hosts) = open.rules(&defaults()).unwrap();
+        assert!(public_internet);
+        assert_eq!(hosts, ["api.anthropic.com", "chatgpt.com", "example.com"]);
+        let invalid = access(json!({"publicInternet": false, "hosts": {"packageManagers": false, "additional": ["*.example.com"]}}));
+        assert!(invalid.validate().is_err());
+        assert!(invalid.rules(&defaults()).is_err());
     }
 
     #[test]

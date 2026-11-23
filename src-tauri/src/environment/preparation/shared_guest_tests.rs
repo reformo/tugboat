@@ -110,6 +110,7 @@ fn production_shared_guest_boot_and_reopen() {
     let definition = guest.brig.policy(&policy.name).unwrap().unwrap();
     assert!(super::matches_template(
         &definition,
+        false,
         &super::allowed_hosts(&settings)
     ));
     let checked = environment::check_environment(

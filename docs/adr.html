@@ -429,6 +429,17 @@
         </dl>
         <p class="source"><a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agents/claude_status_line.py">Claude status line</a> · <a href="../src-tauri/src/agents/codex.rs">Codex arguments</a> · <a href="../src-tauri/src/agents/options.rs">Option values</a> · <a href="../src/projects/project-agent-settings.ts">Agents section</a></p>
       </article>
+      <article id="adr-033">
+        <h3>ADR-033 · Set the agent and network values of a new project in application Settings</h3>
+        <p>Application Settings is a dark dialog with a left menu, like Project settings. Its <strong>New projects</strong> group sets the values that a new project starts with. <code>settings.json</code> has an optional <code>projectDefaults</code> record with the agent settings of <a href="#adr-032">ADR-032</a> and the network access of <a href="#adr-030">ADR-030</a>. Tugboat copies the agent settings into the project record when the user adds the project. Preparation writes the network access into the project policy when it creates that policy for the first time. The deny default stays the default value.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users want to set their usual model, permissions, and network access once, instead of in each new project.</dd>
+          <dt>Consequence</dt>
+          <dd>Existing projects and existing policies keep their values. A change to the network defaults between adding a project and its first preparation applies to that project. If the policy creation was interrupted and the defaults changed, the template check refuses the policy and keeps the document. The settings file keeps schema version 2. Rust leaves out <code>projectDefaults</code> while it has its default values, because an earlier Tugboat refuses unknown fields. After a user saves other values, an earlier Tugboat cannot read the settings file.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/desktop/settings/project_defaults.rs">Project defaults</a> · <a href="../src-tauri/src/projects/mod.rs">Registration</a> · <a href="../src-tauri/src/environment/preparation/mod.rs">First policy</a> · <a href="../src/settings/project-defaults.ts">New projects sections</a> · <a href="../src/settings/settings.ts">Settings dialog</a></p>
+      </article>
     </section>
 
     <p class="note">When a change replaces a decision, keep its ID and link to the replacement. Record the changed behavior, the reason, and the source that implements it.</p>

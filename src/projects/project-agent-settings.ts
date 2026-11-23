@@ -7,7 +7,7 @@ type Boundary = 'brig' | 'workspace';
 type ClaudeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 type CodexEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 // Keep equal to MODELS_WITHOUT_ULTRA in the Rust Codex adapter.
-const modelsWithoutUltra = ['gpt-6-luna', 'gpt-5.6-luna'];
+export const modelsWithoutUltra = ['gpt-6-luna', 'gpt-5.6-luna'];
 interface ClaudeOptions { model: string | null; effort: ClaudeEffort | null; fallbackModel: string | null; appendSystemPrompt: string | null }
 interface CodexOptions { model: string | null; reasoningEffort: CodexEffort | null }
 export interface AgentSettings {
@@ -59,7 +59,7 @@ function isSwitch(input: Field): input is HTMLInputElement {
 }
 
 // A model saved before the list changed stays visible and selected.
-function showValue(input: Field, value: string): void {
+export function showValue(input: Field, value: string): void {
   if (input.tagName !== 'SELECT') { input.value = value; return; }
   const select = input as HTMLSelectElement;
   for (const option of select.querySelectorAll('option[data-saved-value]')) option.remove();

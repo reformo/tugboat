@@ -71,16 +71,21 @@ class ModalStack {
     return active?.hasAttribute('data-inline-modal') && dialogOpen(active) ? active : undefined;
   }
 
+  // Only the most recent open inline modal makes its background inert.
   private updateInlineModal(): void {
-    const panel = document.querySelector<HTMLElement>('[data-inline-modal]');
-    if (!panel) return;
-    const open = dialogOpen(panel);
-    panel.toggleAttribute('inert', open && this.dialogs.at(-1) !== panel);
-    // Keep the settings panel in WebKit's document tree. Only its background branches are inert.
-    for (let foreground: Element | null = panel; foreground?.parentElement && foreground.parentElement !== document.body; foreground = foreground.parentElement) {
-      for (const sibling of foreground.parentElement.children) {
-        if (sibling !== foreground) sibling.toggleAttribute('inert', open);
-      }
+    const panels = [...document.querySelectorAll<HTMLElement>('[data-inline-modal]')];
+    const active = this.dialogs.filter(dialog => panels.includes(dialog) && dialogOpen(dialog)).at(-1);
+    for (const panel of panels) if (panel !== active) setBackgroundInert(panel, false);
+    if (active) setBackgroundInert(active, true);
+    for (const panel of panels) panel.toggleAttribute('inert', dialogOpen(panel) && this.dialogs.at(-1) !== panel);
+  }
+}
+
+// Keep a settings panel in WebKit's document tree. Only its background branches are inert.
+function setBackgroundInert(panel: HTMLElement, inert: boolean): void {
+  for (let foreground: Element | null = panel; foreground?.parentElement && foreground.parentElement !== document.body; foreground = foreground.parentElement) {
+    for (const sibling of foreground.parentElement.children) {
+      if (sibling !== foreground) sibling.toggleAttribute('inert', inert);
     }
   }
 }

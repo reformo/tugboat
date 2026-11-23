@@ -1,4 +1,4 @@
-use super::{AgentDefaults, Network, Settings, Verification};
+use super::{AgentDefaults, Network, ProjectDefaults, Settings, Verification};
 use crate::storage::RecordSchema;
 use serde::Deserialize;
 use serde_json::Value;
@@ -65,6 +65,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<RecordSchema<Settings>, String> {
             allowed_hosts: old.allowed_hosts,
         },
         claude_code: Settings::default().claude_code,
+        project_defaults: ProjectDefaults::default(),
     };
     settings.validate()?;
     Ok(RecordSchema::Upgrade(settings))

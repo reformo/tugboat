@@ -9,6 +9,8 @@ use tauri::AppHandle;
 mod migration;
 #[cfg(test)]
 mod migration_tests;
+mod project_defaults;
+pub use project_defaults::ProjectDefaults;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -59,6 +61,8 @@ pub struct Settings {
     pub verification: Verification,
     pub network: Network,
     pub telemetry: bool,
+    #[serde(skip_serializing_if = "ProjectDefaults::is_default")]
+    pub project_defaults: ProjectDefaults,
 }
 
 impl Default for Settings {
@@ -87,6 +91,7 @@ impl Default for Settings {
             verification: Verification::Require,
             network: Network::Isolated,
             telemetry: false,
+            project_defaults: ProjectDefaults::default(),
         }
     }
 }
@@ -128,6 +133,7 @@ impl Settings {
         }
         self.codex.validate()?;
         self.claude_code.validate()?;
+        self.project_defaults.validate()?;
         if self.cpus == 0 || self.cpus > 32 {
             return Err("CPU count must be between 1 and 32.".into());
         }

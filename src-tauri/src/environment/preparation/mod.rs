@@ -44,9 +44,11 @@ pub(crate) fn allowed_hosts(settings: &Settings) -> Vec<String> {
     hosts
 }
 
-fn matches_template(policy: &Value, expected: &[String]) -> bool {
+// `expected` is sorted and has no duplicates.
+fn matches_template(policy: &Value, public_internet: bool, expected: &[String]) -> bool {
     let spec = &policy["spec"];
-    if spec["egress"]["default"] != "deny"
+    let default = if public_internet { "allow" } else { "deny" };
+    if spec["egress"]["default"] != default
         || spec
             .get("routes")
             .is_some_and(|routes| !routes.as_array().is_some_and(Vec::is_empty))
@@ -161,6 +163,8 @@ fn prepare_selected(
         return Err("Stop the running environment before restoring its project policy.".into());
     }
     let hosts = allowed_hosts(settings);
+    // A new project policy starts with the network defaults from application settings.
+    let new_policy = settings.project_defaults.network.rules(&hosts);
     if project.policy.is_none() {
         if hosts.len() > 64 {
             return Err(
@@ -208,7 +212,8 @@ fn prepare_selected(
                     .into(),
             );
         }
-        let editor = PolicyEditor::create(&policy_link.name, &hosts)?;
+        let (public_internet, policy_hosts) = new_policy.clone()?;
+        let editor = PolicyEditor::egress(&policy_link.name, public_internet, &policy_hosts)?;
         let mut editor_brig = Brig {
             executable: brig.executable.clone(),
             environment: brig.environment.clone(),
@@ -238,12 +243,15 @@ fn prepare_selected(
             return Err("The policy changed outside the app. Changes were preserved. Review the current policy before accepting it.".into());
         }
     }
-    if policy_link.fingerprint.is_none()
-        && (!policy_link.owned || !matches_template(&policy, &hosts))
-    {
-        return Err(
-            "The interrupted policy does not match the expected template. The document was preserved.".into(),
-        );
+    if policy_link.fingerprint.is_none() {
+        let (public_internet, mut expected_hosts) = new_policy?;
+        expected_hosts.sort();
+        expected_hosts.dedup();
+        if !policy_link.owned || !matches_template(&policy, public_internet, &expected_hosts) {
+            return Err(
+                "The interrupted policy does not match the expected template. The document was preserved.".into(),
+            );
+        }
     }
     project
         .policy

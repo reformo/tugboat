@@ -546,11 +546,18 @@ impl Registry {
     ) -> Result<Project, String> {
         let previous_count = self.projects.len();
         let mut project = self.register(selected)?;
-        if self.projects.len() > previous_count {
-            project.network = defaults.network.clone();
-            self.update(project.clone())?;
+        if self.projects.len() <= previous_count {
+            return Ok(project);
         }
-        Ok(project)
+        project.network = defaults.network.clone();
+        self.update(project.clone())?;
+        // A record update keeps the saved agent choices, so the new record receives them directly.
+        self.projects
+            .iter_mut()
+            .find(|record| record.id == project.id)
+            .ok_or("Project not found.")?
+            .set_agent_settings(defaults.project_defaults.agents.clone());
+        self.project(&project.id)
     }
 
     pub fn register(&mut self, selected: &Path) -> Result<Project, String> {

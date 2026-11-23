@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import './style.css';
 import { initializeHost, type HostReadiness } from './settings/host';
-import { initializeSettings, initializeSettingsTabs, selectSettingsTab } from './settings/settings';
+import { initializeSettings, initializeSettingsTabs, selectSettingsTab, type SettingsSection } from './settings/settings';
 import { initializeAppUpdates } from './settings/app-updates';
 import { renderProjects, renderConversations, renderTerminals, isStandaloneConversation, standaloneConversations, terminalCaption, terminalNames, conversationKey, terminalMatches, agentName, isChat, sameProject, sameProjectView, type AgentKind, type Conversation, type Project, type ProjectContext, type TerminalStatus } from './projects/projects';
 import { createAgentLogo } from './providers/agent-logo';
@@ -514,7 +514,7 @@ function projectRescanStatus(message: string | null, busy = false): void {
 }
 
 function shouldRescanProjectLibrary(): boolean {
-  return projectRescan.started() && !projectView.hidden && appData.selectedProject === null
+  return projectRescan.started() && !projectView.hidden && !dialogOpen(settingsView) && appData.selectedProject === null
     && (appData.projects.length > 0 || projectRescanError !== null);
 }
 
@@ -817,8 +817,7 @@ element<HTMLSelectElement>('first-chat-agent').addEventListener('change', event 
   resumeFirstSetup();
 });
 element('first-chat-system-checks').addEventListener('click', () => {
-  showView('settings');
-  selectSettingsTab('system-checks');
+  showSettings('system-checks', 'first-chat-system-checks');
   element('check-host').focus();
 });
 
@@ -1119,20 +1118,39 @@ element('guest-shell').addEventListener('click', () => {
   void openTerminal('start_agent_session', { identifier: id, environmentId, agentKind: 'codex', fingerprint: selectedPlanFingerprint, action: 'shell' }, 'Guest terminal');
 });
 element('project-provider-settings').addEventListener('click', () => {
-  showView('settings'); selectSettingsTab('providers'); element(newChatAgent() === 'claude-code' ? 'claude-account-heading' : 'shared-chatgpt-heading').focus();
+  showSettings('providers', 'project-provider-settings'); element(newChatAgent() === 'claude-code' ? 'claude-account-heading' : 'shared-chatgpt-heading').focus();
 });
 
-function showView(view: 'project' | 'settings' | 'help'): void {
+// Application settings open as a modal above the current view.
+function showSettings(section?: SettingsSection, returnFocusId = 'settings-navigation'): void {
   closeProjectDialogs();
+  if (section || !dialogOpen(settingsView)) selectSettingsTab(section ?? 'general');
+  showDialog(settingsView, returnFocusId);
+  element('settings-heading').focus();
+  void appUpdates.refresh();
+  renderWorkspaceStatus();
+  scheduleProjectRescan();
+  sharedChatgpt?.updateAvailability();
+  void updateTerminalLayout();
+}
+element('close-settings').addEventListener('click', () => { closeDialog(settingsView); });
+settingsView.addEventListener('close', () => {
+  renderWorkspaceStatus();
+  scheduleProjectRescan();
+  rescanVisibleProjectLibrary();
+  void updateTerminalLayout();
+});
+
+function showView(view: 'project' | 'help'): void {
+  closeProjectDialogs();
+  if (dialogOpen(settingsView)) closeDialog(settingsView);
   projectView.hidden = view !== 'project';
-  settingsView.hidden = view !== 'settings';
   helpView.hidden = view !== 'help';
   renderWorkspaceStatus();
-  for (const navigation of [projectNavigation, settingsNavigation, helpNavigation, element('sidebar-current-project')]) navigation.removeAttribute('aria-current');
-  const navigation = { project: appData.selectedProject ? element('sidebar-current-project') : projectNavigation, settings: settingsNavigation, help: helpNavigation };
+  for (const navigation of [projectNavigation, helpNavigation, element('sidebar-current-project')]) navigation.removeAttribute('aria-current');
+  const navigation = { project: appData.selectedProject ? element('sidebar-current-project') : projectNavigation, help: helpNavigation };
   navigation[view].setAttribute('aria-current', 'page');
   element(view + '-heading').focus();
-  if (view === 'settings') void appUpdates.refresh();
   scheduleProjectRescan();
   sharedChatgpt?.updateAvailability();
   void updateTerminalLayout();
@@ -1499,7 +1517,7 @@ refreshSessionsButton.addEventListener('click', () => {
   refreshSessionsButton.focus({ preventScroll: true });
   void refreshConversations();
 });
-settingsNavigation.addEventListener('click', () => showView('settings'));
+settingsNavigation.addEventListener('click', () => { showSettings(); });
 helpNavigation.addEventListener('click', () => showView('help'));
 chooseFolderButton.addEventListener('click', () => { void chooseFolder(); });
 element('choose-first-chat').addEventListener('click', () => { void chooseFolder(); });
@@ -1844,7 +1862,7 @@ await listen<{ identifier: number; message: string }>('terminal-input-error', ev
 
 await listen<string>('menu-action', async event => {
   if (event.payload === 'choose-folder' && appData.selectedProject === null) { showView('project'); void chooseFolder(); }
-  if (event.payload === 'settings') showView('settings');
+  if (event.payload === 'settings') showSettings();
   if (event.payload === 'project') { await hideTerminal(); showView('project'); rescanVisibleProjectLibrary(); }
   if (event.payload === 'return-terminal') { showView('project'); await returnToTerminal(); }
 });
