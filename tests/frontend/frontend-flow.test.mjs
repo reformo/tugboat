@@ -385,12 +385,20 @@ test('API-equivalent information opens beside the total and stays open when usag
   assert.match(harness.element('usage-note').textContent, /Estimated API equivalent in USD.*Includes archived and deleted sessions.*OpenAI catalogue checked 2026-11-10.*Each request retains its dated rates.*Cache writes 0.*ChatGPT subscription billing is separate/s);
   control.focus(); control.click();
   assert.equal(details.open, true);
-  const updated = sessionDashboard([chat], { usage: { ...emptyUsage, unpricedRequests: 1 } });
+  const partlyPriced = { ...emptyUsage, requests: 2, unpricedRequests: 1, costUsd: 0.5 };
+  const updated = sessionDashboard([{ ...chat, usage: partlyPriced }], { usage: partlyPriced });
   await harness.listeners.get('project-usage-updated')({ payload: [project.id, updated] });
   assert.equal(harness.element('usage-info'), details);
   assert.equal(details.open, true);
   assert.equal(harness.dom.window.document.activeElement, control);
-  assert.match(harness.element('usage-note').textContent, /1 request\(s\) unpriced/);
+  assert.match(harness.element('usage-note').textContent, /\* 1 request\(s\) unpriced and excluded from the amount/);
+  const projectAmount = harness.element('project-usage').querySelectorAll('dd')[4];
+  assert.equal(projectAmount.firstChild.textContent, '$0.50');
+  assert.equal(projectAmount.querySelector('.unpriced-marker').title, 'Excludes 1 unpriced request');
+  const rowAmount = harness.element('session-table-body').rows[0].cells[5];
+  assert.equal(rowAmount.firstChild.textContent, '$0.50');
+  assert.ok(rowAmount.querySelector('.unpriced-marker'));
+  assert.doesNotMatch(projectAmount.textContent + rowAmount.textContent, /\+ unpriced/);
   harness.dom.window.document.body.click();
   assert.equal(details.open, false);
   control.click();
@@ -1950,7 +1958,13 @@ test('usage notifications update cumulative totals and prompt details retain unp
   assert.deepEqual([...known.cells].map(cell => cell.firstChild.textContent), ['gpt-6.1-sol', '12,000', '3,000 (25%)', '200', '80', '$0.012345']);
   assert.equal(known.cells[0].querySelector('small').textContent, 'standard tier (assumed)');
   assert.equal(known.cells[5].querySelector('time').dateTime, '2026-11-10');
-  assert.equal(first.tFoot.querySelector('td').textContent, '$0.0123 + unpriced');
+  const partialTotal = first.tFoot.querySelector('td');
+  assert.equal(partialTotal.firstChild.textContent, '$0.0123');
+  assert.doesNotMatch(partialTotal.textContent, /\+ unpriced/);
+  const marker = partialTotal.querySelector('.unpriced-marker');
+  assert.equal(marker.querySelector('[aria-hidden="true"]').textContent, '*');
+  assert.equal(marker.title, 'Excludes 1 unpriced request');
+  assert.equal(marker.querySelector('.visually-hidden').textContent, ' (excludes 1 unpriced request)');
   assert.equal(last.tBodies[0].rows[0].cells[2].textContent, 'Unknown');
   assert.equal(last.tFoot.querySelector('td').textContent, 'Unavailable');
 

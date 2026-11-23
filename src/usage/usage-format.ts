@@ -22,11 +22,32 @@ export function cacheWrites(usage: UsageSummary): string {
   if (usage.missingCacheWriteRequests || usage.unmeasuredTurns) return count(usage.cacheWrite) + ' + unknown';
   return count(usage.cacheWrite);
 }
-export function money(usage: UsageSummary): string {
+function missingMoney(usage: UsageSummary): string | null {
   if (usage.unmeasuredTurns && !usage.requests) return 'Unknown';
   if (usage.unpricedRequests && usage.requests === usage.unpricedRequests) return 'Unavailable';
-  const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(usage.costUsd);
-  return amount + (usage.unpricedRequests ? ' + unpriced' : '') + (usage.unmeasuredTurns ? ' + unknown' : '');
+  return null;
+}
+function amount(usage: UsageSummary): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(usage.costUsd);
+}
+function unknownSuffix(usage: UsageSummary): string { return usage.unmeasuredTurns ? ' + unknown' : ''; }
+export function money(usage: UsageSummary): string {
+  return missingMoney(usage) ?? amount(usage) + (usage.unpricedRequests ? ' + unpriced' : '') + unknownSuffix(usage);
+}
+function unpricedMarker(requests: number): HTMLElement {
+  const explanation = 'Excludes ' + count(requests) + ' unpriced request' + (requests === 1 ? '' : 's');
+  const marker = document.createElement('sup'); marker.className = 'unpriced-marker'; marker.title = explanation;
+  const symbol = document.createElement('span'); symbol.setAttribute('aria-hidden', 'true'); symbol.textContent = '*';
+  const label = document.createElement('span'); label.className = 'visually-hidden'; label.textContent = ' (' + explanation.toLowerCase() + ')';
+  marker.append(symbol, label); return marker;
+}
+// Shows a partial amount with an asterisk instead of the "+ unpriced" text.
+export function renderMoney(target: HTMLElement, usage: UsageSummary): void {
+  const missing = missingMoney(usage);
+  target.textContent = missing ?? amount(usage);
+  if (missing !== null) return;
+  if (usage.unpricedRequests) target.append(unpricedMarker(usage.unpricedRequests));
+  target.append(unknownSuffix(usage));
 }
 export function summaryText(usage: UsageSummary): string {
   return usageCount(usage, 'total') + ' tokens · ' + usageCount(usage, 'input') + ' input · ' + cachedCount(usage) + ' cached input · ' + cacheWrites(usage) + ' cache writes · ' + usageCount(usage, 'output') + ' output · ' + money(usage) + ' estimated API equivalent';

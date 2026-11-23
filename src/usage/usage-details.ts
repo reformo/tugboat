@@ -1,5 +1,5 @@
 import type { AgentUsageDetails, ConversationUsageDetails, PromptUsage, RequestRef, RequestUsage, TurnRef, TurnUsage, UsageSummary } from './usage-types';
-import { cachedCount, cachePercentage, cacheWrites, count, emptyUsage, money, summaryText, usageCount } from './usage-format';
+import { cachedCount, cachePercentage, cacheWrites, count, emptyUsage, renderMoney, summaryText, usageCount } from './usage-format';
 
 function identity(kind: string, ...parts: string[]): string { return 'usage-' + kind + '-' + parts.map(part => encodeURIComponent(part)).join(':'); }
 function requestIdentity(ref: RequestRef): string { return identity('request', ref.sessionId, ref.turnId, ref.requestKey); }
@@ -112,7 +112,7 @@ function turnSection(turn: TurnUsage, index: number, agent: AgentUsageDetails, p
     if (request.costUsd === null) usage.unpricedRequests++;
     else usage.costUsd += request.costUsd;
   }
-  table.tFoot!.querySelector('td')!.textContent = money(usage);
+  renderMoney(table.tFoot!.querySelector('td')!, usage);
   return section;
 }
 
@@ -126,7 +126,8 @@ function scopeTable(details: ConversationUsageDetails, selected: AgentUsageDetai
   const scopes: [string, UsageSummary][] = [[selected.lineage.kind === 'subagent' ? 'Selected agent' : 'Main agent', details.ownUsage], ['Subagents', details.descendantsUsage], ['Combined', details.combinedUsage]];
   for (const [label, usage] of scopes) {
     const row = body.insertRow(); const heading = document.createElement('th'); heading.scope = 'row'; heading.textContent = label; row.append(heading);
-    for (const value of [usageCount(usage, 'input'), cachedCount(usage), cacheWrites(usage), usageCount(usage, 'output'), usageCount(usage, 'total'), money(usage)]) row.insertCell().textContent = value;
+    for (const value of [usageCount(usage, 'input'), cachedCount(usage), cacheWrites(usage), usageCount(usage, 'output'), usageCount(usage, 'total')]) row.insertCell().textContent = value;
+    renderMoney(row.insertCell(), usage);
   }
   group.append(table); return group;
 }

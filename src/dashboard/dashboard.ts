@@ -4,7 +4,7 @@ export type { SessionState } from '../usage/usage-types';
 export type Dashboard = RecordedDashboard & { sessionAvailability?: 'unverified'; availabilityVerified?: boolean };
 export const savedSessionsStatus = 'Showing saved sessions while checking for updates.';
 
-import { cachedCount, cachePercentage, cacheWrites, count, money, usageCount } from '../usage/usage-format';
+import { cachedCount, cachePercentage, cacheWrites, count, money, renderMoney, usageCount } from '../usage/usage-format';
 export { emptyUsage } from '../usage/usage-format';
 export { renderUsageDetails, usageDetailsStatus } from '../usage/usage-details';
 
@@ -47,6 +47,7 @@ function renderSessionRows(body: HTMLElement, sessions: Conversation[], state: S
     for (const value of conversation.usageAvailable === false ? ['—', '—', '—', '—', 'Usage unavailable'] : [usageCount(totals, 'input', true), cachedCount(totals, true), usageCount(totals, 'output', true), usageCount(totals, 'total', true), money(totals)]) {
       const cell = document.createElement('td'); cell.className = 'number-column'; cell.textContent = value; cell.title = conversation.usageAvailable === false ? 'No token measurements are available for this chat.' : [usageCount(totals, 'input') + ' input', cachedCount(totals) + ' cached input', cacheWrites(totals) + ' cache writes', usageCount(totals, 'output') + ' output', usageCount(totals, 'total') + ' total tokens', money(totals) + ' estimated API equivalent', 'Recorded source coverage: ' + conversation.coverage].join(' · '); row.append(cell);
     }
+    if (conversation.usageAvailable !== false) renderMoney(row.lastElementChild as HTMLTableCellElement, totals);
     const actions = document.createElement('td'); actions.className = 'session-row-actions';
     const usage = actionButton('usage', 'Usage for ' + actionTarget, () => { void details(conversation); });
     usage.id = usageButtonId(conversationKey(conversation));
@@ -73,6 +74,7 @@ export function renderDashboard(dashboard: Dashboard, state: SessionState, resum
       description.textContent = count(usage.cached) + ' ';
       const percentage = document.createElement('small'); percentage.textContent = '(' + cachePercentage(usage.cached, usage.input) + ')'; description.append(percentage);
     }
+    if (dashboard.usageAvailable !== false && index === 4) renderMoney(description, usage);
   });
   const hasClaude = dashboard.conversations.some(conversation => conversation.agentKind === 'claude-code');
   const hasCodex = dashboard.conversations.some(conversation => conversation.agentKind === 'codex');
@@ -83,7 +85,7 @@ export function renderDashboard(dashboard: Dashboard, state: SessionState, resum
   notes.push('Cache writes ' + cacheWrites(usage));
   if (usage.missingCachedRequests) notes.push('Some cache-read counts are unavailable');
   if (usage.unmeasuredTurns) notes.push(count(usage.unmeasuredTurns) + ' agent turn(s) without request measurements');
-  if (usage.unpricedRequests) notes.push(count(usage.unpricedRequests) + ' request(s) unpriced');
+  if (usage.unpricedRequests) notes.push('* ' + count(usage.unpricedRequests) + ' request(s) unpriced and excluded from the amount');
   if (usage.assumedTierRequests) notes.push('Standard rates assumed where service tier is not recorded');
   notes.push(hasClaude ? 'Subscription charges, account discounts, and server-tool charges are separate.' : 'ChatGPT subscription billing is separate.');
   if (dashboard.usageAvailable === false) notes.push('Some chats have no token measurements. Totals include recorded usage only.');
