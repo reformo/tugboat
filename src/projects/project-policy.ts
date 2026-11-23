@@ -132,7 +132,7 @@ export function initializeProjectPolicy(current: () => (ProjectContext & { proje
   section.addEventListener('toggle', () => { if (section.open && !state.current()) void readPolicy(); });
   publicInternet.addEventListener('change', () => { saveAccess(publicInternet, access => ({ ...access, publicInternet: publicInternet.checked })); });
   packageManagers.addEventListener('change', () => { saveAccess(packageManagers, access => ({ ...access, hosts: { ...access.hosts, packageManagers: packageManagers.checked } })); });
-  editDomains.addEventListener('click', () => { showEditor(domainsEditor.hidden); if (!domainsEditor.hidden) hosts.focus(); });
+  editDomains.addEventListener('click', () => { showEditor(Boolean(domainsEditor.hidden)); if (!domainsEditor.hidden) hosts.focus(); });
   cancelDomains.addEventListener('click', () => { renderAccess(state.current()?.policy ?? null); editDomains.focus(); });
   saveDomains.addEventListener('click', () => { saveAccess(saveDomains, access => ({ ...access, hosts: { ...access.hosts, additional: domainList(hosts.value) } })); });
   for (const [button, action] of [[attach, 'attach'], [detach, 'detach'], [accept, 'accept']] as const) {
