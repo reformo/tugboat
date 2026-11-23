@@ -84,7 +84,6 @@ pub async fn start_agent_session(
     agent_kind: AgentKind,
     fingerprint: String,
     action: Action,
-    use_brig_boundary: Option<bool>,
     session_id: Option<String>,
     layout: Layout,
 ) -> Result<u64, String> {
@@ -135,7 +134,6 @@ pub async fn start_agent_session(
             project,
             fingerprint,
             action.codex(),
-            use_brig_boundary,
             session_id,
             layout,
         )
@@ -185,7 +183,7 @@ pub async fn start_agent_session(
                 return Err(status.message);
             }
         }
-        let arguments = claude::arguments(&checked, action, session.as_ref(), use_brig_boundary)?;
+        let arguments = claude::arguments(&checked, action, session.as_ref())?;
         if action == Action::Resume {
             resume::require(&checked, session.as_ref().unwrap())?;
         }

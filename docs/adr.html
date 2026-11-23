@@ -154,7 +154,7 @@
 
       <article id="adr-006">
         <h3>ADR-006 · Apply the network policy to a specific Brig environment</h3>
-        <p>New settings use isolated networking and agent-specific host lists. The user can select offline mode. The app requires a bound policy that denies other outbound traffic by default. Changing application defaults affects new policies. Editing an existing policy requires the stopped environment and the current policy fingerprint.</p>
+        <p>New settings use isolated networking and agent-specific host lists. The user can select offline mode. The app requires a bound policy that denies other outbound traffic by default. <a href="#adr-030">ADR-030</a> adds one exception for all public internet access. Changing application defaults affects new policies. Editing an existing policy requires the stopped environment and the current policy fingerprint.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>Different agents need different service hosts. The project owner can review the actual policy and its binding independently of the application defaults.</dd>
@@ -166,7 +166,7 @@
 
       <article id="adr-007">
         <h3>ADR-007 · Keep agent permission modes in each agent adapter</h3>
-        <p>Both agents run inside Brig. New and resumed Codex chats default to <code>--sandbox danger-full-access --ask-for-approval never</code>. The alternative uses <code>workspace-write</code> with command network access disabled and the same approval setting. Claude Code uses <code>--permission-mode manual</code>. <a href="#adr-026">ADR-026</a> replaces the Claude mode for new chats.</p>
+        <p>Both agents run inside Brig. New and resumed Codex chats default to <code>--sandbox danger-full-access --ask-for-approval never</code>. The alternative uses <code>workspace-write</code> with command network access disabled and the same approval setting. Claude Code uses <code>--permission-mode manual</code>. <a href="#adr-026">ADR-026</a> replaces the Claude mode for new chats. <a href="#adr-029">ADR-029</a> makes both agent modes project settings.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>Brig supplies the outer file and network boundary. Codex supports a second workspace restriction. Claude supplies its own interactive permission flow.</dd>
@@ -354,7 +354,7 @@
       </article>
       <article id="adr-026">
         <h3>ADR-026 · Start new Claude Code chats in auto mode</h3>
-        <p>This decision replaces the Claude mode for new chats in <a href="#adr-007">ADR-007</a>. New Claude Code chats start with <code>--permission-mode auto</code>. Resumed chats continue to use <code>--permission-mode manual</code>.</p>
+        <p>This decision replaces the Claude mode for new chats in <a href="#adr-007">ADR-007</a>. New Claude Code chats start with <code>--permission-mode auto</code>. Resumed chats continue to use <code>--permission-mode manual</code>. <a href="#adr-027">ADR-027</a> replaces the mode for resumed chats.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>Users want new chats to start in auto mode by default. Brig still supplies the outer file and network boundary.</dd>
@@ -362,6 +362,72 @@
           <dd>Claude Code decides which actions to approve without a permission request in the terminal. The user can change the mode in the running chat. The launch path checks that the guest program supports the mode for the selected action. A guest without <code>auto</code> cannot start a new chat.</dd>
         </dl>
         <p class="source"><a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agent_sessions/claude.rs">Claude capability check</a></p>
+      </article>
+      <article id="adr-027">
+        <h3>ADR-027 · Resume Claude Code chats in auto mode</h3>
+        <p>This decision replaces the Claude mode for resumed chats in <a href="#adr-026">ADR-026</a>. New and resumed Claude Code chats start with <code>--permission-mode auto</code>.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users want auto mode by default in every Claude Code chat. A chat that started in auto mode also continues in auto mode.</dd>
+          <dt>Consequence</dt>
+          <dd>Tugboat does not start Claude Code chats in manual mode. The user can change the mode in the running chat. A guest without <code>auto</code> cannot start or resume a chat. <a href="#adr-029">ADR-029</a> lets a project select manual mode again. Auto mode stays the default.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agent_sessions/claude.rs">Claude capability check</a></p>
+      </article>
+      <article id="adr-028">
+        <h3>ADR-028 · Hide Claude Code Git attribution by default</h3>
+        <p>Each project saves one Claude Code attribution value: <code>hidden</code> or <code>shown</code>. The default is <code>hidden</code>, also for projects that existed before this decision. When the value is <code>hidden</code>, new and resumed Claude Code chats start with <code>--settings {"attribution":{"commit":"","pr":""}}</code>. When the value is <code>shown</code>, Tugboat adds no settings argument. <a href="#adr-032">ADR-032</a> adds the status line to the same settings document, so every chat now has <code>--settings</code>; only the attribution part depends on this value.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users do not want Claude Code attribution in Git commits and pull requests by default. A project setting must not depend on a file in the user's project folder.</dd>
+          <dt>Consequence</dt>
+          <dd>Command-line settings take priority over the Claude Code settings in the project folder and in the guest home. A project cannot turn attribution on with its own settings file while the value is <code>hidden</code>. The Project settings switch changes the value without stopping the environment. Running chats keep their arguments until they start or resume again. A guest without <code>--settings</code> cannot start or resume a chat while the value is <code>hidden</code>. The registry writes the field only for <code>shown</code>. An older Tugboat version rejects a registry that contains <code>shown</code>.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agent_sessions/claude.rs">Claude capability check</a> · <a href="../src-tauri/src/projects/record.rs">Project record</a> · <a href="../src/projects/project-agent-settings.ts">Attribution switch</a></p>
+      </article>
+      <article id="adr-029">
+        <h3>ADR-029 · Save agent command options for each project</h3>
+        <p>Each project saves three agent options: the Claude Code permission mode (<code>auto</code> or <code>manual</code>), the Claude Code attribution from <a href="#adr-028">ADR-028</a>, and the Codex boundary (<code>brig</code> or <code>workspace</code>). The defaults are <code>auto</code>, <code>hidden</code>, and <code>brig</code>. The launch path reads the values from the project record when a chat starts or resumes. The frontend no longer sends a boundary value with each launch.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users want to change agent command options for one project without changing other projects. The earlier Codex choice was a view state that reset after a plan change, so a new launch could silently use a different boundary.</dd>
+          <dt>Consequence</dt>
+          <dd>The Agents section of Project settings changes the values without stopping the environment. Running chats keep their arguments. A guest that does not list the selected permission mode cannot start or resume a Claude Code chat. The registry writes each field only when it differs from the default, so existing records stay unchanged. An older Tugboat version rejects a registry that contains a non-default value.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/agents/mod.rs">Agent settings</a> · <a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agent_sessions/codex.rs">Codex launch</a> · <a href="../src-tauri/src/projects/record.rs">Project record</a> · <a href="../src/projects/project-agent-settings.ts">Agents section</a></p>
+      </article>
+      <article id="adr-030">
+        <h3>ADR-030 · Allow all public internet access only through the owned project policy</h3>
+        <p>This decision adds one exception to the deny-by-default rule in <a href="#adr-006">ADR-006</a>. The Network section can save the project policy with <code>default: allow</code>. The plan check accepts an <code>allow</code> default only when Tugboat owns the project policy, no other policy is bound, and the merged plan has no deny rules. Tugboat keeps the allowed hosts in the document, so the package manager and domain choices apply again when the user turns public access off.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Some projects need destinations that a host list cannot predict. The user chooses this per project, and the default stays deny.</dd>
+          <dt>Consequence</dt>
+          <dd>Brig merges bound policies with the strictest default, so a second policy turns the run back to deny. Tugboat refuses to save public access while a GitHub access grant exists and reports when another policy restricts it. Boundary checks report an allow-default policy as inconclusive. Package manager domains are a fixed list of registry hosts in the policy, not a separate rule type. HTTP secrets and environment variables are not part of this decision.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/projects/project_policy/access.rs">Network access</a> · <a href="../src-tauri/src/projects/project_policy/editor.rs">Policy document</a> · <a href="../src-tauri/src/platform/brig/mod.rs">Plan check</a> · <a href="../src/projects/project-policy.ts">Network section</a></p>
+      </article>
+      <article id="adr-031">
+        <h3>ADR-031 · Stop the environment automatically before a settings change</h3>
+        <p>Network changes and General saves still need a stopped environment, as in <a href="#adr-006">ADR-006</a>. The interface now stops it first. When no guest process is working, Tugboat stops the environment without a question. Idle Codex chats close and stay resumable. When a guest process can be working, Tugboat lists the processes and asks before it stops them. The native policy guard counts the same guest processes that <code>stop_project</code> ends, so a Mac terminal no longer blocks a policy change.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users received a refusal that told them to stop the environment by hand, even when nothing was working. A working agent turn or command must not end without a warning.</dd>
+          <dt>Consequence</dt>
+          <dd>Only Codex reports a busy state through its terminal title. Tugboat treats every Claude Code chat, guest terminal, startup, sign-in, Git command, and test run as working. A guest that starts between the check and the change still causes the native refusal, and the user can retry. A rename in General does not stop the environment. The native save checks for a stopped environment only when CPU, memory, image verification, or network mode changes.</dd>
+        </dl>
+        <p class="source"><a href="../src/projects/environment-stop.ts">Stop gate</a> · <a href="../src/projects/operations.ts">Stop impact</a> · <a href="../src-tauri/src/projects/operations/mod.rs">Running check</a> · <a href="../src-tauri/src/projects/project_policy/mod.rs">Policy guard</a></p>
+      </article>
+      <article id="adr-032">
+        <h3>ADR-032 · Save model options and set the status line for each chat</h3>
+        <p>This decision extends <a href="#adr-029">ADR-029</a>. Each project also saves optional agent arguments. Claude Code: <code>--model</code>, <code>--effort</code>, <code>--fallback-model</code>, and <code>--append-system-prompt</code>. Codex: <code>--model</code> and <code>-c model_reasoning_effort</code> (low, medium, high, xhigh, max, or ultra). The Agents section offers fixed model lists from the model data checked on 2026-11-23: current models by full model ID and older models in their own group. The native save refuses ultra for <code>gpt-6-luna</code> and <code>gpt-5.6-luna</code>. Tugboat also adds a fixed status line to every new and resumed chat. Claude Code gets a <code>statusLine</code> command in the <code>--settings</code> document. The command is a short <code>python3</code> script that prints the model, effort, input and output tokens, context left, and the 5-hour and 7-day limits left. Codex gets <code>-c tui.status_line</code> with model and reasoning, context left, input and output tokens, and the 5-hour and weekly limits.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Users want to choose the model and effort for one project, and to see usage in every chat without setting it up again.</dd>
+          <dt>Consequence</dt>
+          <dd>The record writes <code>claudeOptions</code> and <code>codexOptions</code> only when a value is set. Model names are validated and cannot start with a dash. The appended prompt uses the joined <code>--option=value</code> form. The launch path refuses a selected Claude option or a Codex model that the guest help text does not list. Every Claude chat now needs <code>--settings</code>. The Claude status line fields come from the input schema in the Claude Code 2.1.318 binary; the guest pins 2.1.326. The Codex status line item names were not verified against Codex 0.171.0 when this decision was recorded, and Tugboat passes them to every Codex chat at the user's request. A wrong item name can stop Codex chats from starting, so check a Codex chat after each Codex update.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/agents/claude.rs">Claude arguments</a> · <a href="../src-tauri/src/agents/claude_status_line.py">Claude status line</a> · <a href="../src-tauri/src/agents/codex.rs">Codex arguments</a> · <a href="../src-tauri/src/agents/options.rs">Option values</a> · <a href="../src/projects/project-agent-settings.ts">Agents section</a></p>
       </article>
     </section>
 

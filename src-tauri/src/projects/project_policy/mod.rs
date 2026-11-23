@@ -4,12 +4,13 @@ use crate::{
     projects::{self, EnvironmentId, Project, Projects, Registry},
     storage, terminal,
 };
+use access::{Egress, NetworkAccess};
 pub(crate) use editor::PolicyEditor;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 
+mod access;
 mod editor;
 mod state;
 use state::PolicyState;
@@ -19,11 +20,13 @@ use state::PolicyState;
 pub struct PolicyView {
     project_id: String,
     environment_id: EnvironmentId,
-    document: Value,
+    document: serde_json::Value,
     fingerprint: String,
     editable: bool,
     attached: bool,
-    allowed_hosts: Vec<String>,
+    access: Option<NetworkAccess>,
+    default_hosts: Vec<String>,
+    public_internet_restricted: bool,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -33,35 +36,6 @@ pub enum Action {
     Attach,
     Detach,
     Accept,
-}
-
-fn simple_hosts(document: &Value) -> Option<Vec<String>> {
-    if document["spec"]["egress"]["default"] != "deny"
-        || document["spec"]
-            .as_object()?
-            .keys()
-            .any(|key| key != "egress")
-        || document["spec"]["egress"]
-            .as_object()?
-            .keys()
-            .any(|key| !["default", "allow"].contains(&key.as_str()))
-    {
-        return None;
-    }
-    if document["spec"]["egress"]["allow"].is_null() {
-        return Some(Vec::new());
-    }
-    document["spec"]["egress"]["allow"]
-        .as_array()?
-        .iter()
-        .map(|rule| {
-            if rule.as_object()?.len() != 1 {
-                return None;
-            }
-            let host = rule["host"].as_str()?;
-            settings::valid_host(host).then(|| host.to_owned())
-        })
-        .collect()
 }
 
 pub(crate) fn sole_binding(list: &str, policy: &str, project: &Project) -> bool {
@@ -98,14 +72,25 @@ fn view(
     let attached = plan["data"]["policies"]
         .as_array()
         .is_some_and(|policies| policies.iter().any(|name| name == &link.name));
-    let hosts = simple_hosts(&document);
+    let egress = Egress::read(&document);
+    let defaults = crate::environment::preparation::allowed_hosts(settings);
+    // Brig takes the strictest default of all bound policies, so another policy can deny the rest.
+    let public_internet_restricted = attached
+        && egress.as_ref().is_some_and(Egress::public_internet)
+        && plan["data"]["egress"]["default"] != "allow";
     let list = brig.checked(&["policy".into(), "ls".into()], None)?;
     Ok(PolicyView {
         project_id: project.id.clone(),
         environment_id: project.environment_id.clone(),
         fingerprint: brig::fingerprint(&document)?,
-        editable: link.owned && hosts.is_some() && sole_binding(&list.stdout, &link.name, project),
-        allowed_hosts: hosts.unwrap_or_default(),
+        editable: link.owned
+            && egress.is_some()
+            && sole_binding(&list.stdout, &link.name, project),
+        access: egress
+            .as_ref()
+            .map(|egress| NetworkAccess::observed(egress, &defaults)),
+        default_hosts: defaults,
+        public_internet_restricted,
         document,
         attached,
     })
@@ -119,7 +104,7 @@ pub(crate) fn change(
     environment_id: &EnvironmentId,
     expected: &str,
     action: Action,
-    hosts: Vec<String>,
+    access: Option<NetworkAccess>,
     private_records: &[PathBuf],
 ) -> Result<Project, String> {
     let _file_guard = storage::lock(file)?;
@@ -162,20 +147,12 @@ pub(crate) fn change(
         }
         return Ok(project);
     }
-    let mut template = settings.clone();
-    match project.agent_kind {
-        crate::agents::AgentKind::Codex => template.codex.allowed_hosts = hosts,
-        crate::agents::AgentKind::ClaudeCode => template.claude_code.allowed_hosts = hosts,
-    }
-    template.validate()?;
+    let requested = requested_egress(action, access.as_ref(), settings, &project)?;
     state.begin(&mut project, action);
     registry.update(project.clone())?;
     storage::write(file, &registry)?;
-    if matches!(action, Action::Save) {
-        let editor = PolicyEditor::create(
-            &link.name,
-            &template.agent_defaults(project.agent_kind).allowed_hosts,
-        )?;
+    if let Some(egress) = &requested {
+        let editor = egress.editor(&link.name)?;
         let mut editing = Brig {
             executable: brig.executable.clone(),
             environment: brig.environment.clone(),
@@ -193,15 +170,8 @@ pub(crate) fn change(
         let document = brig
             .policy(&link.name)?
             .ok_or("Could not read the saved policy.")?;
-        if simple_hosts(&document)
-            != Some(
-                template
-                    .agent_defaults(project.agent_kind)
-                    .allowed_hosts
-                    .clone(),
-            )
-        {
-            return Err("The saved policy does not match the requested hosts.".into());
+        if Egress::read(&document).as_ref() != Some(egress) {
+            return Err("The saved policy does not match the requested network access.".into());
         }
         project
             .policy
@@ -247,6 +217,25 @@ pub(crate) fn change(
     Ok(project)
 }
 
+fn requested_egress(
+    action: Action,
+    access: Option<&NetworkAccess>,
+    settings: &Settings,
+    project: &Project,
+) -> Result<Option<Egress>, String> {
+    if !matches!(action, Action::Save) {
+        return Ok(None);
+    }
+    let access = access.ok_or("Choose the network access to save.")?;
+    let egress = access.egress(&crate::environment::preparation::allowed_hosts(settings))?;
+    if egress.public_internet()
+        && crate::projects::project_github_access::approved_policy(project).is_some()
+    {
+        return Err("Revoke GitHub access before you allow all public internet access. The GitHub access policy denies other destinations.".into());
+    }
+    Ok(Some(egress))
+}
+
 #[tauri::command]
 pub async fn read_project_policy(
     app: AppHandle,
@@ -278,7 +267,7 @@ pub async fn change_project_policy(
     environment_id: Option<EnvironmentId>,
     fingerprint: String,
     action: Action,
-    hosts: Vec<String>,
+    access: Option<NetworkAccess>,
 ) -> Result<Project, String> {
     let lock = projects.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -286,13 +275,10 @@ pub async fn change_project_policy(
         let registry = Registry::load(&projects::file(&app)?)?;
         crate::storage::data_location::validate_project_records(&app, &registry)?;
         let project = registry.resolve_environment(&identifier, environment_id.as_ref())?;
+        // The same guest processes that stop_project ends. A Mac terminal does not use the guest policy.
         if terminal::terminal_sessions(identifier.clone())
             .iter()
-            .any(|process| {
-                process.running
-                    && (process.environment_id.is_none()
-                        || process.belongs_to_environment(&project.id, &project.environment_id))
-            })
+            .any(|process| process.stops_with_environment(&project.id, &project.environment_id))
         {
             return Err(
                 "End this environment's terminal processes and stop it before changing its policy."
@@ -309,29 +295,10 @@ pub async fn change_project_policy(
             &project.environment_id,
             &fingerprint,
             action,
-            hosts,
+            access,
             &crate::storage::data_location::protected_directories(&app)?,
         )
     })
     .await
     .map_err(|error| error.to_string())?
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn complex_policies_are_read_only() {
-        assert_eq!(
-            simple_hosts(
-                &serde_json::json!({"spec":{"egress":{"default":"deny","allow":[{"host":"chatgpt.com"}]}}})
-            ),
-            Some(vec!["chatgpt.com".into()])
-        );
-        assert!(simple_hosts(&serde_json::json!({"spec":{"egress":{"default":"deny","allow":[{"cidr":"0.0.0.0/0"}]}}})).is_none());
-        assert!(simple_hosts(
-            &serde_json::json!({"spec":{"egress":{"default":"deny"},"routes":[{}]}})
-        )
-        .is_none());
-    }
 }

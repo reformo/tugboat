@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 const SESSION: &str = "1a5bc5b5-af21-432d-bf07-e2218dd9f9bf";
 const OTHER_SESSION: &str = "2a5bc5b5-af21-432d-bf07-e2218dd9f9bf";
-const HELP: &str = "  --session-id <uuid>  New chat\n  --resume <uuid>  Resume chat\n  --permission-mode <mode>  Mode (choices: \"auto\", \"manual\", \"plan\")\n  --other  Something else\n";
+const HELP: &str = "  --session-id <uuid>  New chat\n  --resume <uuid>  Resume chat\n  --permission-mode <mode>  Mode (choices: \"auto\", \"manual\", \"plan\")\n  --settings <file-or-json>  Additional settings\n  --other  Something else\n";
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 #[test]
@@ -265,19 +265,19 @@ fn terminal_identity_requires_the_project_environment_and_agent_to_match() {
 
 #[test]
 fn claude_chat_and_shell_commands_use_only_the_selected_guest_reference() {
-    let fixture = Fixture::new();
+    let mut fixture = Fixture::new();
     let checked = &fixture.checked;
     let session = SessionId::new(SESSION).unwrap();
     assert!(fixture.calls().is_empty());
     assert_eq!(
-        claude::arguments(checked, Action::Shell, None, None).unwrap(),
+        claude::arguments(checked, Action::Shell, None).unwrap(),
         vec!["sh", &checked.project.reference()]
     );
-    for (action, option, mode) in [
-        (Action::NewChat, "--session-id", "auto"),
-        (Action::Resume, "--resume", "manual"),
+    for (action, option) in [
+        (Action::NewChat, "--session-id"),
+        (Action::Resume, "--resume"),
     ] {
-        let arguments = claude::arguments(checked, action, Some(&session), Some(true)).unwrap();
+        let arguments = claude::arguments(checked, action, Some(&session)).unwrap();
         assert_eq!(
             arguments,
             [
@@ -287,7 +287,9 @@ fn claude_chat_and_shell_commands_use_only_the_selected_guest_reference() {
                 option,
                 SESSION,
                 "--permission-mode",
-                mode
+                "auto",
+                "--settings",
+                &crate::agents::claude::settings_document(crate::agents::claude::Attribution::Hidden)
             ]
         );
     }
@@ -321,6 +323,27 @@ fn claude_chat_and_shell_commands_use_only_the_selected_guest_reference() {
             "--help"
         ]
     );
+    fixture.checked.project.claude_attribution = crate::agents::claude::Attribution::Shown;
+    for (action, option) in [
+        (Action::NewChat, "--session-id"),
+        (Action::Resume, "--resume"),
+    ] {
+        let arguments = claude::arguments(&fixture.checked, action, Some(&session)).unwrap();
+        assert_eq!(&arguments[3..7], [option, SESSION, "--permission-mode", "auto"]);
+        assert_eq!(arguments[7], "--settings");
+    }
+    fixture.checked.project.claude_permission_mode = crate::agents::claude::PermissionMode::Manual;
+    fixture.set(
+        "HELP",
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"auto\", \"manual\" --settings <json>",
+    );
+    for (action, option) in [
+        (Action::NewChat, "--session-id"),
+        (Action::Resume, "--resume"),
+    ] {
+        let arguments = claude::arguments(&fixture.checked, action, Some(&session)).unwrap();
+        assert_eq!(&arguments[3..7], [option, SESSION, "--permission-mode", "manual"]);
+    }
 }
 
 #[test]
@@ -388,31 +411,23 @@ fn unprepared_offline_unsigned_and_unsupported_guests_do_not_start_claude_chats(
     let mut fixture = Fixture::new();
     let session = SessionId::new(SESSION).unwrap();
     fixture.checked.project.stage = crate::projects::ProjectStage::Ready;
-    assert!(claude::arguments(&fixture.checked, Action::NewChat, Some(&session), None).is_err());
+    assert!(claude::arguments(&fixture.checked, Action::NewChat, Some(&session)).is_err());
     fixture.checked.project.stage = crate::projects::ProjectStage::EnvironmentReady;
     fixture.checked.settings.network = crate::desktop::settings::Network::Offline;
     for action in [Action::NewChat, Action::Resume] {
         assert!(
-            claude::arguments(&fixture.checked, action, Some(&session), None)
+            claude::arguments(&fixture.checked, action, Some(&session))
                 .unwrap_err()
                 .contains("offline")
         );
     }
-    assert!(claude::arguments(&fixture.checked, Action::Shell, None, None).is_ok());
+    assert!(claude::arguments(&fixture.checked, Action::Shell, None).is_ok());
     assert!(fixture.calls().is_empty());
     fixture.checked.settings.network = crate::desktop::settings::Network::Isolated;
-    assert!(claude::arguments(
-        &fixture.checked,
-        Action::NewChat,
-        Some(&session),
-        Some(false)
-    )
-    .unwrap_err()
-    .contains("Brig boundary"));
     fixture.set("AUTH_STATUS", "{\"loggedIn\":false}");
     fixture.set("AUTH_EXIT", "1");
     assert!(
-        claude::arguments(&fixture.checked, Action::NewChat, Some(&session), None)
+        claude::arguments(&fixture.checked, Action::NewChat, Some(&session))
             .unwrap_err()
             .contains("Sign in")
     );
@@ -425,22 +440,50 @@ fn unprepared_offline_unsigned_and_unsupported_guests_do_not_start_claude_chats(
         "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"manual\"",
     ] {
         fixture.set("HELP", help);
-        assert!(claude::arguments(&fixture.checked, Action::NewChat, Some(&session), None).unwrap_err().contains("required session and auto"));
+        for action in [Action::NewChat, Action::Resume] {
+            assert!(claude::arguments(&fixture.checked, action, Some(&session))
+                .unwrap_err()
+                .contains("required session and auto"));
+        }
     }
-    fixture.set(
-        "HELP",
-        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"manual\"",
-    );
-    assert!(claude::arguments(&fixture.checked, Action::Resume, Some(&session), None).is_ok());
     fixture.set(
         "HELP",
         "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"auto\"",
     );
-    assert!(
-        claude::arguments(&fixture.checked, Action::Resume, Some(&session), None)
+    for action in [Action::NewChat, Action::Resume] {
+        assert!(claude::arguments(&fixture.checked, action, Some(&session))
             .unwrap_err()
-            .contains("required session and manual")
-    );
+            .contains("sets the status line"));
+    }
+    // The status line needs --settings even when attribution is shown.
+    fixture.checked.project.claude_attribution = crate::agents::claude::Attribution::Shown;
+    for action in [Action::NewChat, Action::Resume] {
+        assert!(claude::arguments(&fixture.checked, action, Some(&session))
+            .unwrap_err()
+            .contains("sets the status line"));
+    }
+    let supported =
+        "--session-id <uuid> --resume <uuid> --permission-mode <mode> choices: \"auto\" --settings <json>";
+    fixture.set("HELP", supported);
+    for action in [Action::NewChat, Action::Resume] {
+        assert!(claude::arguments(&fixture.checked, action, Some(&session)).is_ok());
+    }
+    fixture.checked.project.claude_options.model = Some(serde_json::from_value(serde_json::json!("opus")).unwrap());
+    for action in [Action::NewChat, Action::Resume] {
+        assert!(claude::arguments(&fixture.checked, action, Some(&session))
+            .unwrap_err()
+            .contains("does not support --model"));
+    }
+    fixture.set("HELP", &format!("{supported} --model <model>"));
+    for action in [Action::NewChat, Action::Resume] {
+        assert!(claude::arguments(&fixture.checked, action, Some(&session)).is_ok());
+    }
+    fixture.checked.project.claude_permission_mode = crate::agents::claude::PermissionMode::Manual;
+    for action in [Action::NewChat, Action::Resume] {
+        assert!(claude::arguments(&fixture.checked, action, Some(&session))
+            .unwrap_err()
+            .contains("required session and manual"));
+    }
 }
 
 #[test]

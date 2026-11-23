@@ -1,6 +1,7 @@
 pub(crate) mod claude;
 pub(crate) mod codex;
 mod command;
+pub(crate) mod options;
 mod session_id;
 
 pub use command::GuestCommand;
@@ -12,6 +13,14 @@ pub use session_id::SessionId;
 pub enum AgentKind {
     Codex,
     ClaudeCode,
+}
+
+/// The per-project agent choices that Tugboat applies when a chat starts or resumes.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentSettings {
+    pub(crate) claude: claude::ChatSettings,
+    pub(crate) codex: codex::ChatSettings,
 }
 
 pub enum AgentCommand<'a> {
@@ -34,7 +43,7 @@ impl AgentKind {
     pub fn command(self, command: AgentCommand<'_>) -> Result<GuestCommand, String> {
         match self {
             Self::Codex => codex::command(command, codex::Boundary::Brig),
-            Self::ClaudeCode => claude::command(command),
+            Self::ClaudeCode => claude::command(command, &claude::ChatSettings::default()),
         }
     }
 

@@ -206,7 +206,7 @@ test('saved session titles keep their full tooltip and resume the exact conversa
   assert.equal(launch.args.sessionId, conversation.id);
   assert.equal(launch.args.identifier, project.id);
   assert.equal(launch.args.fingerprint, 'plan-a');
-  assert.equal(launch.args.useBrigBoundary, true);
+  assert.equal(Object.hasOwn(launch.args, 'useBrigBoundary'), false);
   harness.dom.window.close();
 });
 
@@ -605,19 +605,26 @@ test('stopping Brig refreshes the surviving local shell and completed output', a
   h.dom.window.close();
 });
 
-test('new chats default to the Brig boundary and preserve an explicit sandbox choice without boundary checks', async () => {
-  for (const fullAccess of [true, false]) {
-    const h = await interfaceHarness();
+test('new chats leave the Codex boundary to the saved project setting and run no boundary checks', async () => {
+  for (const boundary of ['brig', 'workspace']) {
+    let saved = { claude: { permissionMode: 'auto', attribution: 'hidden', options: { model: null, effort: null, fallbackModel: null, appendSystemPrompt: null } }, codex: { boundary: 'brig', options: { model: null, reasoningEffort: null } } };
+    const h = await interfaceHarness({
+      read_agent_settings: () => saved,
+      save_agent_settings: ({ settings }) => { saved = settings; return settings; },
+    });
     await h.ready;
     h.element('choose-folder').click(); await flush();
     h.element('project-settings-button').click(); await flush();
-    const choice = h.element('use-brig-boundary');
+    h.element('project-settings-dialog').querySelector('[data-settings-pane="project-agent-settings"]').click(); await flush();
+    const choice = h.element('codex-brig-boundary-switch');
     assert.equal(choice.disabled, false);
     assert.equal(choice.checked, true);
-    if (!fullAccess) choice.click();
+    if (boundary === 'workspace') { choice.click(); await flush(); }
+    assert.equal(saved.codex.boundary, boundary);
     h.element('close-project-settings').click(); await flush();
     h.element('start-codex').click(); await flush();
-    assert.equal(h.calls.find(call => call.command === 'start_agent_session').args.useBrigBoundary, fullAccess);
+    const launch = h.calls.find(call => call.command === 'start_agent_session');
+    assert.equal(Object.hasOwn(launch.args, 'useBrigBoundary'), false);
     assert.equal(h.calls.filter(call => call.command === 'run_boundary_tests').length, 0);
     h.dom.window.close();
   }

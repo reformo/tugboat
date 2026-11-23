@@ -108,7 +108,7 @@ The private renewable record is `<records folder>/claude/session.json`, with dir
 
 Stopping an environment clears its memory copy. The shared account remains connected. Starting a chat restores the copy after checking the account and network policy. Transcripts remain in that environment's guest home. **Check connection** renews the shared account. **Sign out of Tugboat** requires Claude chats and guest terminals to end. It clears managed copies and reports unconfirmed remote revocation. Removing one environment preserves the shared account.
 
-Claude uses the Brig boundary. New Claude chats start in auto permission mode. Resumed Claude chats use manual permission requests. The Codex sandbox option does not apply to Claude. The Mac manages provider authorization. Retest browser authorization and access copies when updating guest agents.
+Claude uses the Brig boundary. New and resumed Claude chats start in auto permission mode by default. **Project settings → Agents** can select manual mode for one project. The Codex sandbox option does not apply to Claude. The Mac manages provider authorization. Retest browser authorization and access copies when updating guest agents.
 
 ### Chats and environments
 
@@ -178,7 +178,7 @@ New settings use these defaults:
 
 Brig network policies control connections made by guest commands and deny other destinations by default. Enter exact host names, one per line. Wildcards are not supported. Add hosts required by your project or sign-in flow.
 
-Use **Project network policy** to change access for both agents in an existing project. Stop the shared environment before editing its policy.
+Use **Project settings → Network** to change access for both agents in an existing project. Tugboat stops a running environment before it applies the change. It asks first when a chat, guest terminal, or command is still working. The section offers **Enable all public internet access** (off by default), **Enable package manager domains**, and **Additional allowed domains**. All public internet access saves the project policy with an allow default and works only when no other policy, such as GitHub access, is bound.
 
 **Offline** mode disables guest network access. Shared provider sign-in uses the Mac network. Online chats require isolated guest networking.
 
@@ -186,7 +186,7 @@ Hosted Codex tools, including web search, have a separate scope from guest comma
 
 New and resumed Codex chats start with `--sandbox danger-full-access --ask-for-approval never`. Codex uses Brig's file sharing and network boundaries without an additional Codex sandbox. The app also provides optional checks for the Brig boundary.
 
-**Use the Brig boundary with the agent sandbox disabled** is selected by default. Clear it to use Codex's `workspace-write` sandbox with command network access disabled. The approval policy remains `never` in both modes.
+**Project settings → Agents → Use the Brig boundary** is on by default and is saved for each project. Turn it off to use Codex's `workspace-write` sandbox with command network access disabled. The approval policy remains `never` in both modes.
 
 Boundary checks target the selected environment. They select comparison hosts from its effective guest network mode and resolved policy. Offline and deny-all modes expect blocked connections. CIDR, wildcard or advanced policies remain inconclusive when a suitable comparison cannot be verified. Brig/hull host rules authorize resolved addresses, so services on shared IP addresses can have a wider scope than their host names. A reachable comparison with possible address overlap also remains inconclusive. Boundary checks report diagnostic results and do not change the selected Codex sandbox mode. See the [pinned hull network policy behavior](https://github.com/brig-sh/hull/blob/7e50ac340d69be387312755c1f07ef6b0e9fec52/docs/network-egress.md).
 

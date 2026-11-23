@@ -90,7 +90,7 @@
         <li>Open the <strong>Project settings</strong> button in the project header. If setup needs your attention, you can also use <strong>Review project settings</strong>.</li>
         <li>If <strong>Existing Brig session</strong> appears, select the session for this folder and agent. Select <strong>Use this session</strong>. Tugboat can reuse a single matching session automatically.</li>
         <li>Read <strong>Project access</strong> for the agent, folder, environment, guest destinations, and signature requirement. Expand <strong>Sharing and execution plan</strong> for guest paths, resources, runtime, policies, and host credentials.</li>
-        <li>Open <strong>Resource and project settings</strong> to change available settings. Tugboat checks the resulting plan and applies the saved settings.</li>
+        <li>Use the menu on the left side of the dialog to open a section. <strong>Overview</strong> opens first. Select <strong>General</strong> to change the name, resources, and network mode. Tugboat checks the resulting plan and applies the saved settings.</li>
         <li>Use <strong>Refresh plan</strong> after an external change. Use <strong>Prepare environment</strong> to start the guest directly from these settings.</li>
       </ol>
       <p>On later visits, Tugboat shows saved history while it checks the environment. Tugboat starts a stopped guest automatically and reuses a verified running guest. Select <strong>New Chat</strong> during startup to open the chosen agent as soon as the guest is ready.</p>
@@ -118,7 +118,7 @@
             <tr><th scope="row">End one process</th><td>Save any unfinished terminal input. Select <strong>Close terminal</strong> while that terminal is running. The selected process ends. An agent chat with a saved transcript can be resumed later.</td></tr>
             <tr><th scope="row">Read command output again</th><td>Open the project’s <strong>Terminals</strong> list. Select the test, diagnostic, or other operation. Its caption shows whether it is running or how it ended. <strong>Close output</strong> discards that view.</td></tr>
             <tr><th scope="row">Run a guest command</th><td>Open <strong>Project settings</strong>. Choose <strong>Guest terminal</strong> after preparation. Commands run in the selected Brig environment under its policy. If a running chat blocks the shell, the message shows its title when available. Close the chat and try again.</td></tr>
-            <tr><th scope="row">Run a Mac command</th><td>Expand <strong>Changes and environment management</strong> in project settings. <strong>Open local terminal</strong> starts a shell on the Mac in the project folder. Guest network and file restrictions apply only inside the guest.</td></tr>
+            <tr><th scope="row">Run a Mac command</th><td>Select <strong>Environment</strong> in project settings. <strong>Open local terminal</strong> starts a shell on the Mac in the project folder. Guest network and file restrictions apply only inside the guest.</td></tr>
             <tr><th scope="row">Copy terminal columns</th><td>Hold Option when you start dragging across the columns. Release the mouse button at the opposite corner. Press Command+C to copy the selected columns from each row.</td></tr>
           </tbody>
         </table>
@@ -131,13 +131,13 @@
 
     <section id="settings">
       <h2>Set resources and network access</h2>
-      <p><strong>Settings → General</strong> supplies app defaults. Open <strong>Project settings</strong> to check a project’s Brig reference and change its resources and network policy.</p>
+      <p><strong>Settings → General</strong> supplies app defaults. Open <strong>Project settings</strong> to check a project’s Brig reference and change its resources, agent options, and network access. The left menu has these sections: <strong>Overview</strong>, <strong>General</strong>, <strong>Agents</strong>, <strong>Network</strong>, <strong>GitHub</strong>, <strong>Web preview</strong>, <strong>Guest image</strong>, and <strong>Environment</strong>.</p>
       <div class="table-wrap" role="region" aria-labelledby="settings-scope-caption" tabindex="0">
         <table>
           <caption id="settings-scope-caption">Where settings take effect</caption>
           <thead><tr><th scope="col">Setting</th><th scope="col">Default or allowed values</th><th scope="col">Effect</th></tr></thead>
           <tbody>
-            <tr><th scope="row">CPU count and Memory (MB)</th><td>4 processors and 4096 MB. Set 1 to 32 processors. Set 1024 to 65536 MB in steps of 256.</td><td>Stop the shared environment before saving an override. Both agents use the saved limits.</td></tr>
+            <tr><th scope="row">CPU count and Memory (MB)</th><td>4 processors and 4096 MB. Set 1 to 32 processors. Set 1024 to 65536 MB in steps of 256.</td><td>Saving stops a running shared environment first. Both agents use the saved limits.</td></tr>
             <tr><th scope="row">Image signature</th><td>Required for the project image.</td><td>Check <strong>System Checks</strong> if image verification fails.</td></tr>
             <tr><th scope="row">Network</th><td><strong>Access allowed by policy</strong> permits guest command connections to allowed destinations. <strong>Offline</strong> blocks guest command traffic.</td><td>The setting applies to both agents. Online chats require the policy-controlled network. Browser account sign-in uses the Mac connection.</td></tr>
             <tr><th scope="row">Allowed guest hosts</th><td>Use one exact lowercase host name per line. Omit schemes, paths, ports, and wildcards.</td><td>Tugboat combines both lists in new policies. An existing project uses its saved policy.</td></tr>
@@ -147,44 +147,90 @@
         </table>
       </div>
       <p>The default Codex host list contains <code>auth.openai.com</code>, <code>chatgpt.com</code>, and <code>api.openai.com</code>. Claude Code starts with <code>api.anthropic.com</code>, <code>platform.claude.com</code>, and <code>claude.ai</code>. A project that downloads dependencies can require additional destinations.</p>
-      <h3>Allow a destination for one existing environment</h3>
+      <h3>Change network access for one existing environment</h3>
       <ol>
-        <li>Finish active work in the shared environment.</li>
-        <li>Open <strong>Project settings</strong>. Expand <strong>Changes and environment management</strong>. Select <strong>Stop Brig environment</strong>.</li>
-        <li>Expand <strong>Project network policy</strong>. Select <strong>Read or refresh policy</strong>. Check the existing document and host list.</li>
-        <li>Add the required host under <strong>Allowed guest hosts for this project</strong>. Keep the existing hosts you still need. Select <strong>Save allowed hosts</strong>.</li>
+        <li>Open <strong>Project settings</strong>. Select <strong>Network</strong>. Tugboat reads the project policy. Select <strong>Refresh</strong> to read it again.</li>
+        <li>Under <strong>Public internet access</strong>, set the switches and the domain list. Tugboat saves each change immediately:
+          <ul>
+            <li><strong>Enable all public internet access</strong> lets guest commands reach any public destination. It is off by default.</li>
+            <li><strong>Enable package manager domains</strong> allows the npm, Yarn, PyPI, crates.io, Go module, Packagist, and RubyGems registries.</li>
+            <li><strong>Additional allowed domains</strong> opens an editor. Enter one exact lowercase domain per line. Omit schemes, paths, ports, and wildcards. Select <strong>Save domains</strong>.</li>
+          </ul>
+        </li>
         <li>Review the updated plan. Start the environment again when prompted. Retry the command that needed the destination.</li>
       </ol>
-      <p>A policy shared with other sessions, an externally managed policy, or one with advanced rules is read-only in this editor. Have its owner review requested changes. If an external change was intentional, read its current document before choosing <strong>Accept this policy version</strong>. Use <strong>Attach to this session</strong> for a detached policy. A detached policy blocks environment preparation.</p>
+      <h3>Changes that stop the environment</h3>
+      <p>A Network change and a CPU, memory, or network change in General need a stopped environment. A rename does not: Tugboat saves the new name and keeps the environment and its chats running. You do not stop it yourself. Tugboat checks the environment before it applies the change:</p>
+      <ul>
+        <li>If the environment is stopped, Tugboat applies the change.</li>
+        <li>If the environment runs and no process is working, Tugboat stops it and applies the change. Idle Codex chats close. You can resume them from the session list.</li>
+        <li>If a process is working, Tugboat shows <strong>Stop the environment to apply this change?</strong> with the list of processes. Select <strong>Stop and apply</strong> or <strong>Stop and save</strong> to end them and continue. Select <strong>Cancel</strong> to keep them running. Tugboat then applies nothing.</li>
+      </ul>
+      <p>Working processes are Codex chats that are busy, all Claude Code chats, guest terminals, environment startup, sign-in, Git commands, and project tests. Tugboat cannot read whether a Claude Code chat is busy, so it always asks. A terminal on the Mac does not block a change.</p>
+      <p>The agent domains from <strong>Settings → General</strong> are always allowed. The Network section lists them below the options. Tugboat keeps your package manager and domain choices while all public internet access is on, so they apply again when you turn it off.</p>
+      <p>All public internet access works only when the project policy is the only policy for the environment. Revoke GitHub access first, because the GitHub access policy denies other destinations. If another policy denies other destinations, the Network section tells you that public access is not in effect.</p>
+      <p>A policy shared with other sessions, an externally managed policy, or one with advanced rules is read-only in this section. Have its owner review requested changes. Expand <strong>Policy document and binding</strong> to read the document. If an external change was intentional, read its current document before choosing <strong>Accept this policy version</strong>. Use <strong>Attach to this session</strong> for a detached policy. A detached policy blocks environment preparation.</p>
       <h3>Understand agent permissions</h3>
-      <p>Under <strong>File and network boundaries</strong>, Codex starts with <strong>Use the Brig boundary with the agent sandbox disabled</strong> selected. In that mode Codex has full access inside the guest. Brig still controls Mac folder sharing and guest network traffic. Codex does not ask for command approval.</p>
-      <p>To use the extra Codex workspace sandbox, clear that option before you start or resume a chat. Codex can write within the workspace and disables network access from its commands. The approval setting remains <code>never</code>. Check the option again after changing the project or plan. A running chat keeps the mode it started with.</p>
-      <p>Claude Code uses the Brig boundary. A new Claude Code chat starts in auto mode. In this mode, Claude Code decides which actions to approve without a permission request. A resumed chat uses manual mode and asks for permission in its terminal when required. Read the proposed action before answering. Tugboat offers the workspace sandbox control for Codex only.</p>
-      <p><strong>Check Brig boundaries</strong> tests file sharing and network behavior in the current environment. Compare the expected and observed results. An inconclusive result can mean two hosts share an address or the active policy has no suitable comparison host. The check reports observations. It does not change the policy. Hosted tools such as Codex web search operate separately from guest commands. A hosted result cannot establish that the guest reached that site.</p>
+      <p>Open <strong>Project settings → Agents</strong> to set the options that Tugboat adds to each agent command. Select the <strong>Claude Code</strong> or <strong>Codex</strong> tab. Tugboat saves each switch and selection immediately, and each text field when you leave it. An empty field keeps the agent's default. The options apply when a chat starts or resumes. A running chat keeps the options that it started with. You do not have to stop the environment.</p>
+      <div class="table-wrap" role="region" aria-labelledby="agent-options-caption" tabindex="0">
+        <table>
+          <caption id="agent-options-caption">Agent options for each project</caption>
+          <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Command effect</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Claude Code → Model</th><td>Default (Claude Opus 5.5)</td><td>Adds <code>--model</code> with the full model ID. The list shows Claude Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2, the <code>opusplan</code> mode, and older models.</td></tr>
+            <tr><th scope="row">Claude Code → Effort</th><td>Default</td><td>Adds <code>--effort</code> with low, medium, high, xhigh, or max.</td></tr>
+            <tr><th scope="row">Claude Code → Fallback model</th><td>None</td><td>Adds <code>--fallback-model</code>. Claude Code uses this model when the main model is overloaded or not available.</td></tr>
+            <tr><th scope="row">Claude Code → Append to system prompt</th><td>Empty</td><td>Adds <code>--append-system-prompt</code> with up to 4000 characters. Claude Code records the prompt at the first request of a chat and reuses it on resume.</td></tr>
+            <tr><th scope="row">Claude Code → Auto mode</th><td>On</td><td>On starts chats with <code>--permission-mode auto</code>. Claude Code decides which actions to approve without a permission request. Off starts chats with <code>--permission-mode manual</code>, and Claude Code asks before actions.</td></tr>
+            <tr><th scope="row">Claude Code → Commit and pull request attribution</th><td>Off</td><td>Off adds <code>--settings</code> with empty commit and pull request attribution. On lets Claude Code add its attribution.</td></tr>
+            <tr><th scope="row">Codex → Model</th><td>Default (Codex configuration)</td><td>Adds <code>--model</code>. The list shows GPT-6.2-Sol, GPT-6.2-Astra, GPT-6.1 Terra, GPT-6.1-Sol, GPT-6-Astra, GPT-6-Sol, GPT-6-Luna, and the older GPT-5.6 models. Codex recommends GPT-6.2-Sol.</td></tr>
+            <tr><th scope="row">Codex → Reasoning effort</th><td>Default</td><td>Adds <code>-c model_reasoning_effort</code> with low, medium, high, xhigh, max, or ultra. GPT-6-Luna and GPT-5.6-Luna do not support ultra.</td></tr>
+            <tr><th scope="row">Codex → Use the Brig boundary</th><td>On</td><td>On starts Codex with <code>--sandbox danger-full-access --ask-for-approval never</code>. Brig controls Mac folder sharing and guest network traffic. Off selects the Codex workspace sandbox with <code>workspace-write</code> and command network access disabled. The approval setting remains <code>never</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The model lists show the models that were current on 23 November 2026. Retired and hidden Codex models are not listed. A model that a project saved before the lists changed stays selected and shows <strong>(saved)</strong>. A guest agent that does not list a selected option in its help text cannot start or resume a chat. Clear the option to continue.</p>
+      <p>Every new and resumed chat shows a status line with the model, the effort level, the input and output tokens, the context left, and the usage limits left, when the agent reports them. It is not a setting. Claude Code receives it through <code>--settings</code>, which replaces a status line from a settings file. Codex receives <code>-c tui.status_line</code>.</p>
+      <p>Claude Code always runs inside the Brig boundary. If you change the mode in a running chat, read each proposed action before you answer. A guest Claude Code that does not support the selected permission mode cannot start or resume a chat.</p>
+      <p>With the Codex workspace sandbox, select <strong>Copy Codex sandbox check</strong> in the Agents section. Paste the check into the same conversation and review the results in the terminal.</p>
+      <p>Select <strong>Environment</strong> to find <strong>Check Brig boundaries</strong>. <strong>Check Brig boundaries</strong> tests file sharing and network behavior in the current environment. Compare the expected and observed results. An inconclusive result can mean two hosts share an address or the active policy has no suitable comparison host. The check reports observations. It does not change the policy. Hosted tools such as Codex web search operate separately from guest commands. A hosted result cannot establish that the guest reached that site.</p>
     </section>
 
     <section id="github-access">
       <h2>Grant GitHub fetch access</h2>
       <ol>
-        <li>Open <strong>Project settings → GitHub access</strong>.</li>
+        <li>Open <strong>Project settings → GitHub</strong>.</li>
         <li>Enter the repository as <code>owner/repository</code>. Enter a GitHub token with <strong>Contents</strong> read permission for that repository.</li>
         <li>Select <strong>Save fetch access</strong>. If the environment is running, select <strong>Stop environment and save access</strong>. Stopping ends project terminals and preserves saved chats.</li>
         <li>Prepare the environment again. Both agents can fetch through the project grant. Check the token's repository selection and Contents permission if GitHub refuses a fetch.</li>
         <li>Select <strong>Replace token</strong> to change the token. Select <strong>Revoke access</strong> to remove the project's grant.</li>
       </ol>
       <p>Tugboat clears the input field after you submit it. Brig uses the Mac Keychain to store the token and issues a scoped session token to the guest. Use <strong>Check access</strong> after a Keychain prompt or an interrupted change. The saved status confirms the local grant. It shows GitHub fetch permission as unverified.</p>
+      <p>The grant allows fetch and clone of the saved repository only. <code>git push</code>, the GitHub API, and the <code>gh</code> command do not work through it. Guest Git sends <code>https://github.com/</code> and <code>git@github.com:</code> addresses through the grant, so agents can use the normal remote. The GitHub access policy denies other destinations, so revoke the grant before you turn on all public internet access. The GitHub section shows the same guidance below its controls.</p>
+    </section>
+
+    <section id="claude-attribution">
+      <h2>Control Claude Code attribution in Git</h2>
+      <p>By default, Claude Code adds no attribution to commits or pull requests in a project. This applies to new projects and to projects that you added before.</p>
+      <ol>
+        <li>Open <strong>Project settings → Agents</strong>.</li>
+        <li>Under <strong>Claude Code</strong>, turn on <strong>Commit and pull request attribution</strong> to let Claude Code add its attribution. Turn it off to remove the attribution again.</li>
+        <li>Start a new Claude Code chat or resume a chat. Tugboat applies the setting when a chat starts or resumes.</li>
+      </ol>
+      <p>You do not have to stop the environment. A running chat keeps the setting that it started with. While the switch is off, a Claude Code settings file in the project cannot turn attribution on. The setting does not change Codex.</p>
     </section>
 
     <section id="preview">
       <h2>Open a local web preview</h2>
       <ol>
         <li>Prepare the project environment. Start the web server in the guest.</li>
-        <li>Open <strong>Project settings → Local web preview</strong>. Enter a free Mac port and the guest web server port.</li>
+        <li>Open <strong>Project settings → Web preview</strong>. Enter a free Mac port and the guest web server port.</li>
         <li>Select <strong>Publish preview</strong>. The project can publish one TCP port at <code>127.0.0.1</code>.</li>
         <li>Select <strong>Open in browser</strong> when the server is ready. Select <strong>Check preview</strong> to check the server or an interrupted change again.</li>
         <li>Select <strong>Close preview</strong> to remove the mapping. Do this before selecting different ports.</li>
       </ol>
       <p>Brig keeps the approved mapping when the project environment stops. It restores the mapping at startup unless you closed the preview.</p>
+      <p>Use the preview to look at a development server that an agent started in the guest, to check a user interface change in your Mac browser, or to call a guest HTTP API from a Mac tool. Only this Mac can open it. <strong>Check preview</strong> expects a plain HTTP response. If the server does not respond, make sure that it uses the guest port, and start it on <code>0.0.0.0</code> if it listens only on <code>localhost</code>. The Web preview section shows the same guidance below its controls.</p>
     </section>
 
     <section id="existing-project-reset">
@@ -215,7 +261,7 @@
       <p>Image updates require a prepared project guest and the bundled Hull recovery runtime. Read the message in Project settings if either is unavailable.</p>
       <ol>
         <li>Finish both agents’ chats and close this project’s active terminals.</li>
-        <li>Open <strong>Project settings → Update guest image</strong>.</li>
+        <li>Open <strong>Project settings → Guest image</strong>.</li>
         <li>Compare the image digests and agent versions. <strong>Current image pin</strong> is the saved digest. <strong>Already up to date</strong> means Tugboat verified that Hull uses the offered image.</li>
         <li>Select <strong>Review update</strong>. Tugboat verifies the candidate, stops the idle guest, and lists changed system paths.</li>
         <li>Read the list. Select <strong>Apply update</strong> to replace those system changes. Select <strong>Keep current</strong> to restore the reviewed disk.</li>
@@ -227,7 +273,7 @@
 
     <section id="review">
       <h2>Review changes and run tests</h2>
-      <p>Leave the chat running with <strong>Return to project</strong>. Open <strong>Project settings → Changes and environment management</strong>.</p>
+      <p>Leave the chat running with <strong>Return to project</strong>. Open <strong>Project settings → Environment</strong>.</p>
       <ol>
         <li>Choose <strong>Git status</strong>. Read the modified, staged, and untracked file names. After each command, choose <strong>Return to project</strong> and reopen project settings for the next command.</li>
         <li>Choose <strong>Working tree diff</strong> to inspect unstaged changes to tracked files. Choose <strong>Staged diff</strong> to inspect changes already staged in Git. New, untracked files appear in status and need separate inspection.</li>
@@ -298,7 +344,7 @@
           </tbody>
         </table>
       </div>
-      <p>Open <strong>Project settings → Changes and environment management</strong>. Select <strong>Preview environment removal…</strong>. Review the listed scope. Save any guest work you need. Type the displayed session name and select <strong>Remove session</strong>.</p>
+      <p>Open <strong>Project settings → Environment</strong>. Select <strong>Preview environment removal…</strong>. Review the listed scope. Save any guest work you need. Type the displayed session name and select <strong>Remove session</strong>.</p>
       <p>If removal stops partway through, open <strong>Review incomplete removal…</strong>. Check the recorded steps and the remaining target in the new preview. Setup stays paused for the affected environment until the operation completes.</p>
     </section>
 
@@ -337,7 +383,7 @@
         <dt>Environment startup fails after a plan appears</dt>
         <dd>Read the environment error in the project view. Check the Mac connection for the initial downloads. Run <strong>Brig doctor</strong>. After correcting the cause, select <strong>Retry environment</strong>.</dd>
         <dt>A saved project setting cannot be changed</dt>
-        <dd>Check the Brig reference in Project settings. Stop the shared environment. Change its resource settings and choose <strong>Save project settings</strong>.</dd>
+        <dd>Check the Brig reference in Project settings. Change its resource settings and choose <strong>Save project settings</strong>. Tugboat stops the shared environment first, and asks when a process is still working.</dd>
       </dl>
       <h3 id="fix-account">Sign-in and New Chat</h3>
       <dl>

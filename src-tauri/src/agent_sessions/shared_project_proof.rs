@@ -66,7 +66,9 @@ fn shared_guest_launches_use_the_agent_adapter_and_explicit_executable() {
             "--session-id",
             &id.argument(),
             "--permission-mode",
-            "auto"
+            "auto",
+            "--settings",
+            &agents::claude::settings_document(agents::claude::Attribution::Hidden)
         ]
     );
     let command = AgentKind::ClaudeCode
@@ -81,7 +83,9 @@ fn shared_guest_launches_use_the_agent_adapter_and_explicit_executable() {
             "--resume",
             &id.argument(),
             "--permission-mode",
-            "manual"
+            "auto",
+            "--settings",
+            &agents::claude::settings_document(agents::claude::Attribution::Hidden)
         ]
     );
 }

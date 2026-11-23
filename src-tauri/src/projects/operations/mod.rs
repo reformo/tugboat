@@ -277,6 +277,25 @@ pub async fn stop_project(
     .map_err(|error| error.to_string())?
 }
 
+// Settings changes call this first, so they can stop a running environment without a failed attempt.
+#[tauri::command]
+pub async fn project_environment_running(
+    app: AppHandle,
+    identifier: String,
+    environment_id: EnvironmentId,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let registry = Registry::load(&projects::file(&app)?)?;
+        crate::storage::data_location::validate_project_records(&app, &registry)?;
+        let project = registry.environment(&identifier, &environment_id)?;
+        let settings = project.settings(settings::load(&settings::file(&app)?)?)?;
+        let brig = environment::brig_for_project(&app, &project, &settings)?;
+        environment::listed_as_running(&brig, &project)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemovalPreview {

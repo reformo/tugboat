@@ -123,6 +123,11 @@ impl FormerProject {
             removal: None,
             preview: None,
             github_access: None,
+            claude_attribution: crate::agents::claude::Attribution::Hidden,
+            claude_permission_mode: crate::agents::claude::PermissionMode::Auto,
+            codex_boundary: crate::agents::codex::Boundary::Brig,
+            claude_options: crate::agents::claude::Options::default(),
+            codex_options: crate::agents::codex::Options::default(),
             options: self.options.as_ref().map(|options| ProjectOptions {
                 cpus: options.cpus,
                 memory_mb: options.memory_mb,

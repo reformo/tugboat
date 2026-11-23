@@ -7,15 +7,6 @@ import { createStore } from 'zustand/vanilla';
 interface Probe { name: string; target: string; expected: string; observed: string; outcome: string }
 interface Report { projectId: string; environmentId: string; planFingerprint: string; checkedAt: number; passed: boolean; cleanup: boolean; results: Probe[] }
 
-export function useBrigBoundary(): boolean {
-  return (document.getElementById('use-brig-boundary') as HTMLInputElement).checked;
-}
-
-export function resetBoundaryChoice(): void {
-  const choice = document.getElementById('use-brig-boundary') as HTMLInputElement;
-  choice.checked = true;
-}
-
 export function initializeBoundaryTests(current: () => ProjectContext | null): () => void {
   const run = document.getElementById('run-boundary-tests') as HTMLButtonElement;
   const status = document.getElementById('boundary-status')!;

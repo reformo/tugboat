@@ -194,7 +194,7 @@ pub fn validate_plan(
     if !policies.iter().any(|name| name == &policy.name) {
         return Err(MISSING_PROJECT_POLICY.into());
     }
-    if data["noPolicy"] != false || data["egress"]["default"] != "deny" {
+    if data["noPolicy"] != false || !permitted_egress(&data["egress"], policy, policies) {
         return Err("Attach a network policy that denies access by default.".into());
     }
     if grant.is_some_and(|grant| policies.len() != 2 || !policies.iter().any(|name| name == grant))
@@ -202,6 +202,21 @@ pub fn validate_plan(
         return Err("The GitHub access policy is missing from the Brig plan.".into());
     }
     PlanPaths::from_plan(plan)
+}
+
+// A Tugboat-owned project policy can allow all public destinations when no other policy is bound.
+fn permitted_egress(
+    egress: &Value,
+    policy: &crate::projects::Policy,
+    policies: &[Value],
+) -> bool {
+    let no_deny_rules =
+        egress["deny"].is_null() || egress["deny"].as_array().is_some_and(Vec::is_empty);
+    match egress["default"].as_str() {
+        Some("deny") => true,
+        Some("allow") => policy.owned && policies.len() == 1 && no_deny_rules,
+        _ => false,
+    }
 }
 
 pub(crate) fn checked_policy_bindings<'a>(

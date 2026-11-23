@@ -233,7 +233,7 @@ impl TerminalStatus {
             && self.agent_kind == Some(project.agent_kind)
     }
 
-    fn stops_with_environment(
+    pub(crate) fn stops_with_environment(
         &self,
         project_id: &str,
         environment_id: &projects::EnvironmentId,

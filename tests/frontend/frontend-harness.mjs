@@ -99,6 +99,7 @@ async function interfaceHarness(overrides = {}, configureDom = () => {}) {
     open_project: () => project, saved_project_dashboard: () => sessionDashboard([]), recorded_project_dashboard: () => sessionDashboard([]), project_dashboard: () => sessionDashboard([]),
     read_project_preferences: () => ({ project, options: { cpus: 4, memoryMb: 4096, verification: 'require', network: 'isolated' } }),
     register_project: () => project,
+    project_environment_running: () => false,
     prepare_project: () => ({ project, plan, fingerprint: 'plan-a', message: null, candidates: [] }),
     preview_project: () => ({ project: selectedFixture, plan, fingerprint: 'plan-a' }),
     inspect_host: () => ({ architecture: 'arm64', osVersion: '27.2', tools: {}, brigStatus: 'installed', version: null, doctor: null, message: null }),

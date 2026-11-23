@@ -79,7 +79,6 @@ fn login(checked: &CheckedProject) -> Result<LoginStatus, String> {
 fn arguments(
     checked: &CheckedProject,
     action: Action,
-    use_brig_boundary: Option<bool>,
     session_id: Option<&str>,
 ) -> Result<Vec<String>, String> {
     checked.project.require_codex()?;
@@ -132,11 +131,14 @@ fn arguments(
             "Guest Codex does not support the required sandbox and approval options.".into(),
         );
     }
-    let boundary = match use_brig_boundary.unwrap_or(true) {
-        true => agents::codex::Boundary::Brig,
-        false => agents::codex::Boundary::Workspace,
-    };
-    let command = agents::codex::command(request, boundary)?;
+    let settings = checked.project.agent_settings().codex;
+    if settings.options.model.is_some() && !help.stdout.contains(agents::codex::MODEL_OPTION) {
+        return Err(
+            "Guest Codex does not support --model. Clear the model in Project settings → Agents."
+                .into(),
+        );
+    }
+    let command = agents::codex::chat_command(request, &settings)?;
     let arguments = shared_runtime::interactive(&checked.project, command);
     admission.capabilities()?;
     admission.prepare(arguments)
@@ -147,12 +149,7 @@ pub(super) fn proof_resume_arguments(
     checked: &CheckedProject,
     session: &SessionId,
 ) -> Result<Vec<String>, String> {
-    arguments(
-        checked,
-        Action::Resume,
-        Some(true),
-        Some(&session.argument()),
-    )
+    arguments(checked, Action::Resume, Some(&session.argument()))
 }
 
 pub(super) async fn start_codex_session(
@@ -160,7 +157,6 @@ pub(super) async fn start_codex_session(
     project: Project,
     fingerprint: String,
     action: Action,
-    use_brig_boundary: Option<bool>,
     session_id: Option<String>,
     layout: Layout,
 ) -> Result<u64, String> {
@@ -227,7 +223,7 @@ pub(super) async fn start_codex_session(
                 ));
             }
         }
-        let arguments = arguments(&checked, action, use_brig_boundary, session_id.as_deref())?;
+        let arguments = arguments(&checked, action, session_id.as_deref())?;
         Ok::<_, String>((environment::command(&checked, arguments), runtime))
     })
     .await

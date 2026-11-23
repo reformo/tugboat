@@ -1,7 +1,14 @@
 use super::{
     EnvironmentAttempt, EnvironmentId, Policy, Project, ProjectOptions, ProjectStage, Removal,
 };
-use crate::{agents::AgentKind, desktop::settings::Network};
+use crate::{
+    agents::{
+        claude::{self, Attribution, PermissionMode},
+        codex::{self, Boundary},
+        AgentKind, AgentSettings,
+    },
+    desktop::settings::Network,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
 
@@ -69,6 +76,16 @@ pub struct ProjectRecord {
     pub(super) preview: Option<super::project_preview::Approval>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) github_access: Option<super::project_github_access::Grant>,
+    #[serde(default, skip_serializing_if = "Attribution::is_hidden")]
+    pub(super) claude_attribution: Attribution,
+    #[serde(default, skip_serializing_if = "PermissionMode::is_auto")]
+    pub(super) claude_permission_mode: PermissionMode,
+    #[serde(default, skip_serializing_if = "Boundary::is_brig")]
+    pub(super) codex_boundary: Boundary,
+    #[serde(default, skip_serializing_if = "claude::Options::is_default")]
+    pub(super) claude_options: claude::Options,
+    #[serde(default, skip_serializing_if = "codex::Options::is_default")]
+    pub(super) codex_options: codex::Options,
     environment: SharedEnvironment,
 }
 
@@ -89,6 +106,11 @@ impl From<Project> for ProjectRecord {
             options: project.options,
             preview: project.preview,
             github_access: project.github_access,
+            claude_attribution: project.claude_attribution,
+            claude_permission_mode: project.claude_permission_mode,
+            codex_boundary: project.codex_boundary,
+            claude_options: project.claude_options,
+            codex_options: project.codex_options,
             environment,
         }
     }
@@ -139,7 +161,20 @@ impl ProjectRecord {
             removal: environment.removal.clone(),
             preview: self.preview.clone(),
             github_access: self.github_access.clone(),
+            claude_attribution: self.claude_attribution,
+            claude_permission_mode: self.claude_permission_mode,
+            codex_boundary: self.codex_boundary,
+            claude_options: self.claude_options.clone(),
+            codex_options: self.codex_options.clone(),
         }
+    }
+
+    pub(super) fn set_agent_settings(&mut self, settings: AgentSettings) {
+        self.claude_attribution = settings.claude.attribution;
+        self.claude_permission_mode = settings.claude.permission_mode;
+        self.codex_boundary = settings.codex.boundary;
+        self.claude_options = settings.claude.options;
+        self.codex_options = settings.codex.options;
     }
 
     pub(super) fn update(&mut self, mut project: Project) -> Result<(), String> {
@@ -154,6 +189,11 @@ impl ProjectRecord {
         let mut proposed = Self::from(project);
         proposed.preview = self.preview.clone();
         proposed.github_access = self.github_access.clone();
+        proposed.claude_attribution = self.claude_attribution;
+        proposed.claude_permission_mode = self.claude_permission_mode;
+        proposed.codex_boundary = self.codex_boundary;
+        proposed.claude_options = self.claude_options.clone();
+        proposed.codex_options = self.codex_options.clone();
         proposed.validate()?;
         *self = proposed;
         Ok(())

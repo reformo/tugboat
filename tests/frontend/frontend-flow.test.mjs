@@ -919,7 +919,7 @@ test('policy reads show a skeleton and recover from errors before a later succes
   first.reject(new Error('Policy unavailable')); await flush();
   assert.equal(harness.element('read-project-policy').getAttribute('aria-busy'), 'false');
   assert.equal(harness.element('project-policy-document').querySelector('.skeleton'), null);
-  harness.handlers.read_project_policy = () => ({ document: { name: 'Recovered policy' }, fingerprint: 'policy', editable: true, attached: true, allowedHosts: [] });
+  harness.handlers.read_project_policy = () => ({ document: { name: 'Recovered policy' }, fingerprint: 'policy', editable: true, attached: true, access: { publicInternet: false, hosts: { packageManagers: false, additional: [] } }, defaultHosts: [], publicInternetRestricted: false });
   harness.element('read-project-policy').click(); await flush();
   assert.match(harness.element('project-policy-document').textContent, /Recovered policy/);
   assert.equal(harness.element('project-policy-document').getAttribute('aria-busy'), 'false');
@@ -1454,7 +1454,7 @@ test('accepting a changed policy refreshes saved session availability', async ()
       return { project, plan, fingerprint: 'accepted-plan' };
     },
     project_dashboard: () => accepted ? current : saved,
-    read_project_policy: () => ({ document: {}, fingerprint: 'new-policy', editable: true, attached: true, allowedHosts: [] }),
+    read_project_policy: () => ({ document: {}, fingerprint: 'new-policy', editable: true, attached: true, access: { publicInternet: false, hosts: { packageManagers: false, additional: [] } }, defaultHosts: [], publicInternetRestricted: false }),
     change_project_policy: () => { accepted = true; return project; },
   });
   await harness.ready; harness.element('choose-folder').click(); await flush();
@@ -1897,7 +1897,7 @@ test('archive, Trash and restore move a session between views without changing p
 
 test('project settings use a modal, save scoped values and hide a native terminal while open', async () => {
   let current = { ...project };
-  const harness = await interfaceHarness({ prepare_project: () => ({ project: current, plan, fingerprint: 'plan-a', candidates: [], message: null }), save_project_preferences: ({ identifier, name, options }) => { assert.equal(identifier, project.id); assert.equal(options.cpus, 2); assert.equal(options.memoryMb, 2048); current = { ...project, name, stage: 'ready' }; return current; } });
+  const harness = await interfaceHarness({ prepare_project: () => ({ project: current, plan, fingerprint: 'plan-a', candidates: [], message: null }), stop_project: () => ({ ...current, stage: 'ready' }), save_project_preferences: ({ identifier, name, options }) => { assert.equal(identifier, project.id); assert.equal(options.cpus, 2); assert.equal(options.memoryMb, 2048); current = { ...project, name, stage: 'ready' }; return current; } });
   await harness.ready; harness.element('choose-folder').click(); await flush();
   harness.element('start-codex').click(); await flush();
   harness.element('project-settings-button').click(); await flush();
@@ -1909,6 +1909,10 @@ test('project settings use a modal, save scoped values and hide a native termina
   harness.element('project-settings-button').click(); await flush();
   harness.element('project-name').value = 'Renamed project'; harness.element('project-cpus').value = '2'; harness.element('project-memory').value = '2048';
   harness.element('project-preferences').dispatchEvent(new harness.dom.window.Event('submit', { bubbles: true, cancelable: true })); await flush();
+  const commands = harness.calls.map(call => call.command);
+  assert.ok(commands.includes('stop_project'));
+  assert.ok(commands.lastIndexOf('stop_project') < commands.lastIndexOf('save_project_preferences'), 'An idle Codex chat stops before the save.');
+  assert.equal(harness.element('preferences-stop-warning').hidden, true);
   assert.equal(harness.element('project-heading').textContent, 'Renamed project');
   assert.equal(harness.element('project-overview').hidden, false);
   assert.equal(harness.element('project-setup').hidden, true);
@@ -2051,7 +2055,7 @@ test('selecting another project clears sign-in, policy, boundary, operation and 
     open_project: ({ identifier }) => projects.find(current => current.id === identifier),
     prepare_project: ({ identifier }) => ({ project: projects.find(current => current.id === identifier), plan, fingerprint: 'plan-a', message: null, candidates: [] }),
     read_project_preferences: ({ identifier }) => identifier === second.id ? new Promise(resolve => { releasePreferences = resolve; }) : preferences(project),
-    read_project_policy: () => ({ document: { project: 'A' }, fingerprint: 'policy-a', editable: true, attached: true, allowedHosts: ['a.example.com'] }),
+    read_project_policy: () => ({ document: { project: 'A' }, fingerprint: 'policy-a', editable: true, attached: true, access: { publicInternet: false, hosts: { packageManagers: false, additional: ['a.example.com'] } }, defaultHosts: [], publicInternetRestricted: false }),
     run_boundary_tests: () => ({ projectId: project.id, environmentId: project.environmentId, planFingerprint: 'plan-a', checkedAt: Math.floor(Date.now() / 1000), passed: true, cleanup: true, results: [{ name: 'A network', target: 'a.example.com', expected: 'Allowed', observed: 'Allowed', outcome: 'pass' }] }),
     preview_removal: () => { throw new Error('Project A removal preview failed'); },
   });
@@ -2061,8 +2065,7 @@ test('selecting another project clears sign-in, policy, boundary, operation and 
   for (const id of ['read-project-policy', 'run-boundary-tests', 'preview-removal']) harness.element(id).click();
   await flush();
   assert.match(harness.element('project-policy-document').textContent, /"A"/);
-  assert.equal(harness.element('use-brig-boundary').disabled, false);
-  harness.element('use-brig-boundary').click();
+  assert.equal(harness.element('network-domains-summary').textContent, 'a.example.com');
   assert.match(harness.element('operation-status').textContent, /Project A/);
   harness.element('close-project-settings').click(); harness.element('project-navigation').click(); await flush();
   harness.element('recent-project-list').querySelector('[data-project-id="project-b"]').click(); await flush();
@@ -2072,11 +2075,11 @@ test('selecting another project clears sign-in, policy, boundary, operation and 
   assert.equal(harness.element('guest-terminal-status').textContent, '');
   assert.equal(harness.element('project-policy-document').textContent, '');
   assert.equal(harness.element('project-policy-hosts').value, '');
+  assert.equal(harness.element('network-domains-summary').textContent, 'No additional domains');
   assert.equal(harness.element('project-policy-fields').disabled, true);
   assert.equal(harness.element('boundary-results').children.length, 0);
   assert.equal(harness.element('boundary-status').textContent, '');
-  assert.equal(harness.element('use-brig-boundary').disabled, false);
-  assert.equal(harness.element('use-brig-boundary').checked, true);
+  assert.equal(harness.element('codex-brig-boundary-switch').disabled, true);
   assert.equal(harness.element('operation-status').textContent, '');
   releasePreferences(preferences(second)); await flush();
   assert.equal(harness.element('project-name').value, second.name);
@@ -2090,7 +2093,7 @@ test('late settings successes and errors cannot overwrite a reopened view or an 
     const pending = new Map();
     const defer = name => new Promise((resolve, reject) => pending.set(name, { resolve, reject }));
     const preferences = current => ({ project: current, options: { cpus: 4, memoryMb: 4096, verification: 'require', network: 'isolated' } });
-    const policy = label => ({ document: { label }, fingerprint: label, editable: true, attached: true, allowedHosts: [label.toLowerCase() + '.example.com'] });
+    const policy = label => ({ document: { label }, fingerprint: label, editable: true, attached: true, access: { publicInternet: false, hosts: { packageManagers: false, additional: [label.toLowerCase() + '.example.com'] } }, defaultHosts: [], publicInternetRestricted: false });
     const boundary = label => ({ projectId: project.id, environmentId: project.environmentId, planFingerprint: 'plan-a', checkedAt: Math.floor(Date.now() / 1000), passed: true, cleanup: true, results: [{ name: label, target: label, expected: 'Allowed', observed: 'Allowed', outcome: 'pass' }] });
     const harness = await interfaceHarness({
       recent_projects: () => projects,
@@ -2233,18 +2236,16 @@ test('network settings and execution plans distinguish guest traffic from hosted
   harness.dom.window.close();
 });
 
-test('inconclusive or incomplete boundary diagnostics preserve the selected Codex sandbox mode', async () => {
+test('inconclusive or incomplete boundary diagnostics do not change the saved Codex sandbox mode', async () => {
   const report = { projectId: project.id, environmentId: project.environmentId, planFingerprint: 'plan-a', checkedAt: Math.floor(Date.now() / 1000), passed: true, cleanup: true, results: [{ name: 'Network', target: 'example.com', expected: 'Denied', observed: 'Unknown', outcome: 'inconclusive' }] };
   const harness = await interfaceHarness({ run_boundary_tests: () => report });
   await harness.ready; harness.element('choose-folder').click(); await flush();
-  harness.element('use-brig-boundary').click();
   for (const [results, cleanup] of [[report.results, true], [[], true], [[{ ...report.results[0], outcome: 'pass' }], false]]) {
     report.results = results; report.cleanup = cleanup;
     harness.element('run-boundary-tests').click(); await flush();
-    assert.equal(harness.element('use-brig-boundary').disabled, false);
-    assert.equal(harness.element('use-brig-boundary').checked, false);
     assert.match(harness.element('boundary-status').textContent, /could not be verified/);
   }
+  assert.equal(harness.calls.some(call => call.command === 'save_agent_settings'), false);
   harness.dom.window.close();
 });
 
@@ -3520,7 +3521,7 @@ test('Project settings keeps keyboard focus inside and nested dialogs restore fo
 test('preparation policy and boundary requests select the recorded agent environment', async () => {
   const harness = await interfaceHarness({
     register_project: () => ({ ...project, stage: 'selected' }),
-    read_project_policy: () => ({ document: {}, fingerprint: 'policy-a', editable: true, attached: true, allowedHosts: ['api.openai.com'] }),
+    read_project_policy: () => ({ document: {}, fingerprint: 'policy-a', editable: true, attached: true, access: { publicInternet: false, hosts: { packageManagers: false, additional: ['api.openai.com'] } }, defaultHosts: [], publicInternetRestricted: false }),
     change_project_policy: () => project,
     run_boundary_tests: () => ({ projectId: project.id, environmentId: project.environmentId, planFingerprint: 'plan-a', checkedAt: 1, passed: true, cleanup: true, results: [{ name: 'Network', target: 'example.com', expected: 'Denied', observed: 'Denied', outcome: 'pass' }] }),
   });
@@ -4015,7 +4016,7 @@ test('a new project can select Claude beside New Chat', async () => {
   assert.equal(launch.args.environmentId, project.environmentId);
   assert.equal(launch.args.agentKind, 'claude-code');
   assert.equal(launch.args.action, 'new-chat');
-  assert.equal(launch.args.useBrigBoundary, true);
+  assert.equal(Object.hasOwn(launch.args, 'useBrigBoundary'), false);
   harness.dom.window.close();
 });
 

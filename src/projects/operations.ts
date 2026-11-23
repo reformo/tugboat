@@ -8,15 +8,40 @@ import type { OpenTerminal } from '../terminal/terminal-launch';
 
 interface Preview { reference: string; workspace: string; description: string; fingerprint: string; external: boolean }
 
+// The guest processes that stop_project ends. Keep this list equal to runs_in_guest in Rust.
+const guestPurposes = ['environment', 'login', 'codex', 'resume', 'claude', 'claude-resume', 'shell', 'git-status', 'git-diff', 'git-staged-diff', 'tests'];
+
+export interface StopImpact { working: string[]; idle: string[] }
+
+function terminalLabel(terminal: TerminalStatus, conversations: Conversation[]): string {
+  const key = isChat(terminal) && terminal.conversationId ? conversationKey({ ...terminal, id: terminal.conversationId }) : null;
+  const title = key ? conversations.find(conversation => conversationKey(conversation) === key)?.title : null;
+  return [terminalNames[terminal.purpose], title, 'Terminal ' + terminal.identifier].filter(Boolean).join(' · ');
+}
+
+function affectedTerminals(project: Project | null, terminals: TerminalStatus[]): TerminalStatus[] {
+  return terminals.filter(terminal => project && terminal.running && terminalMatches(terminal, project) && guestPurposes.includes(terminal.purpose));
+}
+
+// Only a Codex chat reports its activity. Every other guest process can be working.
+function idle(terminal: TerminalStatus): boolean {
+  return isChat(terminal) && terminal.agentKind === 'codex' && !terminal.busy;
+}
+
+export function stopImpact(project: Project | null, terminals: TerminalStatus[], conversations: Conversation[]): StopImpact {
+  const affected = affectedTerminals(project, terminals);
+  return {
+    working: affected.filter(terminal => !idle(terminal)).map(terminal => terminalLabel(terminal, conversations)),
+    idle: affected.filter(idle).map(terminal => terminalLabel(terminal, conversations)),
+  };
+}
+
 export function renderStopImpact(project: Project | null, terminals: TerminalStatus[], conversations: Conversation[]): void {
-  const guestPurposes = ['environment', 'login', 'codex', 'resume', 'claude', 'claude-resume', 'shell', 'git-status', 'git-diff', 'git-staged-diff', 'tests'];
-  const affected = terminals.filter(terminal => project && terminal.running && terminalMatches(terminal, project) && guestPurposes.includes(terminal.purpose));
+  const affected = affectedTerminals(project, terminals);
   const list = document.getElementById('stop-impact-list')!;
   list.replaceChildren(...affected.map(terminal => {
     const item = document.createElement('li');
-    const key = isChat(terminal) && terminal.conversationId ? conversationKey({ ...terminal, id: terminal.conversationId }) : null;
-    const title = key ? conversations.find(conversation => conversationKey(conversation) === key)?.title : null;
-    item.textContent = [terminalNames[terminal.purpose], title, 'Terminal ' + terminal.identifier].filter(Boolean).join(' · ');
+    item.textContent = terminalLabel(terminal, conversations);
     return item;
   }));
   document.getElementById('stop-impact')!.hidden = !affected.length;

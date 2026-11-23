@@ -98,6 +98,31 @@ pub struct Project {
     pub(crate) preview: Option<project_preview::Approval>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) github_access: Option<project_github_access::Grant>,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::agents::claude::Attribution::is_hidden"
+    )]
+    pub(crate) claude_attribution: crate::agents::claude::Attribution,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::agents::claude::PermissionMode::is_auto"
+    )]
+    pub(crate) claude_permission_mode: crate::agents::claude::PermissionMode,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::agents::codex::Boundary::is_brig"
+    )]
+    pub(crate) codex_boundary: crate::agents::codex::Boundary,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::agents::claude::Options::is_default"
+    )]
+    pub(crate) claude_options: crate::agents::claude::Options,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::agents::codex::Options::is_default"
+    )]
+    pub(crate) codex_options: crate::agents::codex::Options,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -122,6 +147,13 @@ pub struct ProjectOptions {
     pub network: settings::Network,
 }
 impl ProjectOptions {
+    // A change to these values needs a new guest. The project name does not.
+    pub(crate) fn changes_environment(&self, previous: &settings::Settings) -> bool {
+        self.cpus != previous.cpus
+            || self.memory_mb != previous.memory_mb
+            || self.verification != previous.verification
+            || self.network != previous.network
+    }
     pub fn apply(&self, settings: &mut settings::Settings) {
         settings.cpus = self.cpus;
         settings.memory_mb = self.memory_mb;
@@ -165,6 +197,19 @@ impl Project {
             );
         }
         Ok(())
+    }
+    pub(crate) fn agent_settings(&self) -> crate::agents::AgentSettings {
+        crate::agents::AgentSettings {
+            claude: crate::agents::claude::ChatSettings {
+                permission_mode: self.claude_permission_mode,
+                attribution: self.claude_attribution,
+                options: self.claude_options.clone(),
+            },
+            codex: crate::agents::codex::ChatSettings {
+                boundary: self.codex_boundary,
+                options: self.codex_options.clone(),
+            },
+        }
     }
     pub fn settings(&self, mut defaults: settings::Settings) -> Result<settings::Settings, String> {
         defaults.network = self.network.clone();
@@ -241,11 +286,7 @@ impl Project {
         options: ProjectOptions,
         previous: &settings::Settings,
     ) {
-        if options.cpus != previous.cpus
-            || options.memory_mb != previous.memory_mb
-            || options.verification != previous.verification
-            || options.network != previous.network
-        {
+        if options.changes_environment(previous) {
             self.environment_verified = Some(false);
             self.environment_attempt = None;
             self.stage = self.stage.invalidate_preparation();
@@ -573,6 +614,11 @@ impl Registry {
             options: None,
             preview: None,
             github_access: None,
+            claude_attribution: crate::agents::claude::Attribution::Hidden,
+            claude_permission_mode: crate::agents::claude::PermissionMode::Auto,
+            codex_boundary: crate::agents::codex::Boundary::Brig,
+            claude_options: crate::agents::claude::Options::default(),
+            codex_options: crate::agents::codex::Options::default(),
         };
         let mut proposed = self.clone();
         proposed.projects.push(project.clone().into());
@@ -642,6 +688,23 @@ impl Registry {
             .unwrap_or(0);
         current.max(previous.saturating_add(1))
     }
+    // Running chats keep their arguments. The values apply when a chat starts or resumes.
+    pub(crate) fn set_agent_settings(
+        &mut self,
+        identifier: &str,
+        environment: &EnvironmentId,
+        settings: crate::agents::AgentSettings,
+    ) -> Result<(), String> {
+        settings.codex.options.validate()?;
+        self.environment(identifier, environment)?.require_active()?;
+        self.projects
+            .iter_mut()
+            .find(|record| record.id == identifier)
+            .ok_or("Project not found.")?
+            .set_agent_settings(settings);
+        Ok(())
+    }
+
     pub fn update(&mut self, project: Project) -> Result<(), String> {
         project.validate()?;
         let mut proposed = self.clone();
@@ -1004,6 +1067,33 @@ pub fn read_project_preferences(
     Ok(ProjectPreferences { project, options })
 }
 
+fn require_stopped_for_preferences(
+    app: &AppHandle,
+    identifier: &str,
+    project: &Project,
+    previous: &settings::Settings,
+) -> Result<crate::environment::EnvironmentOperation, String> {
+    // The caller keeps the operation until the registry write, so no start can pass between.
+    let operation =
+        crate::environment::EnvironmentOperation::begin(&project.id, &project.environment_id)?;
+    if crate::terminal::terminal_sessions(identifier.to_owned())
+        .iter()
+        .any(|process| {
+            process.running && process.belongs_to_environment(&project.id, &project.environment_id)
+        })
+    {
+        return Err(
+            "End the affected environment terminal processes before changing these settings."
+                .into(),
+        );
+    }
+    let brig = crate::environment::brig_for_project(app, project, previous)?;
+    if crate::environment::listed_as_running(&brig, project)? {
+        return Err("Stop the Brig environment before changing project settings.".into());
+    }
+    Ok(operation)
+}
+
 #[tauri::command]
 pub async fn save_project_preferences(
     app: AppHandle,
@@ -1034,24 +1124,10 @@ pub async fn save_project_preferences(
         let mut project = registry.resolve_environment(&identifier, environment_id.as_ref())?;
         project.require_active()?;
         let previous = project.settings(defaults)?;
-        let _operation =
-            crate::environment::EnvironmentOperation::begin(&project.id, &project.environment_id)?;
-        if crate::terminal::terminal_sessions(identifier.clone())
-            .iter()
-            .any(|process| {
-                process.running
-                    && process.belongs_to_environment(&project.id, &project.environment_id)
-            })
-        {
-            return Err(
-                "End the affected environment terminal processes before changing these settings."
-                    .into(),
-            );
-        }
-        let brig = crate::environment::brig_for_project(&app, &project, &previous)?;
-        if crate::environment::listed_as_running(&brig, &project)? {
-            return Err("Stop the Brig environment before changing project settings.".into());
-        }
+        let _operation = options
+            .changes_environment(&previous)
+            .then(|| require_stopped_for_preferences(&app, &identifier, &project, &previous))
+            .transpose()?;
         project.set_preferences(name, options, &previous);
         registry.update(project.clone())?;
         storage::write(&file, &registry)?;
@@ -1061,10 +1137,70 @@ pub async fn save_project_preferences(
     .map_err(|error| error.to_string())?
 }
 
+#[tauri::command]
+pub fn read_agent_settings(
+    app: AppHandle,
+    identifier: String,
+    environment_id: EnvironmentId,
+) -> Result<crate::agents::AgentSettings, String> {
+    Ok(Registry::load(&file(&app)?)?
+        .environment(&identifier, &environment_id)?
+        .agent_settings())
+}
+
+#[tauri::command]
+pub fn save_agent_settings(
+    app: AppHandle,
+    state: State<'_, Projects>,
+    identifier: String,
+    environment_id: EnvironmentId,
+    settings: crate::agents::AgentSettings,
+) -> Result<crate::agents::AgentSettings, String> {
+    let _guard = state
+        .0
+        .try_lock()
+        .map_err(|_| "Project setup is running. Try again shortly.")?;
+    let file = file(&app)?;
+    let _file_guard = storage::lock(&file)?;
+    let mut registry = Registry::load(&file)?;
+    crate::storage::data_location::validate_project_records(&app, &registry)?;
+    registry.set_agent_settings(&identifier, &environment_id, settings.clone())?;
+    storage::write(&file, &registry)?;
+    Ok(settings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn a_rename_does_not_change_the_environment_but_resources_and_network_do() {
+        let previous = settings::Settings::default();
+        let same = ProjectOptions {
+            cpus: previous.cpus,
+            memory_mb: previous.memory_mb,
+            verification: previous.verification.clone(),
+            network: previous.network.clone(),
+        };
+        assert!(!same.changes_environment(&previous));
+        for changed in [
+            ProjectOptions {
+                cpus: previous.cpus + 1,
+                ..same.clone()
+            },
+            ProjectOptions {
+                memory_mb: previous.memory_mb + 256,
+                ..same.clone()
+            },
+            ProjectOptions {
+                network: settings::Network::Offline,
+                ..same.clone()
+            },
+        ] {
+            assert!(changed.changes_environment(&previous));
+        }
+    }
 
     #[test]
     #[cfg(target_os = "macos")]

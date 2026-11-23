@@ -153,7 +153,8 @@ try {
   const help = await guest('claude', '--help');
   assert.match(help.stdout, /--permission-mode[^]*?"auto"/);
   assert.match(help.stdout, /--permission-mode[^]*?"manual"/);
-  check('Codex sandbox modes and the Claude auto and manual permission options', [codexVersion, claudeVersion]);
+  assert.match(help.stdout, /--settings\b/);
+  check('Codex sandbox modes and the Claude auto and manual permission and settings options', [codexVersion, claudeVersion]);
 
   const curlOptions = ['-q', '--noproxy', '*', '--connect-timeout', '8', '--max-time', '12', '-sS', '-o', '/dev/null', '-w', '%{http_code}'];
   const providerCodes = {};

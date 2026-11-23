@@ -12,6 +12,15 @@ pub struct PolicyEditor {
 
 impl PolicyEditor {
     pub fn create(name: &str, hosts: &[String]) -> Result<Self, String> {
+        Self::egress(name, false, hosts)
+    }
+
+    // Brig ignores allowed hosts under an allow default. Tugboat keeps them so the choice survives.
+    pub(crate) fn egress(
+        name: &str,
+        public_internet: bool,
+        hosts: &[String],
+    ) -> Result<Self, String> {
         if !crate::desktop::settings::valid_identifier(name)
             || hosts.len() > 64
             || hosts
@@ -20,7 +29,11 @@ impl PolicyEditor {
         {
             return Err("Use a valid policy name and allowed hosts.".into());
         }
-        let mut document = format!("apiVersion: brig.sh/v1alpha1\nkind: Policy\nmetadata:\n  name: {name}\n  description: Prepared by Tugboat\nspec:\n  egress:\n    default: deny\n    allow:");
+        let default = match public_internet {
+            true => "allow",
+            false => "deny",
+        };
+        let mut document = format!("apiVersion: brig.sh/v1alpha1\nkind: Policy\nmetadata:\n  name: {name}\n  description: Prepared by Tugboat\nspec:\n  egress:\n    default: {default}\n    allow:");
         if hosts.is_empty() {
             document.push_str(" []\n");
         }

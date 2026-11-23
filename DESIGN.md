@@ -47,6 +47,22 @@ colors:
   terminal-ansi-13: "#d3869b"
   terminal-ansi-14: "#8ec07c"
   terminal-ansi-15: "#ffffff"
+  settings-dialog-background: "#262626"
+  settings-dialog-navigation: "#1f1f1f"
+  settings-dialog-field: "#1c1c1c"
+  settings-dialog-surface: "#383838"
+  settings-dialog-line: "#3e3e3e"
+  settings-dialog-field-border: "#5c5c5c"
+  settings-dialog-text: "#ececec"
+  settings-dialog-secondary: "#a6a6a6"
+  settings-dialog-selection: "#34476b"
+  settings-dialog-accent: "#3b78e7"
+  settings-dialog-accent-hover: "#346bd0"
+  settings-dialog-on-accent: "#ffffff"
+  settings-dialog-focus: "#6ea2ff"
+  settings-dialog-error: "#ff7b70"
+  settings-dialog-switch-track: "#6e6e6e"
+  settings-dialog-switch-knob: "#ffffff"
 typography:
   body:
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif"
@@ -426,7 +442,7 @@ The user-confirmed palette comes from the ChatGPT conversation “Renk paleti ol
 - **Terminal Divider** (`terminal-divider`) records the normal dark toolbar bottom line, which uses the sidebar divider role. The application has no terminal split.
 - The sixteen indexed `terminal-ansi-0` through `terminal-ansi-15` colors retain the exact order from `TerminalTheme.h`. They are terminal protocol colors, not additional application action accents.
 
-**The Fixed Composition Rule.** Keep the native window header and sidebar dark, the workspace pale, and controls white, independent of operating-system appearance. Keep the requested dot grid only in the Projects library. Selected-project views and Settings keep the pale base canvas. Keep the terminal view and its separate toolbar dark. Tauri's Dark theme and the explicit per-window AppKit Dark Aqua appearance own classic native chrome, with WebView content below the titlebar. Keep the document root/meta and body color scheme light for the pale workspace and white controls. Settings describes the composition as “Dark sidebar · Light workspace”.
+**The Fixed Composition Rule.** Keep the native window header and sidebar dark, the workspace pale, and controls white, independent of operating-system appearance. The Project settings dialog is the one exception: it always uses the dark `settings-dialog-` palette. Keep the requested dot grid only in the Projects library. Selected-project views and Settings keep the pale base canvas. Keep the terminal view and its separate toolbar dark. Tauri's Dark theme and the explicit per-window AppKit Dark Aqua appearance own classic native chrome, with WebView content below the titlebar. Keep the document root/meta and body color scheme light for the pale workspace and white controls. Settings describes the composition as “Dark sidebar · Light workspace”.
 
 **The Accent Text Rule.** Use On Accent light text on blue primary buttons in normal and hover states. Use Selected Sidebar Text light text on blue navigation and sidebar text selection. Preserve this explicit user choice; do not present this pairing as an AA contrast pass.
 
@@ -479,7 +495,7 @@ The selected-project header uses `components.workspace-header`: sticky at the to
 
 Project dashboards show five totals in a grid: total tokens, input, cached input, output, and estimated API equivalent. Four equal tracks precede a slightly wider cost track; the gap is (16px). The final value aligns right. A small information control beside Estimated API equivalent opens the explanatory note in a popover. The session toolbar wraps with a (16px) gap and `32px 0 18px` margins. Session views stay left; the native agent select and New Chat stay right. Existing chats and terminal outputs reopen from the sidebar. The session table has a minimum width of (650px), with local horizontal scrolling when needed.
 
-Project settings uses a named dialog section in the workspace. Its controller confines focus and makes the background inert. Session usage uses a native HTML dialog. Both are bounded to `min(900px, calc(100vw - 64px))` and a maximum height of `calc(100vh - 64px)`. Each open dialog is a vertical flex column. Its header does not shrink, has `20px 28px` padding, and keeps the close action visible. Its body scrolls vertically with `12px 28px 28px` padding. CPU and memory share two flexible columns; image verification and network share another pair. Each pair uses a (16px) gap.
+Project settings uses a named dialog section in the workspace. Its controller confines focus and makes the background inert. Session usage uses a native HTML dialog. Both are bounded to `min(900px, calc(100vw - 64px))` and a maximum height of `calc(100vh - 64px)`. Each open dialog is a vertical flex column. Its header does not shrink, has `20px 28px` padding, and keeps the close action visible. Session usage's body scrolls vertically with `12px 28px 28px` padding. Project settings has a fixed height of `min(720px, calc(100vh - 64px))`. Its body is a two-column grid: a (200px) left menu on Support Surface with a right divider, and one scrolling section with `24px 32px 32px` padding. Menu items use the session-tab shape; the current item uses White Control Surface, Primary Text, and label weight. Each section starts with a Section Label title. The Agents and Network sections group options in rounded White Control Surface boxes with one-pixel row dividers, as in the reference image `reports/network.png`. Each row puts its label and hint on the left and a (40 × 24px) switch or value button on the right. A checked switch uses Action Blue. Refresh uses a pill button on Support Surface. The dialog always uses the dark `settings-dialog-` palette, as in the reference image, at the user's request. It declares `color-scheme: dark` and redefines the shared tokens inside `.project-settings-dialog`, so its fields, buttons, switches, and native controls follow the dark values. The rest of the workspace keeps the light palette. Select fields use an inline copy of the Lucide chevron with a light stroke. A higher-contrast system setting raises the dialog line, field border, and secondary text values. CPU and memory share two flexible columns; image verification and network share another pair. Each pair uses a (16px) gap. At the compact breakpoint the menu is (168px) wide and the section padding is `20px 24px 28px`.
 
 Showing the terminal keeps the project identity and settings icon, then places the independent dark toolbar and native terminal below it. The header contracts to a minimum height of (86px) with `16px 24px` padding. The ordinary project content is hidden except for errors. The terminal panel fills remaining height with a minimum of (160px); its surface has a minimum of (100px). Toolbar actions wrap separately from terminal text. AppKit sizing subtracts the pinned inset on every side before deriving grid dimensions. Resize the real terminal and pseudo-terminal together.
 

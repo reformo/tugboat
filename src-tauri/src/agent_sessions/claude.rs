@@ -50,7 +50,6 @@ pub(super) fn arguments(
     checked: &CheckedProject,
     action: Action,
     session: Option<&SessionId>,
-    use_brig_boundary: Option<bool>,
 ) -> Result<Vec<String>, String> {
     use crate::agent_sessions::launch::{Admission, LaunchMode};
     let mode = match action {
@@ -64,26 +63,15 @@ pub(super) fn arguments(
         "Prepare the selected Claude environment first.",
     )?;
     let require_session = || session.ok_or("Choose a Claude chat session ID.");
-    let (command, permission_mode) = match action {
+    let command = match action {
         Action::Shell => return admission.prepare(vec!["sh".into(), checked.project.reference()]),
-        Action::NewChat => (
-            AgentCommand::NewChat(Some(require_session()?)),
-            claude_agent::NEW_CHAT_PERMISSION_MODE,
-        ),
-        Action::Resume => (
-            AgentCommand::Resume(require_session()?),
-            claude_agent::RESUME_PERMISSION_MODE,
-        ),
+        Action::NewChat => AgentCommand::NewChat(Some(require_session()?)),
+        Action::Resume => AgentCommand::Resume(require_session()?),
     };
     admission.online(
         &checked.settings.network,
         "Claude sign-in and chats are unavailable in offline mode.",
     )?;
-    if use_brig_boundary == Some(false) {
-        return Err(
-            "Claude uses the Brig boundary. Enable it before starting this session.".into(),
-        );
-    }
     admission.authorize(
         signed_in(checked)?,
         "Sign in with Claude in Settings, Providers.",
@@ -98,16 +86,33 @@ pub(super) fn arguments(
         ],
         None,
     )?;
+    let settings = checked.project.agent_settings().claude;
+    let mode = settings.permission_mode.argument();
     if !help.stdout.contains("--session-id")
         || !help.stdout.contains("--resume")
-        || !supports_permission_mode(&help.stdout, permission_mode)
+        || !supports_permission_mode(&help.stdout, mode)
     {
         return Err(format!(
-            "Guest Claude does not support the required session and {permission_mode} permission options."
+            "Guest Claude does not support the required session and {mode} permission options."
+        ));
+    }
+    if !help.stdout.contains(claude_agent::SETTINGS_OPTION) {
+        return Err(
+            "Guest Claude does not support the settings option that sets the status line and Git attribution.".into(),
+        );
+    }
+    if let Some(option) = settings
+        .options
+        .required_options()
+        .into_iter()
+        .find(|option| !help.stdout.contains(option))
+    {
+        return Err(format!(
+            "Guest Claude does not support {option}. Clear this option in Project settings → Agents."
         ));
     }
     admission.capabilities()?;
-    let command = AgentKind::ClaudeCode.command(command)?;
+    let command = claude_agent::command(command, &settings)?;
     let arguments = shared_runtime::interactive(&checked.project, command);
     admission.prepare(arguments)
 }

@@ -265,6 +265,100 @@ fn one_time_plan_preserves_zero_one_and_two_registrations_and_requires_new_polic
 }
 
 #[test]
+fn agent_settings_default_to_current_behavior_and_survive_reopen_and_stale_updates() {
+    use crate::agents::{
+        claude::{Attribution, ChatSettings, PermissionMode},
+        codex::{self, Boundary},
+        AgentSettings,
+    };
+    let fixture = Fixture::new();
+    let file = fixture.0.join("projects.json");
+    let mut registry = Registry::default();
+    let first = fixture.register(&mut registry, "first");
+    let sibling = fixture.register(&mut registry, "sibling");
+    assert_eq!(first.agent_settings(), AgentSettings::default());
+    storage::write(&file, &registry).unwrap();
+    let recorded: Value = storage::read(&file).unwrap().unwrap();
+    for field in ["claudeAttribution", "claudePermissionMode", "codexBoundary", "claudeOptions", "codexOptions"] {
+        assert!(recorded["projects"][0].get(field).is_none());
+        assert!(serde_json::to_value(&first).unwrap().get(field).is_none());
+    }
+
+    let selected = AgentSettings {
+        claude: ChatSettings {
+            permission_mode: PermissionMode::Manual,
+            attribution: Attribution::Shown,
+            options: serde_json::from_value(json!({"model": "opus", "effort": "high"})).unwrap(),
+        },
+        codex: codex::ChatSettings {
+            boundary: Boundary::Workspace,
+            options: serde_json::from_value(json!({"reasoningEffort": "low"})).unwrap(),
+        },
+    };
+    let stale = registry
+        .agent_environment(&first.id, &first.environment_id, AgentKind::ClaudeCode)
+        .unwrap();
+    registry
+        .set_agent_settings(&first.id, &first.environment_id, selected.clone())
+        .unwrap();
+    registry.update(stale).unwrap();
+    storage::write(&file, &registry).unwrap();
+    let recorded: Value = storage::read(&file).unwrap().unwrap();
+    assert_eq!(recorded["projects"][0]["claudeAttribution"], "shown");
+    assert_eq!(recorded["projects"][0]["claudePermissionMode"], "manual");
+    assert_eq!(recorded["projects"][0]["codexBoundary"], "workspace");
+    assert_eq!(
+        recorded["projects"][0]["claudeOptions"],
+        json!({"model": "opus", "effort": "high", "fallbackModel": null, "appendSystemPrompt": null})
+    );
+    assert_eq!(
+        recorded["projects"][0]["codexOptions"],
+        json!({"model": null, "reasoningEffort": "low"})
+    );
+    let reopened = Registry::load(&file).unwrap();
+    for agent in [AgentKind::Codex, AgentKind::ClaudeCode] {
+        let project = reopened
+            .agent_environment(&first.id, &first.environment_id, agent)
+            .unwrap();
+        assert_eq!(project.agent_settings(), selected);
+    }
+    let sibling = reopened
+        .environment(&sibling.id, &sibling.environment_id)
+        .unwrap();
+    assert_eq!(sibling.agent_settings(), AgentSettings::default());
+
+    let before = registry.clone();
+    assert!(registry
+        .set_agent_settings(&first.id, &sibling.environment_id, AgentSettings::default())
+        .is_err());
+    assert!(registry
+        .set_agent_settings("missing", &first.environment_id, AgentSettings::default())
+        .is_err());
+    let mut unsupported = AgentSettings::default();
+    unsupported.codex.options =
+        serde_json::from_value(json!({"model": "gpt-6-luna", "reasoningEffort": "ultra"})).unwrap();
+    assert!(registry
+        .set_agent_settings(&first.id, &first.environment_id, unsupported)
+        .unwrap_err()
+        .contains("ultra"));
+    assert_eq!(
+        serde_json::to_value(&registry).unwrap(),
+        serde_json::to_value(&before).unwrap()
+    );
+    for (field, value) in [
+        ("claudeAttribution", "visible"),
+        ("claudePermissionMode", "bypassPermissions"),
+        ("codexBoundary", "none"),
+        ("claudeOptions", "opus"),
+    ] {
+        let mut invalid = serde_json::to_value(&before).unwrap();
+        invalid["projects"][0][field] = json!(value);
+        storage::write(&file, &invalid).unwrap();
+        assert!(Registry::load(&file).is_err());
+    }
+}
+
+#[test]
 fn malformed_old_identity_and_unknown_new_state_are_rejected_without_writes() {
     let fixture = Fixture::new();
     let file = fixture.0.join("projects.json");

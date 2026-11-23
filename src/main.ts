@@ -9,11 +9,14 @@ import { initializeAppUpdates } from './settings/app-updates';
 import { renderProjects, renderConversations, renderTerminals, isStandaloneConversation, standaloneConversations, terminalCaption, terminalNames, conversationKey, terminalMatches, agentName, isChat, sameProject, sameProjectView, type AgentKind, type Conversation, type Project, type ProjectContext, type TerminalStatus } from './projects/projects';
 import { createAgentLogo } from './providers/agent-logo';
 import { prepareProject, renderPlan, type Plan } from './projects/preparation';
-import { initializeBoundaryTests, resetBoundaryChoice, useBrigBoundary } from './projects/boundaries';
-import { initializeOperations, renderStopImpact } from './projects/operations';
+import { initializeBoundaryTests } from './projects/boundaries';
+import { initializeOperations, renderStopImpact, stopImpact, type StopImpact } from './projects/operations';
+import { EnvironmentStopGate } from './projects/environment-stop';
 import { initializeGatewayLogs } from './projects/gateway-logs';
 import { initializeProjectPreview } from './projects/project-preview';
 import { initializeProjectGitHubAccess } from './projects/project-github-access';
+import { initializeAgentSettings } from './projects/project-agent-settings';
+import { initializeProjectSettingsNavigation, type ProjectSettingsNavigation } from './projects/project-settings-navigation';
 import { initializeProjectImageUpdate } from './projects/project-image-update';
 import { initializeProjectPolicy } from './projects/project-policy';
 import { renderDashboard, emptyUsage, savedSessionsStatus, type Dashboard, type SessionState } from './dashboard/dashboard';
@@ -85,6 +88,9 @@ let resetOperationDetails = () => {};
 let resetGatewayLogs = () => {};
 let resetProjectPreview = () => {};
 let resetGitHubAccess = () => {};
+let resetAgentSettings = () => {};
+let preferencesStopGate: EnvironmentStopGate | null = null;
+let projectSettingsNavigation: ProjectSettingsNavigation | null = null;
 let projectImageUpdate: ReturnType<typeof initializeProjectImageUpdate> | null = null;
 let terminalIdentifier: number | null = null;
 const terminalLaunch = new TerminalLaunch();
@@ -134,7 +140,7 @@ const usageDetails = initializeUsageDetails({
 function selectedConversations(): Conversation[] { return dashboardState.current()?.conversations ?? []; }
 function projectContext(): ProjectContext | null { return appData.selectedProject ? { id: appData.selectedProject.id, environmentId: appData.selectedProject.environmentId, fingerprint: selectedPlanFingerprint, epoch: projectEpoch, view: projectSettingsEpoch } : null; }
 function resetProjectDetails(): void {
-  ++projectSettingsEpoch; projectPreferences.reset();
+  ++projectSettingsEpoch; projectPreferences.reset(); preferencesStopGate?.cancel();
   element('guest-terminal-status').textContent = '';
   setBusy(element('save-project-preferences'), false);
   setLoading(element('project-preference-fields'), false);
@@ -143,7 +149,7 @@ function resetProjectDetails(): void {
   element<HTMLFieldSetElement>('project-preference-fields').disabled = true;
   for (const id of ['project-name', 'project-cpus', 'project-memory']) element<HTMLInputElement>(id).value = '';
   for (const id of ['project-verification', 'project-network']) element<HTMLSelectElement>(id).value = '';
-  resetPolicyDetails(); resetBoundaryDetails(); resetOperationDetails(); resetGatewayLogs(); resetProjectPreview(); resetGitHubAccess();
+  resetPolicyDetails(); resetBoundaryDetails(); resetOperationDetails(); resetGatewayLogs(); resetProjectPreview(); resetGitHubAccess(); resetAgentSettings();
   projectImageUpdate?.reset();
   finishProjectRecordRefresh();
 }
@@ -192,7 +198,7 @@ function continueRequestedChat(): void {
   requestedChat = null;
   void openTerminal('start_agent_session', {
     identifier: request.project.id, environmentId: request.project.environmentId, agentKind: request.agent,
-    fingerprint: selectedPlanFingerprint, action: 'new-chat', useBrigBoundary: request.agent === 'claude-code' || useBrigBoundary(),
+    fingerprint: selectedPlanFingerprint, action: 'new-chat',
   }, agentName(request.agent));
 }
 
@@ -849,7 +855,7 @@ async function resumeConversation(conversation: Conversation): Promise<void> {
   }
   if (!selectedPlanFingerprint) await refreshSelectedPlan();
   if (!current() || !selectedPlanFingerprint) return;
-  await openTerminal('start_agent_session', { identifier: projectId, environmentId: conversation.environmentId, agentKind: conversation.agentKind, fingerprint: selectedPlanFingerprint, action: 'resume', sessionId: conversation.id, useBrigBoundary: conversation.agentKind === 'claude-code' || useBrigBoundary() }, conversation.title);
+  await openTerminal('start_agent_session', { identifier: projectId, environmentId: conversation.environmentId, agentKind: conversation.agentKind, fingerprint: selectedPlanFingerprint, action: 'resume', sessionId: conversation.id }, conversation.title);
 }
 
 async function selectProject(project: Project, recordOpen = false): Promise<void> {
@@ -896,7 +902,6 @@ async function applySelectedProject(project: Project): Promise<void> {
   selectedPlanFingerprint = null;
   planRequests.invalidate(); planFeedback(null);
   for (const id of ['project-access-summary', 'prepare-environment', 'refresh-plan']) element(id).hidden = true;
-  resetBoundaryChoice();
   folderError.hidden = true;
   element('codex-actions').hidden = true;
   element('sharing-plan').hidden = true;
@@ -990,7 +995,6 @@ async function refreshSelectedPlan(repairMissingBinding = false): Promise<void> 
   if (!appData.selectedProject) return;
   const { id, environmentId } = appData.selectedProject;
   const request = planRequests.begin();
-  const previousFingerprint = selectedPlanFingerprint;
   selectedPlanFingerprint = null;
   appData.plan = null;
   element('sharing-plan').hidden = true;
@@ -1002,7 +1006,6 @@ async function refreshSelectedPlan(repairMissingBinding = false): Promise<void> 
     const result = await invoke<{ project: Project; plan: Plan; fingerprint: string }>('preview_project', { identifier: id, environmentId });
     if (appData.selectedProject?.id !== id || appData.selectedProject.environmentId !== environmentId || !planRequests.accepts(request)) return;
     if (result.project.id !== id || result.project.environmentId !== environmentId) throw new Error('The execution plan belongs to another environment.');
-    if (previousFingerprint !== result.fingerprint) resetBoundaryChoice();
     appData.selectedProject = result.project;
     selectedPlanFingerprint = result.fingerprint;
     planRequests.finish(request);
@@ -1043,7 +1046,6 @@ async function prepareSelectedProject(): Promise<void> {
   appData.plan = null;
   const request = planRequests.begin();
   planFeedback('Preparing the execution plan…', false, true);
-  resetBoundaryChoice();
   void syncMenus();
   element('preparation-status').textContent = 'Preparing Brig project configuration…';
   element('retry-preparation').hidden = true;
@@ -1114,7 +1116,7 @@ element('first-chat-open').addEventListener('click', requestNewChat);
 element('guest-shell').addEventListener('click', () => {
   if (!appData.selectedProject || !selectedPlanFingerprint) return;
   const { id, environmentId } = appData.selectedProject;
-  void openTerminal('start_agent_session', { identifier: id, environmentId, agentKind: 'codex', fingerprint: selectedPlanFingerprint, action: 'shell', useBrigBoundary: useBrigBoundary() }, 'Guest terminal');
+  void openTerminal('start_agent_session', { identifier: id, environmentId, agentKind: 'codex', fingerprint: selectedPlanFingerprint, action: 'shell' }, 'Guest terminal');
 });
 element('project-provider-settings').addEventListener('click', () => {
   showView('settings'); selectSettingsTab('providers'); element(newChatAgent() === 'claude-code' ? 'claude-account-heading' : 'shared-chatgpt-heading').focus();
@@ -1156,7 +1158,6 @@ async function showProjects(message = 'Choose where Brig and your agents will wo
   selectedConversationId = null;
   dashboardState.reset(null);
   renderConversations([], null, resumeConversation);
-  resetBoundaryChoice();
   projectView.classList.remove('has-project');
   updateTerminalActions();
   for (const id of ['project-actions', 'project-meta', 'selected-branch', 'project-settings-button', 'project-reference', 'project-dashboard']) element(id).hidden = true;
@@ -1347,7 +1348,7 @@ async function showProjectSettings(returnFocusId = 'project-settings-button'): P
   }
   renderStopImpact(appData.selectedProject, appData.terminals, selectedConversations());
   element<HTMLDetailsElement>('sharing-plan').open = false;
-  element<HTMLDetailsElement>('project-resources').open = false;
+  projectSettingsNavigation?.select('project-setup-overview');
   if (appData.selectedProject.stage === 'updating-image') element<HTMLDetailsElement>('project-image-update').open = true;
   showDialog(projectSettingsDialog, returnFocusId); await updateTerminalLayout();
   if (!sameProjectView(projectContext(), context) || !projectPreferences.accepts(request) || !dialogOpen(projectSettingsDialog)) return;
@@ -1381,6 +1382,10 @@ element('setup-project').addEventListener('click', () => { void showProjectSetti
 element('close-project-settings').addEventListener('click', () => { closeDialog(projectSettingsDialog); });
 projectSettingsDialog.addEventListener('close', () => { void updateTerminalLayout(); });
 projectSettingsDialog.addEventListener('close', () => { if (!dialogOpen(projectSettingsDialog)) resetProjectDetails(); });
+function currentStopImpact(): StopImpact {
+  return stopImpact(appData.selectedProject, appData.terminals, selectedConversations());
+}
+preferencesStopGate = new EnvironmentStopGate(element('preferences-stop-warning'));
 element<HTMLFormElement>('project-preferences').addEventListener('submit', async event => {
   event.preventDefault(); if (!appData.selectedProject || !dialogOpen(projectSettingsDialog)) return;
   const submission = projectPreferences.submit();
@@ -1389,17 +1394,29 @@ element<HTMLFormElement>('project-preferences').addEventListener('submit', async
   element('project-preferences-status').textContent = 'Saving project settings…';
   setBusy(element('save-project-preferences'), true);
   const options = { cpus: Number(element<HTMLInputElement>('project-cpus').value), memoryMb: Number(element<HTMLInputElement>('project-memory').value), verification: element<HTMLSelectElement>('project-verification').value, network: element<HTMLSelectElement>('project-network').value };
+  const visible = () => sameProjectView(projectContext(), context) && projectPreferences.accepts(request);
+  // A rename keeps the running environment. Only resource and network changes need a new guest.
+  const previous = submission.value.options;
+  const environmentChanged = (['cpus', 'memoryMb', 'verification', 'network'] as const).some(key => previous[key] !== options[key]);
   try {
+    const stop = environmentChanged
+      ? await preferencesStopGate!.prepare({ identifier: id, environmentId: context.environmentId }, currentStopImpact(), message => { if (visible()) element('project-preferences-status').textContent = message; })
+      : { kind: 'not-running' } as const;
+    if (!visible()) return;
+    if (stop.kind === 'cancelled') { element('project-preferences-status').textContent = 'Project settings were not saved.'; return; }
+    element('project-preferences-status').textContent = 'Saving project settings…';
     const project = await invoke<Project>('save_project_preferences', { identifier: id, environmentId: context.environmentId, name: element<HTMLInputElement>('project-name').value, options });
     if (!sameProject(projectContext(), context)) return;
     const saved = { project, options };
     projectPreferences.saved(request, saved);
     rememberProjectPreferences(saved);
     appData.selectedProject = project; element('project-heading').textContent = project.name; element('project-heading').title = project.name;
-    await prepareSelectedProject();
-    if (sameProject(projectContext(), context)) await startSelectedEnvironment(false);
+    if (environmentChanged) {
+      await prepareSelectedProject();
+      if (sameProject(projectContext(), context)) await startSelectedEnvironment(false);
+    }
     updateCodexActions(); await refreshProjects();
-    if (sameProjectView(projectContext(), context) && projectPreferences.accepts(request)) element('project-preferences-status').textContent = 'Project settings saved.';
+    if (sameProjectView(projectContext(), context) && projectPreferences.accepts(request)) element('project-preferences-status').textContent = stop.kind === 'stopped' ? `${stop.note} Project settings saved.` : 'Project settings saved.';
   } catch (error) { if (sameProjectView(projectContext(), context) && projectPreferences.accepts(request)) element('project-preferences-status').textContent = String(error); }
   finally { if (sameProjectView(projectContext(), context) && projectPreferences.accepts(request)) { projectPreferences.finish(request); setBusy(element('save-project-preferences'), false); fields.disabled = false; finishProjectRecordRefresh(); } }
 });
@@ -1838,6 +1855,8 @@ await startup.run('controllers', () => {
 resetBoundaryDetails = initializeBoundaryTests(projectContext);
 resetProjectPreview = initializeProjectPreview(projectContext);
 resetGitHubAccess = initializeProjectGitHubAccess(projectContext);
+resetAgentSettings = initializeAgentSettings(projectContext);
+projectSettingsNavigation = initializeProjectSettingsNavigation();
 projectImageUpdate = initializeProjectImageUpdate(
   projectContext,
   () => terminalLaunch.blocksChanges() || appData.terminals.some(terminal => terminal.running && terminal.projectId === appData.selectedProject?.id),
@@ -1857,7 +1876,6 @@ resetPolicyDetails = initializeProjectPolicy(() => appData.selectedProject ? { .
   updateCodexActions();
   selectedPlanFingerprint = null;
   appData.plan = null;
-  resetBoundaryChoice();
   element('codex-actions').hidden = true;
   element('prepare-environment').hidden = true;
   element('refresh-plan').hidden = true;
@@ -1867,12 +1885,11 @@ resetPolicyDetails = initializeProjectPolicy(() => appData.selectedProject ? { .
     await refreshSelectedPlan();
     if (sameProject(projectContext(), context) && selectedPlanFingerprint) void refreshConversations();
   }
-});
+}, currentStopImpact);
 resetOperationDetails = initializeOperations(projectContext, openTerminal, async project => {
   appData.selectedProject = project;
   selectedPlanFingerprint = null;
   appData.plan = null;
-  resetBoundaryChoice();
   updateCodexActions();
   await refreshTerminals();
   if (appData.selectedProject?.id === project.id) await refreshSelectedPlan();

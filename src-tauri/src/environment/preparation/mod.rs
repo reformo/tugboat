@@ -36,7 +36,7 @@ fn save(registry_file: &Path, project: &Project) -> Result<(), String> {
     storage::write(registry_file, &registry)
 }
 
-fn allowed_hosts(settings: &Settings) -> Vec<String> {
+pub(crate) fn allowed_hosts(settings: &Settings) -> Vec<String> {
     let mut hosts = settings.codex.allowed_hosts.clone();
     hosts.extend(settings.claude_code.allowed_hosts.iter().cloned());
     hosts.sort();

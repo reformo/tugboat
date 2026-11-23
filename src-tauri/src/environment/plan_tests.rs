@@ -166,3 +166,36 @@ fn checked_paths_keep_the_raw_plan_and_its_fingerprint_including_additive_fields
         "The execution plan changed. Review it and start again."
     );
 }
+
+#[test]
+fn only_a_sole_owned_project_policy_can_allow_public_destinations() {
+    let mut fixture = Fixture::new("public-egress");
+    let settings = Settings::default();
+    let mut plan = fixture.plan();
+    assert!(brig::validate_plan(&plan, &fixture.project, &settings).is_ok());
+    plan["data"]["egress"] =
+        json!({"default":"allow","allow":[{"host":"api.anthropic.com"}],"deny":[]});
+    assert!(brig::validate_plan(&plan, &fixture.project, &settings).is_ok());
+    let mut without_deny_list = plan.clone();
+    without_deny_list["data"]["egress"]
+        .as_object_mut()
+        .unwrap()
+        .remove("deny");
+    assert!(brig::validate_plan(&without_deny_list, &fixture.project, &settings).is_ok());
+    for (key, value) in [
+        ("deny", json!([{"host":"example.com"}])),
+        ("deny", json!("example.com")),
+        ("default", json!("open")),
+        ("default", Value::Null),
+    ] {
+        let mut rejected = plan.clone();
+        rejected["data"]["egress"][key] = value;
+        assert!(brig::validate_plan(&rejected, &fixture.project, &settings)
+            .unwrap_err()
+            .contains("denies access by default"));
+    }
+    fixture.project.policy.as_mut().unwrap().owned = false;
+    assert!(brig::validate_plan(&plan, &fixture.project, &settings)
+        .unwrap_err()
+        .contains("denies access by default"));
+}
