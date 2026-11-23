@@ -15,6 +15,7 @@ Use task scope and observable risk to select the required guidance and checks.
 Read the [Tugboat agent guide](docs/agent-guide.html) in full before planning, editing, or running project commands.
 Apply it together with this file. Use its module and test references to identify the boundaries and checks that apply to the task.
 
+
 ## 0. Be understandable
 
 **When explaining complex content, make good use of visualization.**
