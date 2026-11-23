@@ -250,6 +250,7 @@ pub(super) async fn start_codex_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agents::codex::Boundary;
     use crate::desktop::settings::Network;
 
     #[test]
@@ -314,7 +315,7 @@ mod tests {
             (Action::Shell, None),
             (Action::Resume, Some("1a5bc5b5-af21-432d-bf07-e2218dd9f9bf")),
         ] {
-            assert!(arguments(&checked, action, None, session)
+            assert!(arguments(&checked, action, session)
                 .unwrap_err()
                 .contains("only for Codex"));
         }
@@ -362,7 +363,7 @@ esac
             (Action::Codex, None),
             (Action::Resume, Some("01a1c5fd-894f-7e42-b36c-bd1a0dfef8e7")),
         ] {
-            let defaults = arguments(&checked, action, None, session_id).unwrap();
+            let defaults = arguments(&checked, action, session_id).unwrap();
             assert!(defaults.windows(4).any(|flags| flags
                 == [
                     "--sandbox",
@@ -373,11 +374,8 @@ esac
             assert!(!defaults
                 .iter()
                 .any(|flag| flag == "sandbox_workspace_write.network_access=false"));
-            assert_eq!(
-                arguments(&checked, action, Some(true), session_id).unwrap(),
-                defaults
-            );
-            let restricted = arguments(&checked, action, Some(false), session_id).unwrap();
+            checked.project.codex_boundary = Boundary::Workspace;
+            let restricted = arguments(&checked, action, session_id).unwrap();
             assert!(restricted.windows(4).any(|flags| flags
                 == [
                     "--sandbox",
@@ -388,27 +386,26 @@ esac
             assert!(restricted
                 .iter()
                 .any(|flag| flag == "sandbox_workspace_write.network_access=false"));
+            checked.project.codex_boundary = Boundary::Brig;
         }
-        assert!(arguments(&checked, Action::Resume, None, None).is_err());
-        assert!(arguments(&checked, Action::Resume, None, Some("--flag")).is_err());
+        assert!(arguments(&checked, Action::Resume, None).is_err());
+        assert!(arguments(&checked, Action::Resume, Some("--flag")).is_err());
         assert!(arguments(
             &checked,
             Action::Codex,
-            None,
             Some("1a5bc5b5-af21-432d-bf07-e2218dd9f9bf")
         )
         .is_err());
         checked.settings.network = Network::Offline;
-        assert!(arguments(&checked, Action::Codex, None, None).is_err());
+        assert!(arguments(&checked, Action::Codex, None).is_err());
         assert!(arguments(
             &checked,
             Action::Resume,
-            None,
             Some("1a5bc5b5-af21-432d-bf07-e2218dd9f9bf")
         )
         .is_err());
         assert_eq!(
-            arguments(&checked, Action::Shell, None, None).unwrap(),
+            arguments(&checked, Action::Shell, None).unwrap(),
             vec!["sh".to_owned(), checked.project.reference()]
         );
         std::fs::remove_dir_all(root).unwrap();

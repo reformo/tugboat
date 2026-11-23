@@ -522,6 +522,13 @@ mod tests {
         let policy_name = first.project.policy.as_ref().unwrap().name.clone();
         let file = root.join("policies").join(format!("{policy_name}.yaml"));
         let original = fs::read(&file).unwrap();
+        let restricted_access = |additional: &[&str]| {
+            serde_json::from_value(serde_json::json!({
+                "publicInternet": false,
+                "hosts": { "packageManagers": false, "additional": additional }
+            }))
+            .unwrap()
+        };
         let changed = crate::projects::project_policy::change(
             &brig,
             &registry_file,
@@ -537,7 +544,7 @@ mod tests {
                 .as_ref()
                 .unwrap(),
             crate::projects::project_policy::Action::Save,
-            vec!["example.org".into()],
+            Some(restricted_access(&["example.org"])),
             &[],
         )
         .unwrap();
@@ -568,7 +575,7 @@ mod tests {
                 .as_ref()
                 .unwrap(),
             crate::projects::project_policy::Action::Save,
-            allowed_hosts(&settings),
+            Some(restricted_access(&[])),
             &[],
         )
         .is_err());
@@ -599,7 +606,7 @@ mod tests {
                 .as_ref()
                 .unwrap(),
             crate::projects::project_policy::Action::Detach,
-            Vec::new(),
+            None,
             &[],
         )
         .unwrap();
@@ -629,7 +636,7 @@ mod tests {
                 .as_ref()
                 .unwrap(),
             crate::projects::project_policy::Action::Save,
-            allowed_hosts(&settings),
+            Some(restricted_access(&[])),
             &[],
         )
         .unwrap();
@@ -649,7 +656,7 @@ mod tests {
                 .as_ref()
                 .unwrap(),
             crate::projects::project_policy::Action::Attach,
-            Vec::new(),
+            None,
             &[],
         )
         .unwrap();
@@ -669,7 +676,7 @@ mod tests {
                 .as_ref()
                 .unwrap(),
             crate::projects::project_policy::Action::Save,
-            allowed_hosts(&settings),
+            Some(restricted_access(&[])),
             &[],
         )
         .unwrap();

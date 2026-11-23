@@ -181,9 +181,12 @@ fn saves_and_revokes_a_synthetic_git_grant_through_the_native_service() {
     assert!(keychain.contains(&grant.name).unwrap());
     assert!(!fs::read_to_string(&proof.file).unwrap().contains(TOKEN));
     let route_before = proof.brig.policy(&grant.name).unwrap().unwrap();
-    let edited_hosts = ["api.anthropic.com", "api.openai.com", "claude.ai"]
-        .map(str::to_owned)
-        .to_vec();
+    let additional_host = "example.org";
+    let access = serde_json::from_value(json!({
+        "publicInternet": false,
+        "hosts": { "packageManagers": false, "additional": [additional_host] }
+    }))
+    .unwrap();
     let edited = project_policy::change(
         &proof.brig,
         &proof.file,
@@ -198,7 +201,7 @@ fn saves_and_revokes_a_synthetic_git_grant_through_the_native_service() {
             .as_deref()
             .unwrap(),
         project_policy::Action::Save,
-        edited_hosts,
+        Some(access),
         &[],
     )
     .unwrap();
@@ -207,7 +210,7 @@ fn saves_and_revokes_a_synthetic_git_grant_through_the_native_service() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|rule| rule["host"] == "claude.ai"));
+        .any(|rule| rule["host"] == additional_host));
     assert_eq!(
         proof.brig.policy(&grant.name).unwrap(),
         Some(route_before.clone())
