@@ -33,7 +33,7 @@ test('collecting notices preserves a UTF-8 BOM and rejects malformed or missing 
   assert.throws(() => renderNotices([{ name: 'Example', version: '1', notices: [{ name: 'LICENSE', text: '\n' }] }]), /Empty notice for Example 1/);
 });
 
-test('the package verifier rejects stale notices, a missing recipe, and a different source archive', t => {
+test('the package verifier requires both Brig patches and checks the disk tool sources', t => {
   const app = fs.mkdtempSync(path.join(os.tmpdir(), 'tugboat-license-package-'));
   t.after(() => fs.rmSync(app, { recursive: true, force: true }));
   const directory = path.join(app, 'Contents/Resources/licenses');
@@ -51,7 +51,12 @@ test('the package verifier rejects stale notices, a missing recipe, and a differ
   fs.writeFileSync(path.join(disk, 'prepare-disk-tools.mjs'), '// build fixture');
   fs.writeFileSync(path.join(brig, 'brig-compat.json'), '{}');
   fs.writeFileSync(path.join(brig, 'brig-disk-tools.patch'), 'patch fixture');
+  const verificationPatch = path.join(brig, 'brig-verified-cache.patch');
+  fs.writeFileSync(verificationPatch, 'verification cache patch fixture');
   verifyPackagedLicenses(app, pin);
+  fs.unlinkSync(verificationPatch);
+  assert.throws(() => verifyPackagedLicenses(app, pin), /contents/);
+  fs.writeFileSync(verificationPatch, 'verification cache patch fixture');
   fs.writeFileSync(path.join(disk, 'BUILD.txt'), 'Run node scripts/prepare-disk-tools.mjs');
   verifyPackagedLicenses(app, pin);
   fs.writeFileSync(path.join(disk, 'BUILD.txt'), 'No build command');

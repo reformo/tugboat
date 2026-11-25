@@ -3,7 +3,7 @@ import path from 'node:path';
 import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { hashFile } from '../runtime/runtime-bundle.mjs';
-import { readJson, readNotice, readNotices, root } from './license-notices.mjs';
+import { brigSourceFiles, readJson, readNotice, readNotices, root } from './license-notices.mjs';
 
 const execute = promisify(execFile);
 const goRoot = path.join(root, '.build/hull-compat');
@@ -89,9 +89,7 @@ export function packageCorrespondingSource(destination) {
   fs.writeFileSync(path.join(diskFiles, 'BUILD.txt'), instructions.join('\n') + '\n');
   const brigFiles = path.join(destination, 'sources/brig');
   fs.mkdirSync(brigFiles, { recursive: true });
-  fs.copyFileSync(path.join(root, 'resources/runtime/brig-disk-tools.patch'), path.join(brigFiles, 'brig-disk-tools.patch'));
-  fs.copyFileSync(path.join(root, 'resources/runtime/brig-verified-cache.patch'), path.join(brigFiles, 'brig-verified-cache.patch'));
-  fs.copyFileSync(path.join(root, 'config/brig-compat.json'), path.join(brigFiles, 'brig-compat.json'));
+  for (const file of brigSourceFiles) fs.copyFileSync(path.join(root, file), path.join(brigFiles, path.basename(file)));
   return {
     name: 'e2fsprogs', version: disk.version, source: disk.source.url,
     notices: readNotices(path.join(work, 'e2fsprogs-' + disk.version)),

@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 export const root = fileURLToPath(new URL('../../', import.meta.url));
 export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
+export const brigSourceFiles = [
+  'resources/runtime/brig-disk-tools.patch',
+  'resources/runtime/brig-verified-cache.patch',
+  'config/brig-compat.json',
+];
 
 // Keep the original text, including a possible UTF-8 BOM and all line endings.
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
@@ -51,7 +56,7 @@ export function verifyPackagedLicenses(app, diskTools) {
   const expected = [
     'THIRD-PARTY-NOTICES.txt', 'sources/e2fsprogs/BUILD.txt', 'sources/e2fsprogs/source.tar.gz',
     'sources/e2fsprogs/prepare-disk-tools.mjs', 'sources/e2fsprogs/disk-tools.json',
-    'sources/brig/brig-disk-tools.patch', 'sources/brig/brig-compat.json',
+    ...brigSourceFiles.map(file => path.join('sources/brig', path.basename(file))),
   ];
   const files = fs.readdirSync(directory, { recursive: true }).filter(file => fs.statSync(path.join(directory, file)).isFile());
   if (files.length !== expected.length || !expected.every(file => files.includes(file))) throw new Error('Unexpected contents of packaged licenses folder.');
