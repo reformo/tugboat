@@ -10,12 +10,14 @@ import { runtimeConfigurationFile } from './acceptance-runtime.mjs';
 import { cleanSharedProject } from './shared-project-cleanup.mjs';
 
 const workspace = fileURLToPath(new URL('../../', import.meta.url));
+const brigVersion = JSON.parse(fs.readFileSync(path.join(workspace, 'config/brig-runtime.json'), 'utf8')).brig.version;
 const runtime = path.join(workspace, '.build/brig-runtime/bin');
 const archive = 'codex-package-aarch64-unknown-linux-musl.tar.gz';
-const release = 'rust-v0.171.0';
+const codexRelease = '0.172.0';
+const release = 'rust-v' + codexRelease;
 const releaseUrl = `https://github.com/openai/codex/releases/download/${release}`;
-const archiveDigest = 'd8c43bee6cf11b01eb18b95f4d7961092bc40228180808859e70dabb7784c1c9';
-const bundleDigest = 'ad7a3d4d1703a6c664c222d77c462a3932072bba5dfced64677d148cbbe640ff';
+const archiveDigest = 'faf17b8071927f33346a805dc8cb45de4e08c0d75cf0e5e68cecddca28b8861e';
+const bundleDigest = 'c53d1a88c29d30983feccba733a104b680db649eeb545ba6bea3fbb8a6eb805d';
 const profile = 'tugboat-project-proof';
 const reference = `${profile}@proof`;
 const sandbox = `brig-${profile}-proof`;
@@ -94,7 +96,7 @@ async function boot() {
 
 try {
   const version = await json(['version'], 'Version');
-  assert.equal(version.version, 'v0.5.2');
+  assert.equal(version.version, brigVersion);
   assert.deepEqual((await json(['ls'], 'SandboxList')).sandboxes, []);
   await brig(['policy', 'attach', profile, profile, '-n', 'proof']);
   const plan = await json(['plan', ...runArguments], 'Plan');
@@ -137,7 +139,7 @@ try {
   assert.equal((await guest('sha256sum', codex)).stdout.split(' ')[0], localDigest);
   const codexVersion = (await guest(codex, '--version')).stdout.trim();
   const claudeVersion = (await guest('claude', '--version')).stdout.trim();
-  assert.equal(codexVersion, 'codex-cli 0.171.0');
+  assert.equal(codexVersion, 'codex-cli ' + codexRelease);
   assert.match(claudeVersion, /^\d+\.\d+\.\d+ \(Claude Code\)$/);
   check('Both verified executables run on one guest', { codexVersion, claudeVersion, codexDigest: localDigest });
 

@@ -16,7 +16,7 @@ fn fixture(name: &str) -> PathBuf {
     fs::create_dir_all(root.join("registry")).unwrap();
     fs::write(root.join("registry/config.json"), "runtime fixture").unwrap();
     let manifest = json!({
-        "schemaVersion":1,"brigVersion":"v0.5.2","tools":tools,"libraries":[],
+        "schemaVersion":1,"brigVersion":crate::platform::host::SUPPORTED_BRIG_VERSION,"tools":tools,"libraries":[],
         "configuration":{"mke2fs.conf":{"sha256":digest},"registry/config.json":{"sha256":digest}}
     });
     fs::write(root.join("build.json"), manifest.to_string()).unwrap();

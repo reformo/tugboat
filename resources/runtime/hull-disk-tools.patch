@@ -1,68 +1,34 @@
+diff --git a/cmd/hull/blockrootfs.go b/cmd/hull/blockrootfs.go
+index ffe55b2..0a3efd6 100644
 --- a/cmd/hull/blockrootfs.go
 +++ b/cmd/hull/blockrootfs.go
-@@ -29,11 +29,6 @@
- 	"strings"
- 
- 	"github.com/brig-sh/hull/pkg/ociclient"
--)
--
+@@ -34,5 +33,0 @@ import (
 -const (
 -	mke2fsBin  = "/opt/homebrew/opt/e2fsprogs/sbin/mke2fs"
 -	debugfsBin = "/opt/homebrew/opt/e2fsprogs/sbin/debugfs"
- )
- 
- // blockInject is a per-instance file placed into the image after it is built.
-@@ -91,6 +86,10 @@
- // mkfsFromDir runs mke2fs to write an ext4 image of rootfsDir at diskPath.
- // extra goes before the device argument, for options only some callers want.
- func mkfsFromDir(ctx context.Context, diskPath, rootfsDir string, sizeMB int, extra ...string) error {
+-)
+-
+@@ -93,0 +89,4 @@ func mkfsFromDir(ctx context.Context, diskPath, rootfsDir string, sizeMB int, ex
 +	mke2fsBin, err := diskTool("mke2fs")
 +	if err != nil {
 +		return err
 +	}
- 	args := []string{"-t", "ext4", "-d", rootfsDir, "-L", "rootfs", "-m", "0", "-q"}
- 	args = append(args, extra...)
- 	args = append(args, diskPath, fmt.Sprintf("%dM", sizeMB))
-@@ -105,6 +104,10 @@
- // debugfs leaves stale. Its scratch files go in a new directory under
- // stageParent, or under os.TempDir() when stageParent is empty.
- func applyBlockFixups(ctx context.Context, diskPath, rootfsDir string, injects []blockInject, stageParent string) error {
+@@ -107,0 +107,4 @@ func applyBlockFixups(ctx context.Context, diskPath, rootfsDir string, injects [
 +	debugfsBin, err := diskTool("debugfs")
 +	if err != nil {
 +		return err
 +	}
- 	// The injected files need to exist on the host for debugfs to copy them in.
- 	// Three small files beside the image, not a second copy of the rootfs.
- 	stage, err := os.MkdirTemp(stageParent, "block-inject-")
-@@ -181,10 +184,14 @@
- // e2fsck recomputes the summaries. It costs a few tens of milliseconds here,
- // against an image that has never been mounted.
- func repairBlockImage(ctx context.Context, diskPath string) error {
+@@ -183,0 +187,4 @@ func repairBlockImage(ctx context.Context, diskPath string) error {
 +	e2fsckBin, err := diskTool("e2fsck")
 +	if err != nil {
 +		return err
 +	}
- 	// -f forces a full check even though the filesystem looks clean, which it
- 	// does: nothing has mounted it. -y answers the questions, all of which are
- 	// "recount this".
+@@ -187 +194 @@ func repairBlockImage(ctx context.Context, diskPath string) error {
 -	cmd := exec.CommandContext(ctx, "/opt/homebrew/opt/e2fsprogs/sbin/e2fsck", "-f", "-y", diskPath)
 +	cmd := exec.CommandContext(ctx, e2fsckBin, "-f", "-y", diskPath)
- 	out, err := cmd.CombinedOutput()
- 	if err := ctx.Err(); err != nil {
- 		return err
---- a/cmd/hull/rootfsupper.go
-+++ b/cmd/hull/rootfsupper.go
-@@ -81,6 +81,10 @@
- 			return disk, nil
- 		} else if !errors.Is(err, os.ErrNotExist) {
- 			return "", fmt.Errorf("inspect overlay upper disk: %w", err)
-+		}
-+		mke2fsBin, err := diskTool("mke2fs")
-+		if err != nil {
-+			return "", err
- 		}
- 		staging := disk + ".tmp"
- 		_ = os.Remove(staging)
+diff --git a/cmd/hull/desktop_disktools.go b/cmd/hull/desktop_disktools.go
+new file mode 100644
+index 0000000..5b85978
 --- /dev/null
 +++ b/cmd/hull/desktop_disktools.go
 @@ -0,0 +1,31 @@
@@ -97,3 +63,12 @@
 +	}
 +	return path, nil
 +}
+diff --git a/cmd/hull/rootfsupper.go b/cmd/hull/rootfsupper.go
+index 9d1a53e..b04b965 100644
+--- a/cmd/hull/rootfsupper.go
++++ b/cmd/hull/rootfsupper.go
+@@ -84,0 +85,4 @@ func prepareRootfsUpper(instanceDir, kind string) (string, error) {
++		mke2fsBin, err := diskTool("mke2fs")
++		if err != nil {
++			return "", err
++		}

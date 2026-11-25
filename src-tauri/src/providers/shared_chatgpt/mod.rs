@@ -84,6 +84,7 @@ pub async fn sync_project_chatgpt(
         if checked.project.stage != crate::projects::ProjectStage::EnvironmentReady {
             return account::read_status(&app, &mut runtime);
         }
+        crate::environment::shared_runtime::verify_codex(&checked)?;
         account::ensure(&app, &mut runtime, &checked)
     })
     .await

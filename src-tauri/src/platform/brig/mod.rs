@@ -39,6 +39,18 @@ impl Brig {
             ("BRIG_VERIFY".into(), "require".into()),
             ("BRIG_IMAGE".into(), project.image_ref.clone()),
         ]);
+        let trust_cache = brig.state_directory()?.join("agent-packages/image-trust");
+        brig.environment.insert(
+            "TUGBOAT_VERIFICATION_CACHE".into(),
+            trust_cache.to_string_lossy().into_owned(),
+        );
+        if project.image_ref == crate::projects::DEFAULT_ENVIRONMENT_IMAGE {
+            brig.environment.extend([
+                ("BRIG_VERIFY_REGISTRY".into(), "ghcr.io/renovatebot/".into()),
+                ("BRIG_VERIFY_IDENTITY".into(), r"^https://github\.com/renovatebot/base-image/\.github/workflows/promote\.yml@refs/heads/main$".into()),
+                ("BRIG_VERIFY_ISSUER".into(), "https://token.actions.githubusercontent.com".into()),
+            ]);
+        }
         Ok(brig)
     }
 
@@ -205,11 +217,7 @@ pub fn validate_plan(
 }
 
 // A Tugboat-owned project policy can allow all public destinations when no other policy is bound.
-fn permitted_egress(
-    egress: &Value,
-    policy: &crate::projects::Policy,
-    policies: &[Value],
-) -> bool {
+fn permitted_egress(egress: &Value, policy: &crate::projects::Policy, policies: &[Value]) -> bool {
     let no_deny_rules =
         egress["deny"].is_null() || egress["deny"].as_array().is_some_and(Vec::is_empty);
     match egress["default"].as_str() {
@@ -284,12 +292,18 @@ pub fn validate_plan_context(
     if data["verify"]["mode"] != verification {
         return Err("Image verification was not applied to the Brig plan.".into());
     }
+    let publisher_policy = if project.image_ref == crate::projects::DEFAULT_ENVIRONMENT_IMAGE {
+        "replaced"
+    } else {
+        "brig"
+    };
     if data["verify"]["mode"] != "require"
-        || data["verify"]["policy"] != "brig"
+        || data["verify"]["policy"] != publisher_policy
         || data["image"]["ref"] != project.image_ref
     {
         return Err(
-            "This project requires its pinned image and the default Brig signature policy.".into(),
+            "This project requires its pinned image and the registered publisher signature policy."
+                .into(),
         );
     }
     let credentials = data["credentials"]
@@ -345,6 +359,7 @@ mod tests {
         plan["data"]["profile"] = serde_json::json!(project.profile);
         plan["data"]["session"] = serde_json::json!(project.label);
         plan["data"]["verify"]["mode"] = serde_json::json!("require");
+        plan["data"]["verify"]["policy"] = serde_json::json!("replaced");
         plan["data"]["image"]["ref"] = serde_json::json!(project.image_ref);
         plan["data"]["credentials"] = serde_json::json!([]);
         let settings = Settings::default();

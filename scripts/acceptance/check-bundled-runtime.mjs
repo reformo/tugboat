@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runAcceptanceProcess } from './acceptance-process.mjs';
 
 const workspace = fileURLToPath(new URL('../../', import.meta.url));
-const requiredTools = ['brig', 'brigd', 'brig-broker', 'hull', 'hvi', 'vz-runner', 'cosign', 'mke2fs', 'debugfs', 'e2fsck'];
+const requiredTools = ['brig', 'brigd', 'brig-broker', 'agent-updater', 'hull', 'hvi', 'vz-runner', 'cosign', 'mke2fs', 'debugfs', 'e2fsck'];
 const homebrewPrefixes = ['/opt/homebrew', '/usr/local'];
 const homebrewExecutables = homebrewPrefixes.flatMap(prefix => [path.join(prefix, 'bin/brew'), path.join(prefix, 'Homebrew/bin/brew')]);
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
@@ -31,6 +31,7 @@ export async function checkBundledRuntime(application, requestedRoot, { cleanMac
   if (cleanMac) assert.deepEqual(installedHomebrew, [], 'Clean Mac acceptance requires Homebrew to be absent.');
   const macOSVersion = execFileSync('/usr/bin/sw_vers', ['-productVersion'], { encoding: 'utf8', timeout: 5_000 }).trim();
   const manifestSha256 = digest(manifest);
+  const { brigVersion } = JSON.parse(fs.readFileSync(manifest, 'utf8'));
   if (cachedStore) {
     assert.match(cachedStore, /^\/private\/tmp\/tgb-[^/]+\/h\.sparseimage$/);
     assert.equal(fs.realpathSync(cachedStore), cachedStore);
@@ -145,7 +146,7 @@ export async function checkBundledRuntime(application, requestedRoot, { cleanMac
       const result = await command(path.join(bin, 'tugboat'), ['--runtime-check'], { offline: true, timeout: 60_000 });
       const status = JSON.parse(result.stdout);
       assert.equal(status.brigSource, 'bundled'); assert.equal(status.brigStatus, 'installed');
-      assert.equal(status.version.data.version, 'v0.5.2');
+      assert.equal(status.version.data.version, brigVersion);
       assert.equal(status.tools.brig, path.join(bin, 'brig')); assert.equal(status.tools.hull, path.join(bin, 'hull'));
       report.runtimeCheck = status;
     });

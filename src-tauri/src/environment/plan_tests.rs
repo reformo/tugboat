@@ -57,6 +57,7 @@ esac
         plan["data"]["profile"] = json!(self.project.profile);
         plan["data"]["session"] = json!(self.project.label);
         plan["data"]["verify"]["mode"] = json!("require");
+        plan["data"]["verify"]["policy"] = json!("replaced");
         plan["data"]["image"]["ref"] = json!(self.project.image_ref);
         plan["data"]["credentials"] = json!([]);
         plan

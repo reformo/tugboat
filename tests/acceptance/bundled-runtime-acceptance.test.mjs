@@ -8,7 +8,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const scripts = fileURLToPath(new URL('../../scripts/acceptance/', import.meta.url));
-const requiredTools = ['tugboat', 'brig', 'brigd', 'brig-broker', 'hull', 'hvi', 'vz-runner', 'cosign', 'mke2fs', 'debugfs', 'e2fsck'];
+const requiredTools = ['tugboat', 'brig', 'brigd', 'brig-broker', 'agent-updater', 'hull', 'hvi', 'vz-runner', 'cosign', 'mke2fs', 'debugfs', 'e2fsck'];
 const macOnly = { skip: process.platform !== 'darwin' || process.arch !== 'arm64' };
 
 function fixture(t, stage, macOSVersion = '27.2') {
@@ -20,7 +20,7 @@ function fixture(t, stage, macOSVersion = '27.2') {
   const resources = path.join(application, 'Contents/Resources/runtime');
   fs.mkdirSync(bin, { recursive: true }); fs.mkdirSync(resources, { recursive: true });
   for (const name of requiredTools) fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n', { mode: 0o700 });
-  fs.writeFileSync(path.join(resources, 'build.json'), '{}\n');
+  fs.writeFileSync(path.join(resources, 'build.json'), '{"brigVersion":"v0.6.0"}\n');
   fs.mkdirSync(path.join(workspace, 'scripts/acceptance'), { recursive: true });
   for (const name of ['check-bundled-runtime.mjs', 'acceptance-process.mjs']) fs.copyFileSync(path.join(scripts, name), path.join(workspace, 'scripts/acceptance', name));
   const stub = path.join(workspace, 'commands.cjs');
@@ -70,7 +70,7 @@ require('node:child_process').spawn=(binary,args,options)=>{
     assert.equal(path.basename(program),'tugboat'); assert.equal(sandboxed,true);assert.deepEqual(programArguments,['--runtime-check']);
     if(process.env.TGB_FIXTURE_STAGE==='runtime-error'){child.stderr.emit('data','Damaged runtime');child.emit('close',1,null);return;}
     const bin=path.dirname(program);
-    child.stdout.emit('data',JSON.stringify({brigSource:'bundled',brigStatus:'installed',tools:{brig:process.env.TGB_FIXTURE_STAGE==='wrong-path'?'/opt/homebrew/bin/brig':path.join(bin,'brig'),hull:path.join(bin,'hull')},version:{data:{version:process.env.TGB_FIXTURE_STAGE==='wrong-version'?'v9.0.0':'v0.5.2'}}}));
+    child.stdout.emit('data',JSON.stringify({brigSource:'bundled',brigStatus:'installed',tools:{brig:process.env.TGB_FIXTURE_STAGE==='wrong-path'?'/opt/homebrew/bin/brig':path.join(bin,'brig'),hull:path.join(bin,'hull')},version:{data:{version:process.env.TGB_FIXTURE_STAGE==='wrong-version'?'v9.0.0':'v0.6.0'}}}));
     child.emit('close',0,null);
   });
   return child;

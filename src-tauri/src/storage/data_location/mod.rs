@@ -1135,7 +1135,7 @@ pub fn protected_directories(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     Ok(directories)
 }
 
-fn resolved_share(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn resolved_share(path: &Path) -> Result<PathBuf, String> {
     if !path.is_absolute()
         || path
             .components()

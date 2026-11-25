@@ -506,7 +506,7 @@ fn two_guest_commands_keep_their_native_terminal_input_targets() {
     );
     assert!(codex
         .receive("phase1-pty-ready")
-        .contains("codex-cli 0.171.0"));
+        .contains("codex-cli 0.172.0"));
     let mut claude = Terminal::open(
         &runner,
         &[

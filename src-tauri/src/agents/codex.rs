@@ -145,6 +145,8 @@ fn chat_arguments(session: Vec<String>, settings: &ChatSettings) -> Vec<String> 
         "cli_auth_credentials_store=\"file\"".into(),
         "-c".into(),
         "tui.terminal_title=[\"session-id\",\"status\"]".into(),
+        "-c".into(),
+        "check_for_update_on_startup=false".into(),
         "--sandbox".into(),
         match boundary {
             Boundary::Brig => "danger-full-access".into(),

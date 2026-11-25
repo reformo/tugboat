@@ -21,7 +21,6 @@ impl GuestCommand {
         arguments
     }
 
-    #[cfg(test)]
     pub fn in_profile(self) -> Vec<String> {
         self.arguments
     }

@@ -4300,3 +4300,22 @@ test('recheck a cancelled removal confirmation cannot issue another command', as
     assert.equal(harness.calls.filter(call => call.command === 'remove_project').length, 0);
   } finally { harness.dom.window.close(); }
 });
+
+test('the guest terminal opens while agent checks run and a failed agent does not block its sibling', async t => {
+  const pending = deferred();
+  const h = await interfaceHarness({ agent_update_status: () => pending.promise });
+  t.after(() => h.dom.window.close());
+  await h.ready; h.element('choose-folder').click(); await flush();
+  assert.equal(h.element('guest-shell').disabled, false);
+  assert.equal(h.element('start-codex').disabled, true);
+  h.element('guest-shell').click(); await flush();
+  assert.deepEqual(h.calls.filter(call => call.command === 'start_agent_session').map(call => call.args.action), ['shell']);
+  h.element('close-terminal').click(); await flush();
+  pending.resolve({ codex: { selected: '1.0.0', result: 'Signature verification failed' }, 'claude-code': { active: '2.0.0', selected: '2.0.0', result: 'Current' } });
+  await flush();
+  assert.match(h.element('project-agent-update').textContent, /Signature verification failed/);
+  assert.equal(h.element('guest-shell').disabled, false);
+  const select = h.element('agent-choice');
+  select.value = 'claude-code'; select.dispatchEvent(new h.dom.window.Event('change')); await flush();
+  assert.equal(h.element('start-codex').disabled, false);
+});

@@ -101,6 +101,7 @@ async function interfaceHarness(overrides = {}, configureDom = () => {}) {
     register_project: () => project,
     project_environment_running: () => false,
     prepare_project: () => ({ project, plan, fingerprint: 'plan-a', message: null, candidates: [] }),
+    agent_update_status: () => ({ codex: { active: '1.0.0', result: 'Current' }, 'claude-code': { active: '2.0.0', result: 'Current' } }),
     preview_project: () => ({ project: selectedFixture, plan, fingerprint: 'plan-a' }),
     inspect_host: () => ({ architecture: 'arm64', osVersion: '27.2', tools: {}, brigStatus: 'installed', version: null, doctor: null, message: null }),
     terminal_sessions: ({ projectId }) => [...terminals.values()].filter(status => status.projectId === projectId),

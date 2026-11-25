@@ -219,9 +219,13 @@ fn active_project_operation_refuses_review_and_the_sibling_stays_available() {
 }
 
 #[test]
-fn both_agents_and_each_project_terminal_block_review_until_idle() {
+fn active_chats_and_terminals_allow_image_status_but_block_review() {
     let fixture = Fixture::new("active-terminal");
     let before = fixture.snapshot();
+    let managed = Project {
+        image_ref: projects::DEFAULT_ENVIRONMENT_IMAGE.into(),
+        ..fixture.project.clone()
+    };
     for (purpose, agent_kind) in [
         ("codex", Some(AgentKind::Codex)),
         ("claude", Some(AgentKind::ClaudeCode)),
@@ -240,6 +244,21 @@ fn both_agents_and_each_project_terminal_block_review_until_idle() {
             busy: false,
         };
         let error = terminal::with_fixture_terminal_statuses(vec![status], || {
+            let runtime = fixture.runtime("download");
+            assert!(matches!(
+                change(&fixture.file(), &runtime, Action::Read).unwrap(),
+                Status::Available { .. }
+            ));
+            let managed_runtime = Runtime {
+                project: &managed,
+                ..runtime
+            };
+            assert!(matches!(
+                change(&fixture.file(), &managed_runtime, Action::Read).unwrap(),
+                Status::Managed {
+                    image: projects::DEFAULT_ENVIRONMENT_IMAGE
+                }
+            ));
             fixture.review("download").err().unwrap()
         });
         assert_eq!(

@@ -1,10 +1,10 @@
 {
   "variant": "tugboat-bundled-disk-tools-4",
-  "version": "v0.5.2",
-  "commit": "1c4962a25a9e563beee9fce13eecbe7f51809780",
-  "commitTime": "2026-11-06T07:59:37Z",
+  "version": "v0.6.0",
+  "commit": "4aeb84f53628500f97ca361d430a25eff432e825",
+  "commitTime": "2026-11-20T12:15:27Z",
   "source": {
-    "url": "https://codeload.github.com/brig-sh/brig/tar.gz/1c4962a25a9e563beee9fce13eecbe7f51809780",
-    "sha256": "a87fb1663c9c1fe41e85ed9757a10b8bf2138720ad96da72a648c72961ed6a11"
+    "url": "https://codeload.github.com/brig-sh/brig/tar.gz/4aeb84f53628500f97ca361d430a25eff432e825",
+    "sha256": "dac0079cd91303d183e7dc6a44e67afb2dcc5c037c495f0c0af944459ad173c5"
   }
 }

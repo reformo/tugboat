@@ -8,7 +8,7 @@ pub const PRICING_SOURCE: &str = "https://developers.openai.com/api/docs/pricing
 pub const PARSER_VERSION: u32 = 4;
 
 pub(crate) fn supports_codex_history(version: Option<&str>) -> bool {
-    matches!(version, Some("0.167.0" | "0.171.0"))
+    matches!(version, Some("0.167.0" | "0.171.0" | "0.172.0"))
 }
 
 pub mod anthropic;

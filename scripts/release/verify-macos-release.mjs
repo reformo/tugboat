@@ -60,7 +60,7 @@ function verifyApp(app, version, team, publicKey, buildNumber) {
   verifyDeveloperId(app, team);
   const manifest = verifyRuntime(path.join(app, 'Contents/MacOS'), path.join(app, 'Contents/Resources/runtime'));
   verifyPackagedLicenses(app, manifest.diskTools);
-  for (const name of ['brig','brigd','brig-broker','hull','cosign','mke2fs','debugfs','e2fsck']) verifyDeveloperId(path.join(app, 'Contents/MacOS', name), team);
+  for (const name of ['brig','brigd','brig-broker', 'agent-updater','hull','cosign','mke2fs','debugfs','e2fsck']) verifyDeveloperId(path.join(app, 'Contents/MacOS', name), team);
   run('/usr/bin/xcrun', ['stapler', 'validate', app]);
   run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', app]);
   verifyPackagedHull(app);

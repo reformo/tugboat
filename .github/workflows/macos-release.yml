@@ -38,6 +38,7 @@ jobs:
 
       - name: Install dependencies and run frontend tests
         run: |
+          npm install --global --ignore-scripts "npm@$(jq -er '.frontend.npm' config/development-versions.json)"
           npm ci
           npm test
 

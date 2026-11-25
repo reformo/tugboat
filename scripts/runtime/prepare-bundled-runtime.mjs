@@ -40,9 +40,10 @@ function extract(name) {
   if (entries.some(entry => path.isAbsolute(entry) || entry.split('/').includes('..'))) throw new Error('Unsafe release archive: ' + name);
   run('/usr/bin/tar', ['-xzf', archive, '-C', directory]);
   const url = pin.url.slice(0, pin.url.lastIndexOf('/'));
-  const certificate = download(url + '/checksums.txt.pem', name + '.pem');
-  const signature = download(url + '/checksums.txt.sig', name + '.sig');
-  const checksums = download(url + '/checksums.txt', name + '-checksums.txt');
+  const release = name + '-' + pin.version;
+  const certificate = download(url + '/checksums.txt.pem', release + '.pem');
+  const signature = download(url + '/checksums.txt.sig', release + '.sig');
+  const checksums = download(url + '/checksums.txt', release + '-checksums.txt');
   run(path.join(downloads, 'cosign'), ['verify-blob', '--certificate', certificate, '--signature', signature,
     '--certificate-identity', pin.signer, '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com', checksums],
     {env:environment});

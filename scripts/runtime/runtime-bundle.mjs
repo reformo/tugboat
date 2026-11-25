@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-export const runtimeTools = ['brig', 'brigd', 'brig-broker', 'hull', 'hvi', 'vz-runner', 'cosign', 'mke2fs', 'debugfs', 'e2fsck'];
+export const runtimeTools = ['brig', 'brigd', 'brig-broker', 'agent-updater', 'hull', 'hvi', 'vz-runner', 'cosign', 'mke2fs', 'debugfs', 'e2fsck'];
 export const hashFile = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const run = (binary, args) => execFileSync(binary, args, {encoding:'utf8', timeout:30_000, stdio:['ignore','pipe','pipe']});
 
@@ -32,8 +32,9 @@ export function verifyRunner(file, entitlement) {
 }
 
 export function verifyRuntime(bin, resources) {
+  const pins = JSON.parse(fs.readFileSync(new URL('../../config/brig-runtime.json', import.meta.url)));
   const manifest = JSON.parse(fs.readFileSync(path.join(resources, 'build.json'), 'utf8'));
-  if (manifest.schemaVersion !== 1 || manifest.brigVersion !== 'v0.5.2') throw new Error('Unsupported bundled runtime manifest.');
+  if (manifest.schemaVersion !== 1 || manifest.brigVersion !== pins.brig.version) throw new Error('Unsupported bundled runtime manifest.');
   if (JSON.stringify(Object.keys(manifest.tools).sort()) !== JSON.stringify([...runtimeTools].sort())) throw new Error('Incomplete runtime inventory.');
   for (const name of runtimeTools) {
     const file = path.join(bin, name);

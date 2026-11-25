@@ -159,6 +159,7 @@ fn main() {
             project_policy::read_project_policy,
             project_policy::change_project_policy,
             environment::preview_project,
+            environment::agent_updates::agent_update_status,
             environment::prepare_environment,
             environment::finish_environment,
             agent_sessions::start_agent_session,

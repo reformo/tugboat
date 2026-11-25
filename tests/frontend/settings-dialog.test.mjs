@@ -132,16 +132,28 @@ test('an external settings change keeps edited project defaults and updates the 
   assert.equal(harness.element('default-claude-auto-mode').checked, false);
 });
 
-test('an invalid resource value opens the Resources section before the save', async t => {
-  const harness = await interfaceHarness();
+test('an invalid resource value clears the previous save result and opens Resources', async t => {
+  const harness = await interfaceHarness({ save_settings: saved });
   t.after(() => harness.dom.window.close());
   await harness.ready;
   harness.element('settings-navigation').click(); await flush();
   harness.element('settings-tab-agents').click();
-  harness.element('cpu-count').value = '0';
-  harness.element('save-settings').click();
+  const save = harness.element('save-settings');
+  const cpuCount = harness.element('cpu-count');
+  const status = harness.element('settings-status');
+  save.click(); await flush();
+  assert.equal(status.textContent, 'Settings saved.');
+  cpuCount.value = '0';
+  save.click();
   assert.equal(harness.element('settings-panel-resources').hidden, false);
   assert.equal(harness.element('settings-tab-resources').getAttribute('aria-current'), 'true');
-  assert.equal(harness.dom.window.document.activeElement, harness.element('cpu-count'));
-  assert.equal(harness.calls.filter(call => call.command === 'save_settings').length, 0);
+  assert.equal(harness.dom.window.document.activeElement, cpuCount);
+  assert.equal(status.textContent, '');
+  assert.equal(harness.calls.filter(call => call.command === 'save_settings').length, 1);
+  cpuCount.value = '2';
+  save.click(); await flush();
+  const saves = harness.calls.filter(call => call.command === 'save_settings');
+  assert.equal(saves.length, 2);
+  assert.equal(saves[1].args.settings.cpus, 2);
+  assert.equal(status.textContent, 'Settings saved.');
 });

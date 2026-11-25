@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const macOnly = { skip: process.platform !== 'darwin' || process.arch !== 'arm64' ? 'requires an Apple silicon Mac' : false };
 
-function fixture(context, tool, { testMode = true, goAvailable = true, failTest = false, noSign = false } = {}) {
+function fixture(context, tool, { testMode = true, goAvailable = true, goVersion = '1.27.4', failTest = false, noSign = false } = {}) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tugboat-native-prepare-'));
   context.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
   const write = (relative, contents) => {
@@ -21,18 +21,23 @@ function fixture(context, tool, { testMode = true, goAvailable = true, failTest 
   const archive = 'synthetic native archive';
   const sha256 = createHash('sha256').update(archive).digest('hex');
   const pin = { version: 'v0.1.0', commit: 'fixture-commit', variant: 'fixture', source: { url: 'https://fixture.invalid/source.tar.gz', sha256 } };
-  write('config/hull-compat.json', JSON.stringify({ ...pin, go: { url: 'https://fixture.invalid/go.tar.gz', sha256 } }));
+  write('config/hull-compat.json', JSON.stringify({ ...pin, go: { version: '1.27.4', url: 'https://fixture.invalid/go.tar.gz', sha256 } }));
   write('config/brig-compat.json', JSON.stringify(pin));
   for (const name of ['hull', 'brig']) {
     write(`scripts/runtime/prepare-${name}.mjs`, fs.readFileSync(path.join(root, `scripts/runtime/prepare-${name}.mjs`)));
     write(`.build/${name}-compat/downloads/${name}.tar.gz`, archive);
     write(`resources/runtime/${name}-disk-tools.patch`, 'fixture patch');
   }
+  write('resources/runtime/brig-verified-cache.patch', 'fixture patch');
+  write('resources/agent-updater/go.mod', 'fixture module');
   write('.build/hull-compat/downloads/go.tar.gz', archive);
   write('resources/runtime/hull-spaces.patch', 'fixture patch');
   write('resources/runtime/hull-rootfs-restore.patch', fs.readFileSync(path.join(root, 'resources/runtime/hull-rootfs-restore.patch')));
   for (const name of ['hull_spaces_test.go', 'hull_disk_tools_test.go', 'hull_rootfs_restore_test.go', 'brig_disk_tools_test.go']) write(`tests/native/${name}`, 'fixture test');
-  if (goAvailable) write('.build/hull-compat/go/bin/go', 'fixture Go');
+  if (goAvailable) {
+    write('.build/hull-compat/go/bin/go', 'fixture Go');
+    write('.build/hull-compat/go/VERSION', 'go' + goVersion + '\n');
+  }
   const commands = path.join(workspace, 'commands.jsonl');
   const run = (argumentsList = [...(testMode ? ['--test'] : []), ...(noSign ? ['--no-sign'] : [])]) => spawnSync(process.execPath, [
     '--require', path.join(root, 'tests/fixtures/native-preparation.cjs'),
@@ -59,7 +64,7 @@ for (const tool of ['hull', 'brig']) {
   test(`default ${tool} preparation still builds, signs, and caches its executables`, macOnly, context => {
     const { result, run, commands, workspace } = fixture(context, tool, { testMode: false });
     assert.equal(result.status, 0, result.stderr);
-    const count = tool === 'hull' ? 1 : 3;
+    const count = tool === 'hull' ? 1 : 4;
     assert.equal(commands().filter(command => command.argumentsList[0] === 'build').length, count);
     assert.equal(commands().filter(command => command.binary === '/usr/bin/codesign').length, count);
     assert.equal(fs.existsSync(path.join(workspace, `.build/${tool}-compat/prepared.json`)), true);
@@ -91,6 +96,14 @@ test('cold Brig test mode requests test-only hull preparation when Go is absent'
   assert.equal(result.status, 0, result.stderr);
   const prepare = commands().find(command => command.binary === process.execPath);
   assert.deepEqual(prepare.argumentsList.slice(1), ['--test']);
+  assert.ok(commands().every(command => command.binary !== '/usr/bin/codesign'));
+});
+
+test('Brig refreshes the Go installation when the cached version is stale', macOnly, context => {
+  const { result, commands } = fixture(context, 'brig', { goVersion: '1.27.3', noSign: true });
+  assert.equal(result.status, 0, result.stderr);
+  const prepare = commands().find(command => command.binary === process.execPath);
+  assert.deepEqual(prepare.argumentsList.slice(1), ['--test', '--no-sign']);
   assert.ok(commands().every(command => command.binary !== '/usr/bin/codesign'));
 });
 

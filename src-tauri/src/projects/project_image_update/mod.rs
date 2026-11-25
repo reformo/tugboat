@@ -30,7 +30,7 @@ mod root;
 mod runtime;
 mod state;
 
-pub(crate) use super::DEFAULT_ENVIRONMENT_IMAGE as CANDIDATE_IMAGE;
+pub(crate) use super::LEGACY_ENVIRONMENT_IMAGE as CANDIDATE_IMAGE;
 use runtime::{scope, Runtime};
 pub(crate) use state::Pending;
 use state::{Change, Review, RootEvidence, Scope};
@@ -52,6 +52,9 @@ pub(crate) enum Action {
     rename_all_fields = "camelCase"
 )]
 enum Status {
+    Managed {
+        image: &'static str,
+    },
     Available {
         previous: &'static str,
         candidate: &'static str,
@@ -97,7 +100,7 @@ pub(crate) struct View {
     status: Status,
 }
 
-fn idle(project: &Project) -> Result<(), String> {
+fn check_admission(project: &Project, action: &Action) -> Result<(), String> {
     if project.removal_pending()
         || !matches!(
             project.stage,
@@ -106,9 +109,10 @@ fn idle(project: &Project) -> Result<(), String> {
     {
         return Err("Finish project setup or the current project operation before updating the guest image.".into());
     }
-    if terminal::terminal_sessions(project.id.clone())
-        .iter()
-        .any(|terminal| terminal.running)
+    if !matches!(action, Action::Read)
+        && terminal::terminal_sessions(project.id.clone())
+            .iter()
+            .any(|terminal| terminal.running)
     {
         return Err(
             "Close the project's active chats and terminals before updating the guest image."
@@ -459,9 +463,14 @@ fn recovery(message: String) -> Status {
 }
 
 fn change(file: &Path, runtime: &Runtime<'_>, action: Action) -> Result<Status, String> {
-    idle(runtime.project)?;
+    check_admission(runtime.project, &action)?;
     if let Some(pending) = &runtime.project.image_update {
         return pending_action(file, runtime, pending, action);
+    }
+    if runtime.project.image_ref == projects::DEFAULT_ENVIRONMENT_IMAGE {
+        return Ok(Status::Managed {
+            image: projects::DEFAULT_ENVIRONMENT_IMAGE,
+        });
     }
     if runtime.project.image_ref == CANDIDATE_IMAGE {
         let (checked, _) = runtime.plan(CANDIDATE_IMAGE)?;
@@ -482,7 +491,7 @@ fn change(file: &Path, runtime: &Runtime<'_>, action: Action) -> Result<Status, 
             let (previous, scope) = current_scope(runtime)?;
             runtime.instance(&previous)?;
             runtime.stage(CANDIDATE_IMAGE)?;
-            idle(runtime.project)?;
+            check_admission(runtime.project, &Action::Review)?;
             let preparing = Pending::Reviewing {
                 scope: scope.clone(),
             };
@@ -518,6 +527,17 @@ pub(crate) async fn project_image_update(
         project.check_path()?;
         project.check_guest_path()?;
         let status = change(&file, &runtime(&app, &project)?, action)?;
+        if matches!(
+            status,
+            Status::Updated { .. } | Status::Restored { .. } | Status::Recovered
+        ) {
+            if let Err(error) =
+                environment::checked_environment(&app, &identifier, Some(&environment_id), None)
+                    .and_then(environment::agent_updates::start)
+            {
+                eprintln!("Could not start agent checks: {error}");
+            }
+        }
         Ok(View {
             project_id: identifier,
             environment_id,

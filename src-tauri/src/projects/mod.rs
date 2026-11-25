@@ -36,7 +36,11 @@ pub use stage::ProjectStage;
 
 pub(crate) const ENVIRONMENT_PROFILE: &str = "tugboat-project";
 pub(crate) const PREVIOUS_ENVIRONMENT_IMAGE: &str = "ghcr.io/brig-sh/claude-code-stock@sha256:f5b733fbce5aaf38edcdcfe7021993e65625c0f064334a96089e9f1fb5e8d0ce";
-pub(crate) const DEFAULT_ENVIRONMENT_IMAGE: &str = "ghcr.io/brig-sh/claude-code-stock@sha256:f4a80cbac021d6c8cdbad51d3b52f66a2a6e2f0ede2c1144aa73453fae60430a";
+pub(crate) const LEGACY_ENVIRONMENT_IMAGE: &str = "ghcr.io/brig-sh/claude-code-stock@sha256:f4a80cbac021d6c8cdbad51d3b52f66a2a6e2f0ede2c1144aa73453fae60430a";
+
+pub(crate) const DEFAULT_ENVIRONMENT_IMAGE: &str = "ghcr.io/renovatebot/base-image@sha256:4e6e40ce0df7cc1e12d88d04c045abc8ae7842a61f311d986551c7c753caecb4";
+pub(crate) const BASE_ARM64_DIGEST: &str =
+    "sha256:a28c5f5b4d955ab1c7d9a8d6541ece90891ac0849522dd7a3028f8ba357937ba";
 
 static NEXT_PROBE: AtomicU64 = AtomicU64::new(1);
 #[derive(Default)]
@@ -324,7 +328,7 @@ impl Project {
         }
         if !matches!(
             self.image_ref.as_str(),
-            PREVIOUS_ENVIRONMENT_IMAGE | DEFAULT_ENVIRONMENT_IMAGE
+            PREVIOUS_ENVIRONMENT_IMAGE | LEGACY_ENVIRONMENT_IMAGE | DEFAULT_ENVIRONMENT_IMAGE
         ) {
             return Err(
                 "The project guest image must have an approved signed stock image digest.".into(),
@@ -703,7 +707,8 @@ impl Registry {
         settings: crate::agents::AgentSettings,
     ) -> Result<(), String> {
         settings.codex.options.validate()?;
-        self.environment(identifier, environment)?.require_active()?;
+        self.environment(identifier, environment)?
+            .require_active()?;
         self.projects
             .iter_mut()
             .find(|record| record.id == identifier)
@@ -725,7 +730,6 @@ impl Registry {
         *self = proposed;
         Ok(())
     }
-
 }
 
 fn project_label(project: &str) -> String {

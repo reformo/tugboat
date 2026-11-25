@@ -86,6 +86,7 @@
     <section id="ownership">
       <h2>What belongs to whom</h2>
       <p>Each project owns one Brig environment. Both agents share the project mount, persistent guest home, guest processes, and network policy. Each chat has a shorter lifetime than the project. A live terminal can end before the chat does.</p>
+      <p>The environment becomes ready after Tugboat verifies the running guest. Each agent has a separate startup result tied to the Linux boot ID. The Mac downloads and verifies packages outside the guest mounts. Each project activates its own tested version in its persistent home. Package downloads use the Mac connection and keep the guest network policy intact.</p>
       <div class="table-wrap" role="region" aria-labelledby="ownership-caption" tabindex="0">
         <table>
           <caption id="ownership-caption">Identity and lifetime by scope</caption>

@@ -47,7 +47,9 @@ jobs:
           node-version: ${{ steps.config.outputs.node }}
           cache: npm
 
-      - run: npm ci
+      - run: |
+          npm install --global --ignore-scripts "npm@$(jq -er '.frontend.npm' config/development-versions.json)"
+          npm ci
       - run: npm test
       - run: npm run build
 
@@ -100,7 +102,9 @@ jobs:
           node-version: ${{ needs.frontend.outputs.node }}
           cache: npm
 
-      - run: npm ci
+      - run: |
+          npm install --global --ignore-scripts "npm@$(jq -er '.frontend.npm' config/development-versions.json)"
+          npm ci
 
       - name: Select the pinned Rust toolchain
         env:

@@ -10,10 +10,13 @@ const hull = JSON.parse(fs.readFileSync(path.join(root, 'config/hull-compat.json
 const work = path.join(root, '.build/brig-compat');
 const source = path.join(work, 'brig-' + pin.commit);
 const patch = path.join(root, 'resources/runtime/brig-disk-tools.patch');
-const binaries = ['brig', 'brigd', 'brig-broker'];
+const verificationPatch = path.join(root, 'resources/runtime/brig-verified-cache.patch');
+const binaries = ['brig', 'brigd', 'brig-broker', 'agent-updater'];
+const updater = path.join(root, 'resources/agent-updater');
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const noSign = process.argv.includes('--no-sign');
-const identity = JSON.stringify({...pin, go:hull.go, patch:hash(patch), script:hash(fileURLToPath(import.meta.url)), signing:noSign ? 'none' : 'ad-hoc'});
+const updaterSources = fs.readdirSync(updater).filter(name => name !== 'testdata' && !name.endsWith('_test.go')).sort().map(name => hash(path.join(updater, name)));
+const identity = JSON.stringify({...pin, updaterSources, verificationCache:hash(verificationPatch), go:hull.go, patch:hash(patch), script:hash(fileURLToPath(import.meta.url)), signing:noSign ? 'none' : 'ad-hoc'});
 const manifestFile = path.join(work, 'bin/build.json');
 const marker = path.join(work, 'prepared.json');
 const test = process.argv.includes('--test');
@@ -24,7 +27,10 @@ const cached = fs.existsSync(marker) && fs.readFileSync(marker, 'utf8') === iden
 if (cached && !test) process.exit(0);
 const run = (binary, arguments_, options={}) => execFileSync(binary, arguments_, {timeout:300_000, stdio:'inherit', ...options});
 const go = path.join(root, '.build/hull-compat/go/bin/go');
-if (!fs.existsSync(go)) run(process.execPath, [path.join(root, 'scripts/runtime/prepare-hull.mjs'), ...(test ? ['--test'] : []), ...(noSign ? ['--no-sign'] : [])]);
+const goVersion = path.join(root, '.build/hull-compat/go/VERSION');
+if (!fs.existsSync(go) || !fs.existsSync(goVersion) || fs.readFileSync(goVersion, 'utf8').split('\n')[0] !== 'go' + hull.go.version) {
+  run(process.execPath, [path.join(root, 'scripts/runtime/prepare-hull.mjs'), ...(test ? ['--test'] : []), ...(noSign ? ['--no-sign'] : [])]);
+}
 fs.mkdirSync(path.join(work, 'downloads'), {recursive:true});
 const archive = path.join(work, 'downloads/brig.tar.gz');
 if (!fs.existsSync(archive) || hash(archive) !== pin.source.sha256) {
@@ -36,7 +42,7 @@ if (!fs.existsSync(archive) || hash(archive) !== pin.source.sha256) {
 if (!cached) {
   fs.rmSync(source, {recursive:true, force:true});
   run('/usr/bin/tar', ['-xzf', archive, '-C', work]);
-  run('/usr/bin/patch', ['--batch', '-p1', '-i', patch], {cwd:source});
+  for (const file of [patch, verificationPatch]) run('/usr/bin/patch', ['--batch', '-p1', '-i', file], {cwd:source});
 }
 fs.copyFileSync(path.join(root, 'tests/native/brig_disk_tools_test.go'), path.join(source, 'internal/runtime/desktop_disk_tools_test.go'));
 const environment = {
@@ -45,7 +51,8 @@ const environment = {
 };
 const options = {cwd:source, env:environment};
 if (test) {
-  run(go, ['test', '-mod=readonly', './internal/runtime', './internal/buildinfo', '-count=1'], options);
+  run(go, ['test', '-mod=readonly', './...'], { ...options, cwd: updater });
+  run(go, ['test', '-mod=readonly', './internal/verify', './internal/runtime', './internal/buildinfo', '-count=1'], options);
   run(go, ['test', '-mod=readonly', './internal/wrap', '-run', '^Test(DesktopOfflineRetry|DesktopStop|Stop|PruningDrops|AnOrphanHome|RemoveDeletesAnEphemeralHome)', '-count=1'], options);
   process.exit(0);
 }
@@ -57,7 +64,9 @@ try {
     '-X', info + '.gitDescribe=' + pin.version + '-0-g' + pin.commit.slice(0,7), '-X', info + '.gitModified=true'].join(' ');
   for (const name of binaries) {
     const binary = path.join(temporary, name);
-    run(go, ['build', '-mod=readonly', '-buildvcs=false', '-trimpath', '-ldflags', flags, '-o', binary, './cmd/' + name], options);
+    if (name === 'agent-updater') {
+      run(go, ['build', '-mod=readonly', '-trimpath', '-o', binary, '.'], { ...options, cwd: updater });
+    } else run(go, ['build', '-mod=readonly', '-buildvcs=false', '-trimpath', '-ldflags', flags, '-o', binary, './cmd/' + name], options);
     if (!noSign) run('/usr/bin/codesign', ['--force', '--sign', '-', binary]);
   }
   const verificationHome = path.join(work, 'verification-home');
@@ -69,7 +78,7 @@ try {
     throw new Error('Patched Brig reports an unexpected build identity.');
   }
   const tools = Object.fromEntries(binaries.map(name => [name, {sha256:hash(path.join(temporary, name))}]));
-  fs.writeFileSync(path.join(temporary, 'build.json'), JSON.stringify({...pin, go:hull.go, modified:true, patchSha256:hash(patch), tools}, null, 2) + '\n');
+  fs.writeFileSync(path.join(temporary, 'build.json'), JSON.stringify({...pin, go:hull.go, modified:true, patchSha256:hash(patch), verificationPatchSha256:hash(verificationPatch), tools}, null, 2) + '\n');
   const destination = path.join(work, 'bin');
   const previous = path.join(work, 'bin.previous');
   fs.rmSync(previous, {recursive:true, force:true});

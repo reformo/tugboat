@@ -16,20 +16,20 @@ use std::{
     time::Duration,
 };
 
-pub(super) const VERSION: &str = "codex-cli 0.171.0";
-pub(crate) const PROGRAM: &str = "/root/.tugboat-codex-0.171.0/bin/codex";
-const DIRECTORY: &str = ".tugboat-codex-0.171.0";
-const RELEASE: &str = "https://github.com/openai/codex/releases/download/rust-v0.171.0";
+pub(super) const VERSION: &str = "codex-cli 0.172.0";
+pub(crate) const PROGRAM: &str = "/root/.tugboat-codex-0.172.0/bin/codex";
+const DIRECTORY: &str = ".tugboat-codex-0.172.0";
+const RELEASE: &str = "https://github.com/openai/codex/releases/download/rust-v0.172.0";
 const SIGNER: &str =
-    "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.171.0";
+    "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.172.0";
 const ISSUER: &str = "https://token.actions.githubusercontent.com";
 const ARCHIVE: &str = "codex-package-aarch64-unknown-linux-musl.tar.gz";
 const BUNDLE: &str = "codex-package-aarch64-unknown-linux-musl.tar.gz.sigstore";
-const ARCHIVE_SIZE: u64 = 199_315_347;
-const BUNDLE_SIZE: u64 = 8_489;
-const ARCHIVE_SHA256: &str = "d8c43bee6cf11b01eb18b95f4d7961092bc40228180808859e70dabb7784c1c9";
-const BUNDLE_SHA256: &str = "ad7a3d4d1703a6c664c222d77c462a3932072bba5dfced64677d148cbbe640ff";
-const MANIFEST: &str = include_str!("../../profiles/codex-0.171.0.manifest");
+const ARCHIVE_SIZE: u64 = 201_917_755;
+const BUNDLE_SIZE: u64 = 8_509;
+const ARCHIVE_SHA256: &str = "faf17b8071927f33346a805dc8cb45de4e08c0d75cf0e5e68cecddca28b8861e";
+const BUNDLE_SHA256: &str = "c53d1a88c29d30983feccba733a104b680db649eeb545ba6bea3fbb8a6eb805d";
+const MANIFEST: &str = include_str!("../../profiles/codex-0.172.0.manifest");
 
 pub(super) fn install(brig: &Brig, home: &Path, running: bool) -> Result<(), String> {
     if verify(home).is_ok() {
@@ -42,7 +42,7 @@ pub(super) fn install(brig: &Brig, home: &Path, running: bool) -> Result<(), Str
     }
     private_directory(home.parent().ok_or("The project guest home is invalid.")?)?;
     private_directory(home)?;
-    let cache = brig.state_directory()?.join("tugboat-codex-0.171.0");
+    let cache = brig.state_directory()?.join("tugboat-codex-0.172.0");
     private_directory(&cache)?;
     let _guard = storage::lock(&cache.join("package"))?;
     // A second preparation may have completed while this attempt waited for the cache.

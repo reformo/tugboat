@@ -1,7 +1,7 @@
 use super::{codex_package, CheckedProject};
 use crate::{
-    agents::{AgentCommand, AgentKind, GuestCommand},
-    projects::{Project, DEFAULT_ENVIRONMENT_IMAGE, PREVIOUS_ENVIRONMENT_IMAGE},
+    agents::{AgentKind, GuestCommand},
+    projects::{Project, LEGACY_ENVIRONMENT_IMAGE, PREVIOUS_ENVIRONMENT_IMAGE},
 };
 
 use serde::Serialize;
@@ -22,8 +22,24 @@ pub(crate) struct Versions {
 
 pub(crate) fn program(kind: AgentKind) -> &'static str {
     match kind {
-        AgentKind::Codex => codex_package::PROGRAM,
-        AgentKind::ClaudeCode => CLAUDE_PROGRAM,
+        AgentKind::Codex => "/root/.tugboat-active-codex/bin/codex",
+        AgentKind::ClaudeCode => "/root/.tugboat-active-claude/claude",
+    }
+}
+
+pub(super) fn legacy_evidence(checked: &CheckedProject, kind: AgentKind) -> serde_json::Value {
+    use serde_json::json;
+    let (version, checksum) = match checked.project.image_ref.as_str() {
+        PREVIOUS_ENVIRONMENT_IMAGE => ("2.1.318", PREVIOUS_CLAUDE_SHA256),
+        LEGACY_ENVIRONMENT_IMAGE => ("2.1.326", DEFAULT_CLAUDE_SHA256),
+        _ => return json!({}),
+    };
+    match kind {
+        AgentKind::ClaudeCode => json!({(version): checksum}),
+        AgentKind::Codex => json!({
+            "0.172.0": include_str!("../../profiles/codex-0.172.0.manifest"),
+            "0.171.0": include_str!("../../../resources/agent-updater/legacy-codex-0.171.0.manifest"),
+        }),
     }
 }
 
@@ -51,13 +67,13 @@ pub(crate) fn install_codex(checked: &CheckedProject) -> Result<(), String> {
 }
 
 pub(crate) fn verify_codex(checked: &CheckedProject) -> Result<(), String> {
-    codex_package::verify(&checked.paths.host_home)
+    super::agent_updates::verify(checked, AgentKind::Codex)
 }
 
 pub(crate) fn pinned_versions(image: &str) -> Result<Versions, String> {
     let claude_code = match image {
         PREVIOUS_ENVIRONMENT_IMAGE => "2.1.318 (Claude Code)",
-        DEFAULT_ENVIRONMENT_IMAGE => "2.1.326 (Claude Code)",
+        LEGACY_ENVIRONMENT_IMAGE => "2.1.326 (Claude Code)",
         _ => return Err("The guest image has no approved Claude Code release.".into()),
     };
     Ok(Versions {
@@ -67,12 +83,14 @@ pub(crate) fn pinned_versions(image: &str) -> Result<Versions, String> {
 }
 
 pub(crate) fn verify_versions(checked: &CheckedProject) -> Result<Versions, String> {
-    verify_codex(checked)?;
-    verify_claude(checked)?;
+    codex_package::verify(&checked.paths.host_home)?;
+    verify_stock_claude(checked)?;
     let version = |kind: AgentKind| {
-        let arguments = kind
-            .command(AgentCommand::Version)?
-            .in_output(checked.project.reference());
+        let program = match kind {
+            AgentKind::Codex => codex_package::PROGRAM,
+            AgentKind::ClaudeCode => CLAUDE_PROGRAM,
+        };
+        let arguments = exec(&checked.project, program, &["--version"]);
         checked
             .brig
             .checked(&arguments, None)
@@ -89,6 +107,11 @@ pub(crate) fn verify_versions(checked: &CheckedProject) -> Result<Versions, Stri
 }
 
 pub(crate) fn verify_claude(checked: &CheckedProject) -> Result<(), String> {
+    verify_mount(checked)?;
+    super::agent_updates::verify(checked, AgentKind::ClaudeCode)
+}
+
+pub(crate) fn verify_mount(checked: &CheckedProject) -> Result<(), String> {
     let mounts = checked.brig.checked(
         &exec(
             &checked.project,
@@ -100,9 +123,14 @@ pub(crate) fn verify_claude(checked: &CheckedProject) -> Result<(), String> {
     if mounts.stdout.trim() != "/brig/claude tmpfs" {
         return Err("The guest Claude access directory is not mounted on temporary memory.".into());
     }
+    Ok(())
+}
+
+pub(crate) fn verify_stock_claude(checked: &CheckedProject) -> Result<(), String> {
+    verify_mount(checked)?;
     let expected = match checked.project.image_ref.as_str() {
         PREVIOUS_ENVIRONMENT_IMAGE => PREVIOUS_CLAUDE_SHA256,
-        DEFAULT_ENVIRONMENT_IMAGE => DEFAULT_CLAUDE_SHA256,
+        LEGACY_ENVIRONMENT_IMAGE => DEFAULT_CLAUDE_SHA256,
         _ => return Err("The guest image has no approved Claude executable.".into()),
     };
     let executable = checked.brig.checked(

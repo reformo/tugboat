@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-11-13T18:31:51.597Z",
+  "verifiedAt": "2026-11-25T09:08:40.466Z",
   "target": {
     "os": "macos",
     "minimumVersion": "15.0",
@@ -9,15 +9,15 @@
     "architecture": "arm64"
   },
   "frontend": {
-    "node": "26.12.1",
-    "npm": "11.20.0",
+    "node": "26.13.1",
+    "npm": "12.2.3",
     "cli": {
-      "version": "2.12.4",
-      "integrity": "sha512-JI9bHfudSRJikGOrjbXEm6RjzzvmKuLc+JixB1NE8hNzQkNlCCIC3pTES3uypkR9lxHrsbxzcnSwhI2IxBQphw=="
+      "version": "2.12.6",
+      "integrity": "sha512-/cOeQgqq8PBDPODOjjT0YHs4qxKCHcQMWMiBm4rLM3JNr9mZE+PHNKOK4zAkhIUtYMNL/0fweW48VNvzD1AbqA=="
     },
     "api": {
-      "version": "2.12.4",
-      "integrity": "sha512-pVmfis+4zT8H0Qhp3xPZx9Ju7kpzvA6rr/PSJPyuwfvucTQ8sVt61NYU9KMkK703UFlYadFmjKA4HhybOtN0gg=="
+      "version": "2.12.5",
+      "integrity": "sha512-G9QIMt5fzED+aS4QhVK3w1HWLKpLIwH/MnpCr9z1ugGEHnS2ORmqrLkc0uALOjRK4qXJy+4Yiw8LDl/KicC1Hg=="
     },
     "vite": {
       "version": "8.3.8",
@@ -39,18 +39,18 @@
     }
   },
   "rust": {
-    "compiler": "1.99.1",
-    "cargo": "1.99.1",
+    "compiler": "1.100.0",
+    "cargo": "1.100.0",
     "distribution": "Homebrew",
     "tauri": {
-      "version": "2.12.5",
+      "version": "2.12.7",
       "rustVersion": "1.90",
-      "checksum": "5fb0244332cfb9cee7e2a568bf5da29a36ed8fdbd717f6f47a66b6b7b358c072"
+      "checksum": "30fbfbb9dc9a2697b0e96d909ddc295fb18d2d82a58ed542ab8d9eba2edbe6da"
     },
     "tauriBuild": {
-      "version": "2.7.4",
+      "version": "2.7.6",
       "rustVersion": "1.90",
-      "checksum": "adddb0e648752aaac5da9c3c3c6a68e1e87cab55e3b757b18a9441ef8c3ac614"
+      "checksum": "73d80784e874fa117b9b00a6680cf2f9b8a51bbd14406bea980cf8f328b00646"
     },
     "dialog": {
       "version": "2.8.4"
@@ -58,16 +58,16 @@
   },
   "ghostty": {
     "library": "libghostty-vt",
-    "version": "1.0.1",
-    "tag": "vt-1.0.1",
-    "commit": "108cacb17ed8990840cd14abfce43d8ed8503ca1",
+    "version": "1.0.2",
+    "tag": "vt-1.0.2",
+    "commit": "573c4a21e02311ae87844af26b6a7a179f82858e",
     "source": {
-      "url": "https://release.files.ghostty.org/libghostty-vt/1.0.1/libghostty-vt-1.0.1.tar.gz",
-      "sha256": "333dfce97641ef9b536bb9e08907ad86abaaada50e8f7417b70d9284adef37aa"
+      "url": "https://release.files.ghostty.org/libghostty-vt/1.0.2/libghostty-vt-1.0.2.tar.gz",
+      "sha256": "1dcafa8a3357f3a6bbf4f2696e61de611400c5469518716793dfffd35f008b3e"
     },
     "dependencies": {
-      "url": "https://release.files.ghostty.org/libghostty-vt/1.0.1/libghostty-vt-1.0.1-deps.tar.gz",
-      "sha256": "91a4e10960a52bf5bf4b15aa2a2cddaff8a89d6cd903d3055bda4fd17de3356d"
+      "url": "https://release.files.ghostty.org/libghostty-vt/1.0.2/libghostty-vt-1.0.2-deps.tar.gz",
+      "sha256": "c56156dbea82fdf71f13bf0d704cdf4393b6a04208d7f9691e0d7f60c7f9ca4d"
     },
     "zig": {
       "version": "0.17.1",
@@ -77,7 +77,7 @@
     },
     "buildArguments": [
       "--system",
-      "../libghostty-vt-1.0.1-deps",
+      "../libghostty-vt-1.0.2-deps",
       "--prefix",
       "<WORK>/ghostty-install",
       "-Demit-lib-vt",
@@ -94,28 +94,29 @@
     "header": "ghostty/vt.h"
   },
   "brig": {
-    "version": "v0.5.2",
-    "commit": "1c4962a25a9e563beee9fce13eecbe7f51809780",
+    "version": "v0.6.0",
+    "commit": "4aeb84f53628500f97ca361d430a25eff432e825",
     "apiVersion": "brig.sh/v1alpha1",
     "runtime": "hull",
     "backend": "hvi",
     "hull": {
-      "version": "v0.1.0",
-      "commit": "7e50ac3",
+      "version": "v0.2.0",
+      "commit": "d0eab08",
       "desktopBuild": "config/hull-compat.json"
     },
     "fixtureDirectory": "tests/fixtures/brig/v0.5.2"
   },
   "scope": {
     "verified": [
-      "Rust Tauri dependency compile",
-      "Tauri CLI execution",
-      "TypeScript API check",
-      "Vite production build",
-      "libghostty-vt static link and VT/UTF-8 state",
-      "Brig no-boot CLI plan contract",
-      "BD-02 native macOS window, menu shortcuts and folder dialog",
-      "BD-02 packaged debug app and system light/dark appearance"
+      "npm clean install, TypeScript and Vite build, and Linux Node tests",
+      "Cargo lockfile resolution for aarch64-apple-darwin",
+      "Bundled SQLite schema and records identity on Linux",
+      "Brig runtime, plan and session tests on Linux",
+      "Brig and hull cross-builds for aarch64-apple-darwin",
+      "Brig, hull and Codex release signatures",
+      "Codex 0.172.0 loopback usage and Tugboat parser smoke test",
+      "libghostty-vt and terminal test cross-builds for aarch64-macos.15.0",
+      "libghostty-vt terminal engine test on Linux"
     ],
     "nextIntegrationTask": "BD-03"
   }

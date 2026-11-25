@@ -478,7 +478,7 @@ test('preparation reports native phases and elapsed time and can reveal its outp
   output.click(); await flush();
   assert.equal(harness.element('environment-boot-elapsed').textContent, 'Elapsed 1:07');
   await harness.listeners.get('environment-preparation-verifying')({ payload: { projectId: project.id, environmentId: project.environmentId, terminalIdentifier: 70 } }); await flush();
-  assert.equal(stage.textContent, 'Verifying the running guest and agent versions');
+  assert.equal(stage.textContent, 'Verifying the running guest image');
   assert.equal(harness.element('cancel-preparation').disabled, true);
 });
 

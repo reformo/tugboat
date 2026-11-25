@@ -246,8 +246,14 @@ pub(super) fn resume_existing(
 }
 
 fn replay(checked: &CheckedProject, transcripts: &transcripts::Fixture) -> Result<(), String> {
+    let boot = crate::environment::agent_updates::boot_id(checked)?;
     let mut failures = Vec::new();
     for (agent, transcript) in transcripts.entries() {
+        let update = crate::environment::agent_updates::run(checked, agent, &boot, "update")?;
+        if update.active.is_none() {
+            failures.push(update.result);
+            continue;
+        }
         let id = SessionId::new(&transcript.session_id)?;
         match shared_project_proof::replay_without_message(checked, agent, &id, &transcript.marker)
         {

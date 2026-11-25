@@ -68,10 +68,26 @@ impl Brig {
         Ok(arguments)
     }
 
+    pub(crate) fn require_private_cache<'a>(
+        &self,
+        shares: impl IntoIterator<Item = &'a Path>,
+    ) -> Result<(), String> {
+        use crate::storage::data_location::resolved_share;
+        let cache = resolved_share(&self.state_directory()?.join("agent-packages"))?;
+        for share in shares {
+            let path = resolved_share(share)?;
+            if cache.starts_with(&path) || path.starts_with(&cache) {
+                return Err("A guest share overlaps the private agent package cache.".into());
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn verify_shared_plan(&self, project: &Project, plan: &Value) -> Result<(), String> {
         let data = &plan["data"];
         let expected_home = self.shared_project_home(project)?;
         let paths = PlanPaths::from_plan(plan)?;
+        self.require_private_cache([project.path.as_path(), paths.host_home.as_path()])?;
         if paths.host_home != expected_home
             || data["home"]["guest"] != "/root"
             || data["home"]["mode"] != "read-write"
@@ -115,7 +131,9 @@ impl Brig {
         if state["id"] != sandbox
             || state["status"] != "running"
             || state["backend"] != "hvi"
-            || state["imageDigest"] != image
+            || (state["imageDigest"] != image
+                && !(project.image_ref == crate::projects::DEFAULT_ENVIRONMENT_IMAGE
+                    && state["imageDigest"] == crate::projects::BASE_ARM64_DIGEST))
         {
             return Err("The running guest does not use this project's verified image. Stop it and prepare the project again.".into());
         }

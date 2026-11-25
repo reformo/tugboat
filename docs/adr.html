@@ -440,6 +440,15 @@
         </dl>
         <p class="source"><a href="../src-tauri/src/desktop/settings/project_defaults.rs">Project defaults</a> · <a href="../src-tauri/src/projects/mod.rs">Registration</a> · <a href="../src-tauri/src/environment/preparation/mod.rs">First policy</a> · <a href="../src/settings/project-defaults.ts">New projects sections</a> · <a href="../src/settings/settings.ts">Settings dialog</a></p>
       </article>
+      <article id="adr-034">
+        <h3>ADR-034 · Update each coding agent when the project guest starts</h3>
+        <p>New projects boot a signed, agent-free image. Project registrations keep their own image digests. Tugboat verifies the running environment before enabling its terminal. It checks each vendor once per Linux boot ID and activates each compatible agent independently.</p>
+        <dl>
+          <dt>Recorded reason</dt><dd>A stable agent release can arrive between Tugboat releases. Package downloads must respect project isolation and allow the terminal to open during installation.</dd>
+          <dt>Consequence</dt><dd>The Mac verifies and caches packages. A project activates a versioned directory with an atomic link change after guest checks pass. Failed updates can retain a previously verified version. Agent releases use the same persistent chat and credential paths.</dd>
+        </dl>
+        <p class="source"><a href="../src-tauri/src/environment/agent_updates.rs">Startup checks</a> · <a href="../resources/agent-updater/release.go">Release signatures</a></p>
+      </article>
     </section>
 
     <p class="note">When a change replaces a decision, keep its ID and link to the replacement. Record the changed behavior, the reason, and the source that implements it.</p>

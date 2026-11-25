@@ -11,7 +11,7 @@ const go = path.join(goRoot, 'go/bin/go');
 
 function binaryModules(binary) {
   const info = JSON.parse(execFileSync(go, ['version', '-m', '-json', binary], { encoding: 'utf8', timeout: 20_000 }));
-  const modules = info.Main.Path === 'github.com/brig-sh/brig' ? info.Deps : [info.Main, ...info.Deps];
+  const modules = ['github.com/brig-sh/brig', 'tugboat/agent-updater'].includes(info.Main.Path) ? info.Deps : [info.Main, ...info.Deps];
   return modules.map(module => module.Replace ?? module);
 }
 
@@ -37,7 +37,7 @@ export async function collectRuntimeLicenses(bin) {
   const pins = readJson(path.join(root, 'config/brig-runtime.json'));
   const brig = readJson(path.join(root, 'config/brig-compat.json'));
   const modules = new Map();
-  for (const name of ['brig', 'brigd', 'brig-broker', 'cosign']) {
+  for (const name of ['brig', 'brigd', 'brig-broker', 'agent-updater', 'cosign']) {
     for (const module of binaryModules(path.join(bin, name))) {
       modules.set(module.Path + '@' + module.Version, module);
     }
@@ -47,14 +47,14 @@ export async function collectRuntimeLicenses(bin) {
   while (queue.length) components.push(...await Promise.all(queue.splice(0, 6).map(collectModule)));
 
   const source = path.join(root, '.build/brig-compat/brig-' + brig.commit);
-  const modifications = 'Tugboat modifies Brig ' + brig.version + ' to find the bundled mke2fs beside its executable and preserve the ' + brig.version + ' API version string while reporting modified:true. It also cleans up isolated gateways after a failed boot and reports unconfirmed stops. It keeps the ownership record for an existing default guest home when its virtual machine is absent. The CLI, daemon and broker use the same patched source. The patch and source pin are in sources/brig/ beside this notice file.\n';
+  const modifications = 'Tugboat modifies Brig ' + brig.version + ' to find the bundled mke2fs beside its executable and preserve the ' + brig.version + ' API version string while reporting modified:true. It also cleans up isolated gateways after a failed boot and reports unconfirmed stops. It keeps the ownership record for an existing default guest home when its virtual machine is absent. It caches verified digests on the Mac for offline project restarts. The CLI, daemon and broker use the same patched source. The patch and source pin are in sources/brig/ beside this notice file.\n';
   components.push({
     name: 'github.com/brig-sh/brig', version: brig.version, source: brig.source.url, revision: brig.commit,
     notices: [...readNotices(source), { name: 'MODIFICATIONS.txt', text: modifications }],
   });
   const runnerLicense = path.join(root, '.build/brig-runtime-downloads/hvi-LICENSE');
   if (!fs.existsSync(runnerLicense) || hashFile(runnerLicense) !== pins.hull.hviLicenseSha256) {
-    execFileSync('/usr/bin/curl', ['-fsSL', '--max-time', '60', 'https://raw.githubusercontent.com/brig-sh/hvi-vmm/v0.1.0-rc.1/LICENSE', '-o', runnerLicense], { timeout: 65_000 });
+    execFileSync('/usr/bin/curl', ['-fsSL', '--max-time', '60', 'https://raw.githubusercontent.com/brig-sh/hvi-vmm/v0.1.0-rc.3/LICENSE', '-o', runnerLicense], { timeout: 65_000 });
   }
   if (hashFile(runnerLicense) !== pins.hull.hviLicenseSha256) throw new Error('hvi license SHA-256 mismatch.');
   const runnerNotices = readNotices(path.join(root, '.build/brig-runtime-inputs/hull'));
@@ -90,6 +90,7 @@ export function packageCorrespondingSource(destination) {
   const brigFiles = path.join(destination, 'sources/brig');
   fs.mkdirSync(brigFiles, { recursive: true });
   fs.copyFileSync(path.join(root, 'resources/runtime/brig-disk-tools.patch'), path.join(brigFiles, 'brig-disk-tools.patch'));
+  fs.copyFileSync(path.join(root, 'resources/runtime/brig-verified-cache.patch'), path.join(brigFiles, 'brig-verified-cache.patch'));
   fs.copyFileSync(path.join(root, 'config/brig-compat.json'), path.join(brigFiles, 'brig-compat.json'));
   return {
     name: 'e2fsprogs', version: disk.version, source: disk.source.url,

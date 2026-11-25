@@ -12,7 +12,7 @@ type BootState = { phase: 'idle' } | ({ phase: 'starting'; verificationId?: numb
 const messages = {
   starting: 'Waiting for Brig to start',
   booting: 'Brig started the guest setup process',
-  verifying: 'Verifying the running guest and agent versions',
+  verifying: 'Verifying the running guest image',
   cancelling: 'Stopping environment preparation',
   'awaiting-result': 'Waiting for the preparation result',
 };

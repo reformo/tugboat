@@ -14,11 +14,12 @@ fn managed(checked: &CheckedProject) -> Result<(), String> {
     {
         return Err("Shared Claude sign-in requires a verified Tugboat project guest.".into());
     }
-    shared_runtime::verify_claude(checked)
+    shared_runtime::verify_mount(checked)
 }
 
 pub(super) fn publish(checked: &CheckedProject, bytes: Vec<u8>) -> Result<(), String> {
     managed(checked)?;
+    crate::environment::agent_updates::verify(checked, AgentKind::ClaudeCode)?;
     execute(checked, "write", Some(bytes))
 }
 

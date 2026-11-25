@@ -16,6 +16,7 @@ type Change = { path: string; kind: keyof typeof kinds };
 type Status =
   | ({ status: 'available' } & Images)
   | ({ status: 'review'; changes: Change[]; token: string } & Images)
+  | { status: 'managed'; image: string }
   | { status: 'current'; image: string; versions: Versions }
   | { status: 'recovery'; previous: string; candidate: string; message: string }
   | { status: 'updated'; previous: string; candidate: string; versions: Versions }
@@ -45,6 +46,7 @@ function checked(view: View, context: ProjectContext): boolean {
       return image(view.previous) && image(view.candidate) && versions(view.previousVersions) && versions(view.candidateVersions)
         && text(view.token) && Array.isArray(view.changes)
         && view.changes.every(change => text(change?.path) && change.path.startsWith('/') && Object.hasOwn(kinds, change.kind));
+    case 'managed': return image(view.image);
     case 'current':
       return image(view.image) && versions(view.versions);
     case 'restored':
@@ -116,6 +118,7 @@ export function initializeProjectImageUpdate(
     }
     if (next?.status === 'recovery') { addImage('Previous image', next.previous); addImage('Candidate image', next.candidate); }
     if (next?.status === 'updated') { addImage('Previous image', next.previous); addImage('Current image', next.candidate, next.versions); }
+    if (next?.status === 'managed') addImage('Current image', next.image);
     if (next?.status === 'current' || next?.status === 'restored') addImage('Current image', next.image, next.versions);
     images.replaceChildren(...rows);
     images.hidden = !rows.length;
@@ -184,6 +187,7 @@ export function initializeProjectImageUpdate(
 
 function statusMessage(view: View): string {
   switch (view.status) {
+    case 'managed': return 'Tugboat checks agent releases when this environment starts.';
     case 'available': return 'An image update is available.';
     case 'current': return 'Already up to date.';
     case 'review': return 'The guest is stopped. Review the listed system changes before applying.';

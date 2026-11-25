@@ -38,6 +38,69 @@ impl Guest {
             .to_owned()
     }
 
+    fn start(&self, file: &Path, checked: &environment::CheckedProject, attempt: u64) {
+        let token = format!("disposable-{attempt}");
+        let mut project = checked.project.clone();
+        project
+            .begin_environment(crate::projects::EnvironmentAttempt::pending(
+                token.clone(),
+                attempt,
+                checked.fingerprint.clone(),
+            ))
+            .unwrap();
+        let mut registry = Registry::load(file).unwrap();
+        registry.update(project.clone()).unwrap();
+        storage::write(file, &registry).unwrap();
+        self.boot(checked);
+        let ready = environment::complete_attempt(
+            file,
+            &project.id,
+            &project.environment_id,
+            &token,
+            attempt,
+            Ok(()),
+            || {
+                environment::is_running(&self.brig, &project, &checked.paths)?
+                    .then_some(())
+                    .ok_or_else(|| "Guest stopped".into())
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(ready.message.is_none());
+        let read = || {
+            let plan = environment::check_environment(
+                self.brig.clone(),
+                ready.project.clone(),
+                checked.settings.clone(),
+                Some(&checked.fingerprint),
+                &[],
+            )
+            .unwrap();
+            environment::agent_updates::start(plan).unwrap()
+        };
+        let mut agents = read();
+        assert_eq!(agents.len(), 2);
+        assert!(agents.values().all(|agent| agent.result == "Checking"));
+        assert_eq!(
+            self.run(&project, "/usr/bin/bash", &["-c", "printf ready"]),
+            "ready"
+        );
+        let deadline = std::time::Instant::now() + Duration::from_secs(1200);
+        while agents.values().any(|agent| agent.result == "Checking") {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Agent startup timed out"
+            );
+            std::thread::sleep(Duration::from_secs(2));
+            agents = read();
+        }
+        for (kind, agent) in agents {
+            assert!(agent.active.is_some(), "{kind:?} {}", agent.result);
+            environment::agent_updates::verify(checked, kind).unwrap();
+        }
+    }
+
     fn boot(&self, checked: &environment::CheckedProject) {
         let mut args = environment::run_arguments(checked, &["--version".into()]).unwrap();
         args.insert(0, "--verbose".into());
@@ -121,10 +184,7 @@ fn production_shared_guest_boot_and_reopen() {
         std::slice::from_ref(&records),
     )
     .unwrap();
-    shared_runtime::install_codex(&checked).unwrap();
-    guest.boot(&checked);
-    assert!(environment::is_running(&guest.brig, &checked.project, &checked.paths).unwrap());
-    shared_runtime::verify_versions(&checked).unwrap();
+    guest.start(&file, &checked, 1);
     let opened = Registry::load(&file).unwrap();
     let [codex, claude] = opened.agent_views(&project.id).unwrap();
     assert_eq!(codex.environment_id, claude.environment_id);
@@ -198,18 +258,10 @@ fn production_shared_guest_boot_and_reopen() {
     let bwrap = checked
         .paths
         .host_home
-        .join(".tugboat-codex-0.171.0/codex-resources/bwrap");
+        .join(".tugboat-active-codex/codex-resources/bwrap");
     fs::write(&bwrap, b"synthetic-corruption").unwrap();
-    let archive = root.join(
-        "state/tugboat-codex-0.171.0/verified/codex-package-aarch64-unknown-linux-musl.tar.gz",
-    );
-    fs::write(archive, b"synthetic-corruption").unwrap();
-    assert!(shared_runtime::verify_codex(&checked).is_err());
-    shared_runtime::install_codex(&checked).unwrap();
-    shared_runtime::verify_codex(&checked).unwrap();
 
-    guest.boot(&checked);
-    shared_runtime::verify_versions(&checked).unwrap();
+    guest.start(&file, &checked, 2);
     assert_ne!(
         guest.run(
             &claude.project,

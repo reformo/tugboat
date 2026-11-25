@@ -1,15 +1,6 @@
---- a/cmd/hull/run.go
-+++ b/cmd/hull/run.go
-@@ -761,6 +761,9 @@
- 	if overlayBlock && rootfsTypeOverride == "block" {
- 		return errors.New("HULL_ROOTFS_MODE=overlay-block does not combine with --rootfs-type block")
- 	}
-+	if err := restoreTugboatUpper(instanceDir, instanceName, imageDigest, overlayBlock && vmmType == hypervisors.HviVmm); err != nil {
-+		return err
-+	}
- 	mountRootfs := ociSpec.Annotations["com.urunc.unikernel.mountRootfs"] == "true"
- 
- 	if containerBoot {
+diff --git a/cmd/hull/desktop_rootfs_restore.go b/cmd/hull/desktop_rootfs_restore.go
+new file mode 100644
+index 0000000..f2bdd6f
 --- /dev/null
 +++ b/cmd/hull/desktop_rootfs_restore.go
 @@ -0,0 +1,47 @@
@@ -60,3 +51,11 @@
 +    fmt.Fprintln(os.Stderr, "restored reviewed Tugboat writable system disk")
 +    return nil
 +}
+diff --git a/cmd/hull/run.go b/cmd/hull/run.go
+index 3da9ecb..490c74a 100644
+--- a/cmd/hull/run.go
++++ b/cmd/hull/run.go
+@@ -764,0 +765,3 @@ func runInstance(ctx context.Context, cmd *cli.Command) error {
++	if err := restoreTugboatUpper(instanceDir, instanceName, imageDigest, overlayBlock && vmmType == hypervisors.HviVmm); err != nil {
++		return err
++	}

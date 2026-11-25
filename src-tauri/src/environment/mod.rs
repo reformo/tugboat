@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::process::Command;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+pub(crate) mod agent_updates;
 pub(crate) mod boundaries;
 mod codex_package;
 mod gate;
@@ -98,6 +99,7 @@ fn check_registered_environment(
     crate::storage::data_location::validate_project_records(app, registry)?;
     let settings = project.settings(settings::load(&settings::file(app)?)?)?;
     let brig = brig_for_project(app, &project, &settings)?;
+    brig.require_private_cache(registry.projects.iter().map(|record| record.path.as_path()))?;
     check_environment(
         brig,
         project,
@@ -358,13 +360,6 @@ async fn launch_preparation_terminal(
     );
     let pending_token = token.clone();
     let (command, terminal_target) = tauri::async_runtime::spawn_blocking(move || {
-        let checked = checked_environment(
-            &preparation_app,
-            &identifier,
-            Some(&pending_environment),
-            Some(&fingerprint),
-        )?;
-        shared_runtime::install_codex(&checked)?;
         let _guard = registry_lock.lock().map_err(|error| error.to_string())?;
         let file = projects::file(&preparation_app)?;
         let _file_guard = storage::lock(&file)?;
@@ -410,7 +405,7 @@ async fn launch_preparation_terminal(
         } else if cancelled {
             Err("Environment preparation cancelled.".into())
         } else {
-            Err("Could not verify the guest agent version. Check the terminal output and prepare the environment again.".into())
+            Err("Could not start the project guest. Check the terminal output and prepare the environment again.".into())
         };
         complete_environment(
             &completed_app,
@@ -526,7 +521,7 @@ fn verify_running_attempt(
     if !is_running(&checked.brig, &checked.project, &checked.paths)? {
         return Err("The Brig environment did not remain running. Prepare it again.".into());
     }
-    shared_runtime::verify_versions(&checked).map(|_| ())
+    Ok(())
 }
 
 fn complete_environment(
@@ -552,7 +547,15 @@ fn complete_environment(
     })();
     match result {
         Ok(Some(result)) => {
+            let ready = result.message.is_none();
             let _ = app.emit("environment-preparation-finished", result);
+            if ready {
+                if let Err(error) = checked_environment(app, identifier, Some(environment_id), None)
+                    .and_then(agent_updates::start)
+                {
+                    eprintln!("Could not start agent checks: {error}");
+                }
+            }
         }
         Ok(None) => {}
         Err(error) => {
@@ -573,7 +576,7 @@ pub async fn finish_environment(
     let status = terminal::terminal_snapshot(terminal_identifier)
         .ok_or("The environment terminal record was not found.")?;
     if status.project_id != identifier || status.purpose != "environment" || status.running {
-        return Err("Could not verify the guest agent version. Check the terminal output.".into());
+        return Err("Could not start the project guest. Check the terminal output.".into());
     }
     let lock = projects.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -591,7 +594,7 @@ pub async fn finish_environment(
         let process_result = if status.exit_code == Some(0) {
             Ok(())
         } else {
-            Err("Could not verify the guest agent version. Prepare the environment again.".into())
+            Err("Could not start the project guest. Prepare the environment again.".into())
         };
         let result = complete_attempt(
             &file,

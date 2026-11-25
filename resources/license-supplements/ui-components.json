@@ -29,31 +29,31 @@
     },
     {
       "name": "Lucide icons (folder, settings, chevron-down)",
-      "version": "1.72.0",
+      "version": "1.80.0",
       "license": "ISC and MIT (see notices)",
       "repository": "https://github.com/lucide-icons/lucide",
-      "sourceRevision": "1.72.0",
-      "sourceArchive": "https://github.com/lucide-icons/lucide/tree/1.72.0",
+      "sourceRevision": "1.80.0",
+      "sourceArchive": "https://github.com/lucide-icons/lucide/tree/1.80.0",
       "modifications": "Interface icon SVG stroke widths are set to 1.5.",
       "icons": {
         "folder.svg": {
-          "url": "https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/folder.svg",
+          "url": "https://raw.githubusercontent.com/lucide-icons/lucide/1.80.0/icons/folder.svg",
           "sha256": "f0d92b94b797a8ab7d4c4ae33c3236c47f64068351b4e14bdb5014ee42898a39",
           "bytes": 342
         },
         "settings.svg": {
-          "url": "https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/settings.svg",
+          "url": "https://raw.githubusercontent.com/lucide-icons/lucide/1.80.0/icons/settings.svg",
           "sha256": "0ae27fd0f81999229e3127ac96c5b32edfea448e291d509e76212b917551d66b",
           "bytes": 586
         },
         "chevron-down.svg": {
-          "url": "https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/chevron-down.svg",
+          "url": "https://raw.githubusercontent.com/lucide-icons/lucide/1.80.0/icons/chevron-down.svg",
           "sha256": "66ea878e72ed3488bb3b464c39dfdccee8d1f78e560dccea40e5e12da0e87e87",
           "bytes": 236
         }
       },
       "notices": [
-        "lucide-1.72.0/LICENSE"
+        "lucide-1.80.0/LICENSE"
       ],
       "distribution": "bundled-interface"
     }

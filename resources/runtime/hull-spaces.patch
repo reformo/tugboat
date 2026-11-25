@@ -1,9 +1,8 @@
+diff --git a/cmd/hull/run.go b/cmd/hull/run.go
+index 9457ff9..3da9ecb 100644
 --- a/cmd/hull/run.go
 +++ b/cmd/hull/run.go
-@@ -1013,15 +1013,7 @@
- 	shareMounts := ""
- 	var containerMounts strings.Builder
- 	for _, sh := range shares {
+@@ -1017,9 +1017 @@ exec %s "$@"
 -		if vmmType == hypervisors.VzVmm || vmmType == hypervisors.HviVmm {
 -			mountOpts := ""
 -			if sh.readOnly {
@@ -14,13 +13,10 @@
 -			shareMounts += fmt.Sprintf("mkdir -p %s\nmount -t 9p -o trans=virtio,version=9p2000.L,msize=512000 %s %s\n", sh.guest, sh.tag, sh.guest)
 -		}
 +		shareMounts += shareMountCommand(sh, vmmType == hypervisors.VzVmm || vmmType == hypervisors.HviVmm)
- 		mode := "rw"
- 		if sh.readOnly {
- 			mode = "ro"
-@@ -1700,12 +1692,29 @@
- 	return nil, false, fmt.Errorf("invalid %s mode %q in %q (want ro or rw)", flag, parts[2], spec)
- }
- 
+@@ -1709,3 +1701,15 @@ func checkShareMode(flag, spec, vmmName string, readOnly bool) error {
+-// checkScriptGuestPath refuses a guest path the guest's init script cannot
+-// carry: the script that mounts the shares names the path unquoted, so a
+-// space or a tab would split it and a quote would open a string.
 +// shareMountCommand keeps a guest path in one literal shell argument. Spaces
 +// are valid in the TSV used by container boots and need quoting in the legacy
 +// shell wrapper. Neither path may split or execute the directory name.
@@ -36,35 +32,47 @@
 +	return fmt.Sprintf("mkdir -p %s\nmount -t 9p -o trans=virtio,version=9p2000.L,msize=512000 %s %s\n", guest, sh.tag, guest)
 +}
 +
- func validateGuestPath(guestPath string) error {
- 	if !strings.HasPrefix(guestPath, "/") {
- 		return fmt.Errorf("guest path %q must be absolute", guestPath)
- 	}
+@@ -1713,2 +1717,4 @@ func checkScriptGuestPath(guestPath string) error {
 -	if strings.ContainsAny(guestPath, " \t'\"") {
 -		return fmt.Errorf("guest path %q must not contain spaces or quotes", guestPath)
 +	// Tabs and line breaks delimit /urunc-mounts records. Quote support stays
 +	// unchanged; ordinary spaces do not delimit a TSV field.
 +	if strings.ContainsAny(guestPath, "\x00\t\r\n'\"") {
 +		return fmt.Errorf("guest path %q must not contain tabs, line breaks or quotes", guestPath)
- 	}
- 	return nil
- }
+diff --git a/cmd/hull/share_test.go b/cmd/hull/share_test.go
+index 80fdb75..f05c6ee 100644
+--- a/cmd/hull/share_test.go
++++ b/cmd/hull/share_test.go
+@@ -285,2 +285 @@ func TestParseSharesRefusesTheRootAndATakenPath(t *testing.T) {
+-// The init script names a guest path unquoted, so a path with a space or a
+-// quote is refused from either flag.
++// The guest mount format refuses delimiters and quotes from either flag.
+@@ -289 +288 @@ func TestParseSharesRefusesAPathTheScriptCannotCarry(t *testing.T) {
+-	for _, guest := range []string{"/my dir", "/it's", `/"q"`, "/a\tb"} {
++	for _, guest := range []string{"/it's", `/"q"`, "/a\tb", "/a\nb", "/a\rb", "/a\x00b"} {
+@@ -292 +291 @@ func TestParseSharesRefusesAPathTheScriptCannotCarry(t *testing.T) {
+-		if err == nil || !strings.Contains(err.Error(), "must not contain spaces or quotes") {
++		if err == nil || !strings.Contains(err.Error(), "must not contain tabs, line breaks or quotes") {
+@@ -297 +296 @@ func TestParseSharesRefusesAPathTheScriptCannotCarry(t *testing.T) {
+-		if err == nil || !strings.Contains(err.Error(), "must not contain spaces or quotes") {
++		if err == nil || !strings.Contains(err.Error(), "must not contain tabs, line breaks or quotes") {
 diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
+index 5e5a5d2..8e1c750 100644
 --- a/cmd/hull/stop.go
 +++ b/cmd/hull/stop.go
-@@ -24 +23,0 @@
+@@ -24 +23,0 @@ import (
 -	"os/exec"
-@@ -26 +25 @@
+@@ -26 +25 @@ import (
 -	"strconv"
 +	"slices"
-@@ -34,0 +34 @@
+@@ -34,0 +34 @@ import (
 +	"golang.org/x/sys/unix"
-@@ -125 +125,3 @@
+@@ -112 +112,15 @@ func stopInstanceIn(s *store.Store, instanceID string, timeoutSecs int) error {
 -			_ = s.SaveInstance(state)
 +			if err := s.SaveInstance(state); err != nil {
 +				return fmt.Errorf("record stop intent for instance %s: %w", instanceID, err)
 +			}
-@@ -126,0 +129,12 @@
++		}
 +		// Earlier hull builds could clear the PID of a live monitor when its
 +		// executable path contained spaces. Check the exact argv on explicit Stop.
 +		if state.PID == 0 && len(state.CmdLine) > 0 {
@@ -76,8 +84,7 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +				fmt.Printf("Instance %s stopped\n", instanceID)
 +				return nil
 +			}
-+		}
-@@ -261,17 +275 @@
+@@ -248,17 +262 @@ func waitForExit(pid int, timeout time.Duration) bool {
 -// vmmProcessMatches reports whether pid's argv looks like one of our VMMs,
 -// guarding stop against pid reuse after a VMM crash.
 -// reapOrphanVMM finds and kills a VMM that was spawned but never had its pid
@@ -96,7 +103,7 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 -// it carries that instance's own paths, and requiring all of it means a
 -// coincidence cannot satisfy it.
 +// reapOrphanVMM ends a monitor whose launch did not finish recording its PID.
-@@ -278,0 +277,8 @@
+@@ -265,0 +264,8 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 +	reaped, err := stopUnrecordedVMM(s, state, 0)
 +	if err != nil {
 +		log.Warnf("instance %s: could not recover its monitor: %v", state.ID, err)
@@ -105,24 +112,27 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +}
 +
 +func stopUnrecordedVMM(s *store.Store, state *store.InstanceState, grace time.Duration) (bool, error) {
-@@ -280 +286 @@
+@@ -267 +273 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -		return false
 +		return false, nil
-@@ -282,4 +288 @@
+@@ -269,4 +275 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -	want := strings.Join(state.CmdLine, " ")
 -	// -ww so long argv is not truncated to the terminal width; the paths that
 -	// make this unique are at the end of the line.
 -	out, err := exec.Command("/bin/ps", "-axww", "-o", "pid=,command=").Output()
 +	process, err := unrecordedVMM(state.CmdLine)
-@@ -287 +290 @@
+@@ -274 +277 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -		return false
 +		return false, err
-@@ -289,6 +292,7 @@
+@@ -276,9 +279,7 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -	killed := false
 -	for _, line := range strings.Split(string(out), "\n") {
 -		line = strings.TrimSpace(line)
 -		pidStr, cmd, ok := strings.Cut(line, " ")
 -		if !ok {
+-			continue
+-		}
+-		if strings.TrimSpace(cmd) != want {
 -			continue
 +	if process == nil {
 +		return false, nil
@@ -131,14 +141,27 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +	if grace > 0 {
 +		if err := signalUnrecordedVMM(s, state, process, syscall.SIGTERM); err != nil {
 +			return false, err
-@@ -296,2 +300,2 @@
--		if strings.TrimSpace(cmd) != want {
+@@ -286,3 +287,2 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
+-		pid, perr := strconv.Atoi(pidStr)
+-		if perr != nil || pid <= 0 {
 -			continue
 +		if waitForExit(pid, grace) {
 +			return true, nil
-@@ -299,2 +303,23 @@
--		pid, perr := strconv.Atoi(pidStr)
--		if perr != nil || pid <= 0 {
+@@ -290,14 +290,23 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
+-		// Re-check immediately before signalling.
+-		//
+-		// The decision to reap comes from a record read before the `ps` above,
+-		// and that `ps` costs about 50ms on a busy machine. In that window the
+-		// instance can finish starting and be recorded "running", or the pid can
+-		// be recycled. The path this replaced re-verified per pid before
+-		// signalling; the first version of this one did not, and went straight
+-		// from a stale snapshot to SIGKILL.
+-		//
+-		// Two questions, both cheap: is this still one of our VMMs, and does the
+-		// record still say nobody owns it?
+-		if !processIsAVMM(pid, nil) {
+-			log.Debugf("instance %s: pid %d is no longer one of our VMMs; not signalling it",
+-				state.ID, pid)
 +	}
 +	if err := signalUnrecordedVMM(s, state, process, syscall.SIGKILL); err != nil {
 +		return false, err
@@ -162,52 +185,37 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +		process := &processes[index]
 +		pid := int(process.Proc.P_pid)
 +		if pid <= 0 {
-@@ -303,14 +328,5 @@
--		// Re-check immediately before signalling.
--		//
--		// The decision to reap comes from a record read before the `ps` above,
--		// and that `ps` costs about 50ms on a busy machine. In that window the
--		// instance can finish starting and be recorded "running", or the pid can
--		// be recycled. The path this replaced re-verified per pid before
--		// signalling; the first version of this one did not, and went straight
--		// from a stale snapshot to SIGKILL.
--		//
--		// Two questions, both cheap: is this still one of our VMMs, and does the
--		// record still say nobody owns it?
--		if !processIsAVMM(pid, nil) {
--			log.Debugf("instance %s: pid %d is no longer one of our VMMs; not signalling it",
--				state.ID, pid)
-+		argv, err := processArgv(pid)
-+		if err != nil && unix.ByteSliceToString(process.Proc.P_comm[:]) == filepath.Base(expected[0]) && !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
-+			return nil, fmt.Errorf("read monitor process %d arguments: %w", pid, err)
-+		}
-+		if err != nil || !slices.Equal(argv, expected) {
-@@ -319,5 +335,2 @@
+@@ -306,5 +315,3 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -		if fresh, ferr := s.GetInstance(state.ID); ferr == nil &&
 -			(fresh.PID > 0 || fresh.Status == "running") {
 -			log.Warnf("instance %s finished starting while we were looking for its VMM "+
 -				"(pid %d is now recorded); leaving it alone", state.ID, fresh.PID)
 -			return false
-+		if match != nil {
-+			return nil, errors.New("multiple monitor processes match the recorded command")
-@@ -325,7 +338 @@
++		argv, err := processArgv(pid)
++		if err != nil && unix.ByteSliceToString(process.Proc.P_comm[:]) == filepath.Base(expected[0]) && !errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
++			return nil, fmt.Errorf("read monitor process %d arguments: %w", pid, err)
+@@ -312,4 +319 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -		log.Warnf("instance %s: found a VMM (pid %d) that was started but never recorded; "+
 -			"killing it", state.ID, pid)
 -		if kerr := syscall.Kill(pid, syscall.SIGKILL); kerr != nil {
 -			log.Warnf("instance %s: could not kill pid %d: %v", state.ID, pid, kerr)
--			continue
--		}
++		if err != nil || !slices.Equal(argv, expected) {
+@@ -318 +322,12 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
 -		killed = true
++		if match != nil {
++			return nil, errors.New("multiple monitor processes match the recorded command")
++		}
 +		match = process
-@@ -333 +340 @@
--	return killed
++	}
 +	return match, nil
-@@ -335,0 +343,25 @@
++}
++
 +func signalUnrecordedVMM(s *store.Store, state *store.InstanceState, process *unix.KinfoProc, signal syscall.Signal) error {
 +	fresh, err := s.GetInstance(state.ID)
 +	if err != nil {
 +		return fmt.Errorf("re-read the instance record: %w", err)
-+	}
+@@ -320 +335,18 @@ func reapOrphanVMM(s *store.Store, state *store.InstanceState) bool {
+-	return killed
 +	if fresh.ID != state.ID || fresh.PID != 0 || fresh.Status != state.Status ||
 +		!fresh.StartTime.Equal(state.StartTime) || !slices.Equal(fresh.CmdLine, state.CmdLine) {
 +		return errors.New("the instance record changed while locating its monitor")
@@ -226,9 +234,7 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +		return fmt.Errorf("send %s to monitor process %d: %w", signal, pid, err)
 +	}
 +	return nil
-+}
-+
-@@ -357,0 +390,13 @@
+@@ -344,0 +377,13 @@ var vmmExecutablePrefixes = []string{"qemu-system-"}
 +func isVMMExecutable(executable string) bool {
 +	base := filepath.Base(executable)
 +	if vmmExecutables[base] {
@@ -242,13 +248,11 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +	return false
 +}
 +
-@@ -370,2 +415,3 @@
+@@ -357,30 +402,3 @@ func processIsAVMM(pid int, state *store.InstanceState) bool {
 -	out, err := exec.Command("/bin/ps", "-p", strconv.Itoa(pid), "-o", "lstart=,command=").Output()
 -	if err != nil {
-+	// ps flattens argv, which loses the argument boundaries in a bundle path.
-+	argv, err := processArgv(pid)
-+	if err != nil || len(argv) == 0 || !isVMMExecutable(argv[0]) {
-@@ -374,28 +419,0 @@
+-		return false
+-	}
 -	line := strings.TrimSpace(string(out))
 -	if line == "" {
 -		return false
@@ -275,12 +279,13 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 -		}
 -	}
 -	if !isVMM {
--		return false
--	}
-@@ -407 +425 @@
++	// ps flattens argv, which loses the argument boundaries in a bundle path.
++	argv, err := processArgv(pid)
++	if err != nil || len(argv) == 0 || !isVMMExecutable(argv[0]) {
+@@ -394 +412 @@ func processIsAVMM(pid int, state *store.InstanceState) bool {
 -	if len(state.CmdLine) > 0 && strings.Join(state.CmdLine, " ") == cmdline {
 +	if slices.Equal(state.CmdLine, argv) {
-@@ -413,11 +431,3 @@
+@@ -400,11 +418,3 @@ func processIsAVMM(pid int, state *store.InstanceState) bool {
 -	// ParseInLocation, not Parse: `ps -o lstart=` prints LOCAL wall-clock time
 -	// with no zone, and parsing it as UTC makes every process look
 -	// (UTC-offset) hours out. On a UTC+3 machine that made every live VMM
@@ -295,7 +300,7 @@ diff --git a/cmd/hull/stop.go b/cmd/hull/stop.go
 +	process, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
 +	if err != nil {
 +		return false
-@@ -425 +435,2 @@
+@@ -412 +422,2 @@ func processIsAVMM(pid int, state *store.InstanceState) bool {
 -	return !when.After(state.StartTime.Add(5 * time.Second))
 +	started := time.Unix(process.Proc.P_starttime.Unix())
 +	return !started.After(state.StartTime.Add(5 * time.Second))

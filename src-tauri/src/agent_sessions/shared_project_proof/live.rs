@@ -313,7 +313,7 @@ fn missing_image_or_modified_policy_cannot_authorize_live_access() {
             {"host":"api.anthropic.com"}, {"host":"api.openai.com"}, {"host":"auth.openai.com"},
             {"host":"chatgpt.com"}, {"host":"claude.ai"}, {"host":"platform.claude.com"}
         ], "deny":[]}, "ports":[], "credentials":[],
-        "image":{"ref":crate::projects::DEFAULT_ENVIRONMENT_IMAGE},
+        "image":{"ref":image_reference()},
         "project":{"host":root.join("sample project"),"guest":"/work/sample project","mode":"read-write"},
         "home":{"host":root.join(format!("state/homes/{SANDBOX}")),"guest":"/root","mode":"read-write"},
     });

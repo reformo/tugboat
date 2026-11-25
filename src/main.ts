@@ -155,7 +155,48 @@ function resetProjectDetails(): void {
 }
 
 function environmentReady(): boolean { return appData.selectedProject?.stage === 'environment-ready' && selectedPlanFingerprint !== null && !planRequests.pending(); }
+type AgentUpdate = { selected?: string; active?: string; result: string };
+let agentStatuses: Partial<Record<AgentKind, AgentUpdate>> = {};
+let agentStatusKey = '';
+function refreshAgentStatus(): void {
+  const project = appData.selectedProject;
+  const key = project?.stage === 'environment-ready' && selectedPlanFingerprint
+    ? [project.id, project.environmentId, project.environmentAttempt?.terminalIdentifier, projectEpoch, selectedPlanFingerprint].join('|') : '';
+  if (key === agentStatusKey) return;
+  agentStatusKey = key;
+  agentStatuses = {};
+  const display = element('agent-update-status');
+  const summary = element('project-agent-update');
+  display.textContent = '';
+  summary.hidden = true;
+  if (!key || !project) return;
+  const current = () => key === agentStatusKey && appData.selectedProject?.id === project.id;
+  async function read(): Promise<void> {
+    if (!current()) return;
+    try {
+      const statuses = await invoke<Record<AgentKind, AgentUpdate>>('agent_update_status', { identifier: project!.id, environmentId: project!.environmentId });
+      if (!current()) return;
+      agentStatuses = statuses;
+      const agents: AgentKind[] = ['codex', 'claude-code'];
+      display.textContent = agents.map(kind => {
+        const status = statuses[kind];
+        const selected = status?.selected && status.selected !== status.active ? `Selected ${status.selected}` : null;
+        const active = status?.active ? `Active ${status.active}` : status && status.result !== 'Checking' ? 'Unavailable' : null;
+        return [agentName(kind), active, selected, status?.result ?? 'Waiting'].filter(Boolean).join(' · ');
+      }).join(' | ');
+      summary.textContent = display.textContent;
+      summary.hidden = agents.every(kind => ['Current', 'Installed'].includes(statuses[kind]?.result));
+      if (requestedChat && !statuses[requestedChat.agent]?.active && statuses[requestedChat.agent]?.result !== 'Checking') requestedChat = null;
+      updateCodexActions();
+      if (agents.some(kind => statuses[kind]?.result === 'Checking')) window.setTimeout(() => void read(), 1500);
+    } catch (error) {
+      if (current()) { requestedChat = null; summary.textContent = display.textContent = String(error); summary.hidden = false; updateNewChatButtons(); }
+    }
+  }
+  void read();
+}
 function canStartChat(): boolean {
+  if (!agentStatuses[newChatAgent()]?.active) return false;
   const context = projectContext();
   if (newChatAgent() === 'claude-code') return environmentReady() && claudeAccount?.status()?.state === 'signed-in';
   return environmentReady() && !accountSync.pending() && sharedChatgpt?.status()?.state === 'signed-in'
@@ -216,7 +257,7 @@ function requestNewChat(): void {
 
 async function syncProjectAccount(): Promise<void> {
   const context = projectContext();
-  if (!context || newChatAgent() !== 'codex' || sharedChatgpt?.status()?.state !== 'signed-in' || !environmentReady() || accountSync.pending()) return;
+  if (!context || !agentStatuses.codex?.active || newChatAgent() !== 'codex' || sharedChatgpt?.status()?.state !== 'signed-in' || !environmentReady() || accountSync.pending()) return;
   const key = [context.id, context.epoch, context.fingerprint, sharedChatgpt.status()?.generation].join('|');
   if (accountSyncKey === key) return;
   accountSyncKey = key; const request = accountSync.begin(); connectedAccountProject = null;
@@ -1084,6 +1125,7 @@ async function prepareSelectedProject(): Promise<void> {
 }
 
 function updateCodexActions(): void {
+  refreshAgentStatus();
   const ready = appData.selectedProject?.stage === 'environment-ready';
   renderFirstChat();
   const agent = hasFirstChat() ? firstChatAgent() : newChatAgent();
@@ -1107,7 +1149,7 @@ function updateCodexActions(): void {
   claudeAccount?.select();
   element<HTMLButtonElement>('guest-shell').disabled = !environmentReady() || terminalLaunch.blocksChanges() || projectSelection.pending() || folderChoice.pending() || preparingSelected();
   sharedChatgpt?.updateAvailability();
-  if (ready && !claude && agent) void syncProjectAccount();
+  if (ready && !claude && agent && agentStatuses.codex?.active) void syncProjectAccount();
 }
 
 element('start-codex').addEventListener('click', requestNewChat);
@@ -1835,7 +1877,7 @@ await listen<{ project: Project; terminalIdentifier: number; message: string | n
   await refreshSelectedPlan();
   if (!sameProject(projectContext(), context) || !currentAttempt()) return;
   updateCodexActions();
-  element('preparation-status').textContent = result.message ?? 'Brig environment and guest agent version verified.';
+  element('preparation-status').textContent = result.message ?? 'Brig environment ready.';
   environmentFeedback(result.message ?? (appData.selectedProject?.stage === 'environment-ready' ? null : 'The project environment is not running. Try starting it again.'));
   if (viewRequest !== null && (hasFirstChat() || result.message)) await finishPreparationView(context, viewRequest);
   if (!result.message && appData.selectedProject?.stage === 'environment-ready') void refreshConversations();

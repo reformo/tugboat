@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
   "brig": {
-    "version": "v0.5.2",
-    "url": "https://github.com/brig-sh/brig/releases/download/v0.5.2/brig-0.5.2-darwin-arm64.tar.gz",
-    "sha256": "f2341c4c8f8a7c17ae491369139150f849b9ce9e3f44f9829dbd6b79de5d53e3",
-    "signer": "https://github.com/brig-sh/brig/.github/workflows/release.yml@refs/tags/v0.5.2",
-    "sbomSha256": "24aa2dcce8a5aa454847a8e291bcde385f375ef955b50dfc31b1557d38f00ec8"
+    "version": "v0.6.0",
+    "url": "https://github.com/brig-sh/brig/releases/download/v0.6.0/brig-0.6.0-darwin-arm64.tar.gz",
+    "sha256": "4c98a7f88cdbd54af320f45b40048585ce0490d07fb9f3350a04f6a2b27f47a2",
+    "signer": "https://github.com/brig-sh/brig/.github/workflows/release.yml@refs/tags/v0.6.0",
+    "sbomSha256": "d914eee1bc95c7c96554083886cb137f7d7cf3d2dee15d342fe444dc3e7b3f18"
   },
   "hull": {
-    "version": "v0.1.0",
-    "url": "https://github.com/brig-sh/hull/releases/download/v0.1.0/hull-0.1.0-arm64.tar.gz",
-    "sha256": "f5dd18e28205e442e5ae57245c427490bfca8015aa6c143e03a522c1718f5e02",
-    "signer": "https://github.com/brig-sh/hull/.github/workflows/release.yml@refs/tags/v0.1.0",
-    "sbomSha256": "9accab644573de99e98984af9538dbe2dccac9ae8f9a99040a1f694b41e70911",
+    "version": "v0.2.0",
+    "url": "https://github.com/brig-sh/hull/releases/download/v0.2.0/hull-0.2.0-arm64.tar.gz",
+    "sha256": "c167edeaa359f50df73b416dd4e84d4cfdb4f3996a7351e3f2e2372394cbb8a8",
+    "signer": "https://github.com/brig-sh/hull/.github/workflows/release.yml@refs/tags/v0.2.0",
+    "sbomSha256": "0305c2335d340822e1578cb62d2946d07482b50921c12a3b9414ee6eb16707c8",
     "hviLicenseSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   "cosign": {
-    "version": "v3.1.4",
-    "url": "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-darwin-arm64",
-    "sha256": "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"
+    "version": "v3.1.5",
+    "url": "https://github.com/sigstore/cosign/releases/download/v3.1.5/cosign-darwin-arm64",
+    "sha256": "35cfceffe68448019f75bcbb2c470045ee2f4264cf5ad6d564f08f327f97d13f"
   }
 }

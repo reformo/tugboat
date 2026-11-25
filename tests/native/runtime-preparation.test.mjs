@@ -23,10 +23,12 @@ function fixture(context, noSign) {
   const sha256 = createHash('sha256').update(payload).digest('hex');
   const pins = { cosign: { url: 'https://fixture.invalid/cosign', sha256 } };
   for (const name of ['brig', 'hull']) {
-    pins[name] = { url: `https://fixture.invalid/${name}.tar.gz`, sha256, signer: 'fixture identity', sbomSha256: sha256, version: name === 'brig' ? 'v0.5.2' : 'v0.1.0' };
-    for (const suffix of ['tar.gz', 'pem', 'sig']) write(`.build/brig-runtime-downloads/${name}.${suffix}`, payload);
+    pins[name] = { url: `https://fixture.invalid/${name}.tar.gz`, sha256, signer: 'fixture identity', sbomSha256: sha256, version: name === 'brig' ? 'v0.6.0' : 'v0.2.0' };
+    const release = name + '-' + pins[name].version;
+    write(`.build/brig-runtime-downloads/${name}.tar.gz`, payload);
+    for (const suffix of ['pem', 'sig']) write(`.build/brig-runtime-downloads/${release}.${suffix}`, payload);
     write(`.build/brig-runtime-downloads/${name}-sbom.json`, payload);
-    write(`.build/brig-runtime-downloads/${name}-checksums.txt`, `${sha256}  ${name}.tar.gz\n`);
+    write(`.build/brig-runtime-downloads/${release}-checksums.txt`, `${sha256}  ${name}.tar.gz\n`);
     write(`.build/${name}-compat/bin/build.json`, '{}');
   }
   write('.build/brig-runtime-downloads/cosign', payload);

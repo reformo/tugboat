@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::State;
 
-pub const SUPPORTED_BRIG_VERSION: &str = "v0.5.2";
+pub const SUPPORTED_BRIG_VERSION: &str = "v0.6.0";
 
 #[derive(Default)]
 pub struct Inspection(Mutex<InspectionState>);
@@ -280,8 +280,7 @@ fn inspect_with_runtime(
     result.version = Some(version.clone());
     if version["data"]["version"] != SUPPORTED_BRIG_VERSION {
         result.brig_status = "incompatible".into();
-        result.message =
-            Some("This app was verified with Brig v0.5.2. Select a compatible version.".into());
+        result.message = Some(format!("This app requires Brig {SUPPORTED_BRIG_VERSION}."));
         return result;
     }
     match inspection_output(query(brig, &["--json", "doctor"], cancel), "Doctor") {

@@ -27,10 +27,10 @@ The interface uses bundled Google Fonts Inter and Lucide sidebar icons. The nati
 
 - An Apple silicon Mac with macOS 15 or later.
 - Internet access for the first download of guest images and boot assets.
-- The bundled [Tugboat project profile](src-tauri/profiles/tugboat-project.yaml). The verified image and pinned Codex package supply both agents.
+- The bundled [Tugboat project profile](src-tauri/profiles/tugboat-project.yaml). On each guest start, Tugboat checks both agents and installs verified stable releases from their vendors.
 - An account with access to the selected agent. Codex uses the shared ChatGPT account; Claude Code uses the shared Claude account.
 
-The app includes Brig v0.5.2, a patched hull CLI, signed hvi/Vz runners, cosign, and the ext4 disk tools. Brig and hull use the bundled disk tools. The hull patch also supports shared folder paths that contain spaces. Homebrew is optional.
+The app includes Brig v0.6.0, a patched hull v0.2.0 CLI, signed hvi/Vz runners, cosign, and the ext4 disk tools. Brig and hull use the bundled disk tools. The hull patch also supports shared folder paths that contain spaces. Homebrew is optional.
 
 Tugboat uses a bundled, empty registry configuration for public guest images. It does not read the host Docker credential store. Use standalone Brig for private registry sign-in. The project environment requires image signature verification.
 
@@ -44,7 +44,7 @@ The trunk workflow uses the Developer ID release script to sign and notarize the
 
 The workflow validates the notarization private key before installing dependencies or preparing native tools. If notarization reports `invalidP8`, follow the [private key recovery steps](docs/developer-guide.html#invalid-apple-api-key) to replace `APPLE_API_KEY_CONTENT` from the original `.p8` file.
 
-To build from source, install Node.js and npm, Rust and Cargo, and Xcode with its command line tools. Supported Node.js versions are 22.22.2 or later in the 22.x series, 24.15.0 or later in the 24.x series, and 26.0.0 or later. The recorded development environment uses Node.js 26.12.1 and Rust 1.99.1.
+To build from source, install Node.js and npm, Rust and Cargo, and Xcode with its command line tools. Supported Node.js versions are 22.22.2 or later in the 22.x series, 24.15.0 or later in the 24.x series, and 26.0.0 or later. The recorded development environment uses Node.js 26.13.1, npm 12.2.3, and Rust and Cargo 1.100.0.
 
 Run these commands from the project root:
 
@@ -114,7 +114,7 @@ Claude uses the Brig boundary. New and resumed Claude chats start in auto permis
 
 Configured projects show saved chats and measured usage while Tugboat checks the shared environment. Tugboat checks the current plan and starts a stopped environment automatically. It reuses a verified running guest. You can inspect the plan in **Project settings**. Startup failures offer **Retry environment**. **Stop Brig environment** ends both agents’ chats and other guest processes. The persistent guest home and chat history stay available.
 
-Tugboat installs the signed Codex 0.171.0 package during the first preparation for that release. Its versioned install directory is separate from the Codex settings and saved chats.
+Tugboat installs the signed Codex 0.172.0 package during the first preparation for that release. Its versioned install directory is separate from the Codex settings and saved chats.
 
 **New Chat** starts a process for the chosen agent inside the project environment. Selecting an open chat restores its terminal and scrollback. Claude new chats receive a UUID from Tugboat. Resume uses the saved agent and native ID. Two agents can use the same native ID and keep distinct chats.
 
@@ -128,7 +128,7 @@ Tugboat reads Codex token events and Claude message usage from their own directo
 
 The usage icon opens **Session usage**. For a root chat with subagents, **Main agent**, **Subagents**, and **Combined** separate the root's own usage from delegated work. Expand a subagent to inspect its own agent turns and requests. User prompt counts and agent turn counts are separate. Proven prompt attribution links to the source request or unmeasured turn. Work without proven attribution stays under **Unassigned to a user prompt** and remains in the selected total. A selected child's details cover that child and its descendants only; ancestors and siblings are excluded. While the dialog is open, changes in the selected subtree refresh its details and preserve open disclosures, focus, and scroll position.
 
-Exact source ownership and parent relationships are supported for the Codex 0.167.0 and 0.171.0 record formats. A physical request uses the verified guest-home namespace, model provider, origin thread ID, and response ID. Different guest homes stay separate. Matching titles, token amounts, or project paths do not establish request identity. Legacy counter records retain their saved usage with unknown source coverage until reliable evidence resolves ownership; they are not reset or deduplicated by equal amounts.
+Exact source ownership and parent relationships are supported for the Codex 0.167.0, 0.171.0, and 0.172.0 record formats. A physical request uses the verified guest-home namespace, model provider, origin thread ID, and response ID. Different guest homes stay separate. Matching titles, token amounts, or project paths do not establish request identity. Legacy counter records retain their saved usage with unknown source coverage until reliable evidence resolves ownership; they are not reset or deduplicated by equal amounts.
 
 The OpenAI catalogue was checked on 2026-11-17 against [OpenAI API pricing](https://developers.openai.com/api/docs/pricing). It covers GPT-6.2 Astra and Sol, GPT-6.1 Sol and Terra, and GPT-6 Astra, Sol, and Luna. Prompts above 272,000 input tokens use long-context prices for the full request. Missing tiers use Standard and carry an assumption label. GPT-6.2 Ultrafast pricing uses the request timestamp to apply the published change on March 1, 2027, Pacific time. Unverified models and tiers remain unpriced.
 
@@ -188,7 +188,7 @@ New and resumed Codex chats start with `--sandbox danger-full-access --ask-for-a
 
 **Project settings → Agents → Use the Brig boundary** is on by default and is saved for each project. Turn it off to use Codex's `workspace-write` sandbox with command network access disabled. The approval policy remains `never` in both modes.
 
-Boundary checks target the selected environment. They select comparison hosts from its effective guest network mode and resolved policy. Offline and deny-all modes expect blocked connections. CIDR, wildcard or advanced policies remain inconclusive when a suitable comparison cannot be verified. Brig/hull host rules authorize resolved addresses, so services on shared IP addresses can have a wider scope than their host names. A reachable comparison with possible address overlap also remains inconclusive. Boundary checks report diagnostic results and do not change the selected Codex sandbox mode. See the [pinned hull network policy behavior](https://github.com/brig-sh/hull/blob/7e50ac340d69be387312755c1f07ef6b0e9fec52/docs/network-egress.md).
+Boundary checks target the selected environment. They select comparison hosts from its effective guest network mode and resolved policy. Offline and deny-all modes expect blocked connections. CIDR, wildcard or advanced policies remain inconclusive when a suitable comparison cannot be verified. Brig/hull host rules authorize resolved addresses, so services on shared IP addresses can have a wider scope than their host names. A reachable comparison with possible address overlap also remains inconclusive. Boundary checks report diagnostic results and do not change the selected Codex sandbox mode. See the [pinned hull network policy behavior](https://github.com/brig-sh/hull/blob/d0eab08061f56c0edd5f060109bbee35e19abe64/docs/network-egress.md).
 
 The installed app stores records in `~/Library/Application Support/Tugboat` by default. In **Settings → Records folder**, choose an empty folder and select **Restart Tugboat**. The project registry, settings, provider records, and closed usage database move together. Tugboat verifies the copy and commits the new location before cleaning the old records.
 

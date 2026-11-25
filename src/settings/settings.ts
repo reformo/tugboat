@@ -140,6 +140,7 @@ export async function initializeSettings(): Promise<void> {
     if (control.form !== form) return;
     const firstInvalid = [...form.elements].find(element => (element as HTMLInputElement).willValidate && !(element as HTMLInputElement).validity.valid);
     if (control !== firstInvalid) return;
+    setStatus('');
     const panel = control.closest<HTMLElement>('.settings-panel')!;
     selectSettingsTab(panel.id.replace('settings-panel-', '') as SettingsSection);
     control.focus();

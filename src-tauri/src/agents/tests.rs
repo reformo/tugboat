@@ -107,12 +107,14 @@ fn codex_new_and_resumed_chats_preserve_current_arguments_in_both_boundary_modes
         assert_eq!(&resumed[..3], &["--no-daemon", "resume", SESSION]);
         assert_eq!(&new[1..], &resumed[3..]);
         assert_eq!(
-            &new[1..9],
+            &new[1..11],
             &[
                 "-c",
                 "cli_auth_credentials_store=\"file\"",
                 "-c",
                 "tui.terminal_title=[\"session-id\",\"status\"]",
+                "-c",
+                "check_for_update_on_startup=false",
                 "--sandbox",
                 sandbox,
                 "--ask-for-approval",
@@ -130,7 +132,7 @@ fn codex_new_and_resumed_chats_preserve_current_arguments_in_both_boundary_modes
                 .chain(status_line)
                 .collect(),
         };
-        assert_eq!(&new[9..], expected_tail);
+        assert_eq!(&new[11..], expected_tail);
     }
     assert!(AgentKind::Codex
         .command(AgentCommand::NewChat(Some(&session)))

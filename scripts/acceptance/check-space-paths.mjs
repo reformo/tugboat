@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { runtimeConfigurationFile } from './acceptance-runtime.mjs';
 
 const workspace = fileURLToPath(new URL('../../', import.meta.url));
+const brigVersion = JSON.parse(fs.readFileSync(path.join(workspace, 'config/brig-runtime.json'), 'utf8')).brig.version;
 const brigPath = process.argv[4] ?? path.join(workspace, '.build/brig-runtime/bin/brig');
 const cacheHome = process.argv[2];
 assert.ok(cacheHome && fs.realpathSync(cacheHome).startsWith('/private/tmp/brig-'), 'Pass an isolated Brig cache HOME.');
@@ -54,7 +55,7 @@ let owned = false;
 fs.mkdirSync(path.dirname(evidence), { recursive: true });
 save();
 try {
-  check('stock-brig-version', json(['version']).data.version === 'v0.5.2', 'Installed Brig v0.5.2; no modified Brig binary.');
+  check('stock-brig-version', json(['version']).data.version === brigVersion, 'Installed Brig ' + brigVersion + '.');
   report.initialReferences = json(['ls']).data.sandboxes.map(value => value.ref);
   assert.ok(!report.initialReferences.includes(reference), 'The test session must be new.');
   brig(['policy', 'create', policy]);

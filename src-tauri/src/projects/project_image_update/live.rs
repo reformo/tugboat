@@ -92,7 +92,7 @@ impl Fixture {
         let brig = proof_brig(&hull, &settings, |name| directory(name));
         let cached = root.join("cache/verified");
         if cached.is_dir() {
-            let target = PathBuf::from(directory("state/tugboat-codex-0.171.0/verified"));
+            let target = PathBuf::from(directory("state/tugboat-codex-0.172.0/verified"));
             for file in [
                 "codex-package-aarch64-unknown-linux-musl.tar.gz",
                 "codex-package-aarch64-unknown-linux-musl.tar.gz.sigstore",
@@ -243,7 +243,7 @@ fn updates_and_restores_the_real_disposable_writable_guest_disk() {
     assert!(matches!(resumed, Status::Review { token: recovered, .. } if token == recovered));
     let (checked, _) = runtime.plan(PREVIOUS_ENVIRONMENT_IMAGE).unwrap();
     // A newer Tugboat build can reopen a review before its package is installed in this home.
-    fs::remove_dir_all(checked.paths.host_home.join(".tugboat-codex-0.171.0")).unwrap();
+    fs::remove_dir_all(checked.paths.host_home.join(".tugboat-codex-0.172.0")).unwrap();
     let kept = change(&fixture.file, &runtime, Action::KeepCurrent { token }).unwrap();
     assert!(matches!(kept, Status::Restored { .. }));
     assert_eq!(
@@ -262,7 +262,7 @@ fn updates_and_restores_the_real_disposable_writable_guest_disk() {
             &candidate.project,
             "printf altered-test-marker >> /usr/local/bin/claude",
         )?;
-        assert!(shared_runtime::verify_claude(&candidate)
+        assert!(shared_runtime::verify_stock_claude(&candidate)
             .unwrap_err()
             .contains("changed"));
         Err("The candidate Claude Code executable failed verification.".into())

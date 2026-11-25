@@ -168,7 +168,7 @@ func TestDesktopShareMountKeepsThePathLiteral(t *testing.T) {
 
 func TestDesktopGuestPathRejectsRecordSeparators(t *testing.T) {
 	for _, path := range []string{"/work/sample\tproject", "/work/sample\nproject", "/work/sample\rproject", "/work/sample\x00project", "/work/sample'project", "/work/sample\"project", "relative"} {
-		if validateGuestPath(path) == nil {
+		if validateGuestPath(path) == nil && checkScriptGuestPath(path) == nil {
 			t.Errorf("accepted an unsafe guest path: %q", path)
 		}
 	}

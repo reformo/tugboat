@@ -28,12 +28,17 @@ function fixture(t, script, stage = 'version', overrideTools = false) {
   const entry = path.join(workspace, 'scripts/acceptance', script);
   fs.copyFileSync(path.join(scripts, script), entry);
   fs.copyFileSync(path.join(scripts, 'acceptance-runtime.mjs'), path.join(workspace, 'scripts/acceptance/acceptance-runtime.mjs'));
+  if (withSpaces) {
+    fs.mkdirSync(path.join(workspace, 'config'));
+    fs.copyFileSync(new URL('../../config/brig-runtime.json', import.meta.url), path.join(workspace, 'config/brig-runtime.json'));
+  }
   const stub = fileURLToPath(new URL('../fixtures/acceptance-commands.cjs', import.meta.url));
   const result = spawnSync(process.execPath, ['--require', stub, entry, ...args], {
     encoding: 'utf8', env: { ...process.env, TEST_BRIG_STAGE: stage }, timeout: 10_000,
   });
   assert.ifError(result.error);
   const evidence = path.join(workspace, 'artifacts', withSpaces ? 'space-paths' : 'bd-15', 'real-brig.json');
+  assert.ok(fs.existsSync(evidence), result.stderr || result.stdout);
   return { status: result.status, report: JSON.parse(fs.readFileSync(evidence, 'utf8')) };
 }
 

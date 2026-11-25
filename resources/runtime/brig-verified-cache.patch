@@ -1,0 +1,178 @@
+--- a/internal/verify/verify.go
++++ b/internal/verify/verify.go
+@@ -417,8 +417,11 @@
+ 	// it must not read like a bad signature, so it lands on Unresolved.
+ 	digest, err := p.resolveDigest(ref)
+ 	if errors.Is(err, errTimedOut) {
+-		return Result{Policy: p, Outcome: Unresolved, Image: ref, Ours: ours, TimedOut: true,
+-			Detail: timeoutDetail(ref)}
++		return p.verifiedOffline(ref, localDigest, "", Result{Policy: p, Outcome: Unresolved, Image: ref, Ours: ours, TimedOut: true,
++			Detail: timeoutDetail(ref)})
++	}
++	if err != nil && unreachable(err.Error()) {
++		return p.verifiedOffline(ref, localDigest, "", Result{Policy: p, Outcome: Unresolved, Image: ref, Ours: ours, Detail: err.Error()})
+ 	}
+ 	if err != nil {
+ 		return Result{Policy: p, Outcome: Unresolved, Image: ref, Ours: ours, Detail: err.Error()}
+@@ -432,8 +435,11 @@
+ 		refWithDigest(ref, digest),
+ 	)
+ 	if errors.Is(verr, errTimedOut) {
+-		return Result{Policy: p, Outcome: Failed, Image: ref, Digest: digest, Ours: ours, TimedOut: true,
+-			Detail: timeoutDetail(ref)}
++		return p.verifiedOffline(ref, localDigest, digest, Result{Policy: p, Outcome: Failed, Image: ref, Digest: digest, Ours: ours, TimedOut: true,
++			Detail: timeoutDetail(ref)})
++	}
++	if verr != nil && unreachable(out) {
++		return p.verifiedOffline(ref, localDigest, digest, Result{Policy: p, Outcome: Failed, Image: ref, Digest: digest, Ours: ours, Detail: firstLine(out, verr)})
+ 	}
+ 	if verr != nil {
+ 		return Result{Policy: p, Outcome: Failed, Image: ref, Digest: digest, Ours: ours, Detail: firstLine(out, verr)}
+@@ -446,6 +452,9 @@
+ 	if localDigest != "" && localDigest != digest {
+ 		return Result{Policy: p, Outcome: Mismatch, Image: ref, Digest: digest, Local: localDigest, Ours: ours}
+ 	}
++	if err := saveDesktopRecord(desktopReceipt(p, ref), []byte(digest)); err != nil {
++		return Result{Policy: p, Outcome: Failed, Image: ref, Digest: digest, Ours: ours, Detail: "could not save the host verification record"}
++	}
+ 	return Result{Policy: p, Outcome: Verified, Image: ref, Digest: digest, Ours: ours}
+ }
+ 
+--- a/internal/verify/bundle.go
++++ b/internal/verify/bundle.go
+@@ -120,6 +120,15 @@
+ 	if !isDigest(digest) {
+ 		return nil, fmt.Errorf("%q is not a sha256 digest", digest)
+ 	}
++	// A cached manifest is usable offline because its bytes must still
++	// match the digest verified under the independent boot publisher policy.
++	cache := ""
++	if root := os.Getenv("TUGBOAT_VERIFICATION_CACHE"); filepath.IsAbs(root) {
++		cache = filepath.Join(root, digest[7:]+".manifest")
++		if body, err := os.ReadFile(cache); err == nil && sha256Digest(body) == digest {
++			return manifestDigests(body, digest)
++		}
++	}
+ 	ctx, cancel := context.WithTimeout(context.Background(), registryTimeout)
+ 	defer cancel()
+ 
+@@ -137,6 +146,16 @@
+ 		return nil, err
+ 	}
+ 
++	files, err := manifestDigests(body, digest)
++	if err != nil {
++		return nil, err
++	}
++	if err := saveDesktopRecord(cache, body); err != nil {
++		return nil, err
++	}
++	return files, nil
++}
++func manifestDigests(body []byte, digest string) (BootDigests, error) {
+ 	if got := sha256Digest(body); got != digest {
+ 		return nil, refusedf("the registry answered %s with a manifest whose digest is %s", digest, got)
+ 	}
+--- /dev/null
++++ b/internal/verify/desktop_cache.go
+@@ -0,0 +1,63 @@
++package verify
++
++import (
++	"crypto/sha256"
++	"fmt"
++	"os"
++	"path/filepath"
++	"strings"
++)
++
++// Tugboat sets this only for its checked project plans. The directory is
++// private to the host, outside both project mounts. A receipt binds the
++// immutable digest to the exact publisher policy which verified it.
++func desktopReceipt(policy Policy, ref string) string {
++	root := os.Getenv("TUGBOAT_VERIFICATION_CACHE")
++	if !filepath.IsAbs(root) {
++		return ""
++	}
++	return filepath.Join(root, fmt.Sprintf("%x.verified", sha256.Sum256([]byte(strings.Join([]string{policy.Registry, policy.Identity, policy.Issuer, ref}, "\x00")))))
++}
++
++func saveDesktopRecord(file string, data []byte) error {
++	if file == "" {
++		return nil
++	}
++	dir := filepath.Dir(file)
++	if err := os.MkdirAll(dir, 0700); err != nil {
++		return err
++	}
++	temp, err := os.CreateTemp(dir, ".record-")
++	if err != nil {
++		return err
++	}
++	defer os.Remove(temp.Name())
++	if _, err = temp.Write(data); err != nil {
++		temp.Close()
++		return err
++	}
++	if err = temp.Close(); err != nil {
++		return err
++	}
++	return os.Rename(temp.Name(), file)
++}
++
++func (p Policy) verifiedOffline(ref, local, resolved string, failure Result) Result {
++	file := desktopReceipt(p, ref)
++	if file == "" {
++		return failure
++	}
++	data, err := os.ReadFile(file)
++	digest := string(data)
++	if err != nil || !isDigest(digest) || (local != "" && local != digest) || (resolved != "" && resolved != digest) {
++		return failure
++	}
++	if _, pin, pinned := strings.Cut(ref, "@"); pinned {
++		if pin != digest {
++			return failure
++		}
++	} else if !strings.HasPrefix(ref, BootAssetsPolicy().Registry) || p.Identity != BootAssetsPolicy().Identity {
++		return failure
++	}
++	return Result{Policy: p, Outcome: Verified, Image: ref, Digest: digest, Ours: true}
++}
+--- /dev/null
++++ b/internal/verify/desktop_cache_test.go
+@@ -0,0 +1,34 @@
++package verify
++
++import (
++	"errors"
++	"strings"
++	"testing"
++)
++
++func TestDesktopOfflineVerification(t *testing.T) {
++	t.Setenv("TUGBOAT_VERIFICATION_CACHE", t.TempDir())
++	p := DefaultPolicy()
++	digest := "sha256:" + strings.Repeat("a", 64)
++	ref := p.Registry + "example@" + digest
++	digestStub(t, digest, nil, nil)
++	if result := p.Verify(ref, ""); result.Outcome != Verified {
++		t.Fatal(result)
++	}
++	digestStub(t, "", errTimedOut, nil)
++	if result := p.Verify(ref, digest); result.Outcome != Verified {
++		t.Fatal(result)
++	}
++	if result := p.Verify(ref, "sha256:"+strings.Repeat("b", 64)); result.Outcome == Verified {
++		t.Fatal("wrong local digest")
++	}
++	other := p
++	other.Identity += "different"
++	if result := other.Verify(ref, ""); result.Outcome == Verified {
++		t.Fatal("changed publisher")
++	}
++	digestStub(t, digest, nil, errors.New("bad signature"))
++	if result := p.Verify(ref, ""); result.Outcome != Failed {
++		t.Fatal("accepted bad signature")
++	}
++}

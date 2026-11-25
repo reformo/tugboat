@@ -1,189 +1,13 @@
---- a/internal/runtime/rootfsmode.go
-+++ b/internal/runtime/rootfsmode.go
-@@ -101,16 +101,27 @@
- 	return OverlayRoot{Why: "brig builds one on hull and on nerdctl with urunc only"}
- }
- 
--// hullMke2fs is the mke2fs hull formats the overlay disks with. hull runs this
--// path and no other (cmd/hull/blockrootfs.go), so it is the one checked. A var
--// for tests.
--var hullMke2fs = "/opt/homebrew/opt/e2fsprogs/sbin/mke2fs"
-+// Tugboat ships mke2fs beside brig and its patched hull. Resolve the actual
-+// executable so a symlinked CLI still checks the matching bundled tool.
-+// Keep a variable for the existing rootfs decision tests.
-+var hullMke2fs = bundledMke2fs()
-+
-+func bundledMke2fs() string {
-+	executable, err := os.Executable()
-+	if err != nil {
-+		return ""
-+	}
-+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-+		executable = resolved
-+	}
-+	return filepath.Join(filepath.Dir(executable), "mke2fs")
-+}
- 
- // hullOverlayRoot is whether hull can build an overlay root here: it can when
- // its mke2fs is there to run.
- func hullOverlayRoot() OverlayRoot {
- 	if !isExecutable(hullMke2fs) {
--		return OverlayRoot{Why: "install e2fsprogs (brew install e2fsprogs): hull formats the disks with " + hullMke2fs}
-+		return OverlayRoot{Why: "the bundled mke2fs is unavailable at " + hullMke2fs + "; reinstall Tugboat"}
- 	}
- 	return OverlayRoot{Available: true}
- }
+diff --git a/internal/buildinfo/buildinfo.go b/internal/buildinfo/buildinfo.go
+index af560e9..9057976 100644
 --- a/internal/buildinfo/buildinfo.go
 +++ b/internal/buildinfo/buildinfo.go
-@@ -57,6 +57,8 @@
- 	if info.Commit == "" {
- 		info = info.withGit(gitCommit, gitCommitTime, gitDescribe, gitModified == "true")
- 	}
+@@ -59,0 +60,2 @@ func Read() Info {
 +	// Tugboat keeps the compatible release version and reports Modified.
 +	info.Version = strings.TrimSuffix(info.Version, "+dirty")
- 	return info
- }
- 
---- a/internal/runtime/hull_test.go
-+++ b/internal/runtime/hull_test.go
-@@ -101,7 +101,7 @@
- 	explicit := generic
- 	explicit.RootfsMode = RootfsModeOverlayBlock
- 	if _, _, err := runArgs(explicit, "hvi", "shared", "", "", nil, nil); err == nil ||
--		!strings.Contains(err.Error(), "brew install e2fsprogs") {
-+		!strings.Contains(err.Error(), "reinstall Tugboat") {
- 		t.Errorf("BRIG_ROOTFS_MODE=overlay-block with no mke2fs: want a refusal naming e2fsprogs, got %v", err)
- 	}
- 
---- a/internal/runtime/rootfsmode_test.go
-+++ b/internal/runtime/rootfsmode_test.go
-@@ -71,7 +71,7 @@
- 
- // hull runs one mke2fs, so that file is the whole of what it needs.
- func TestHullOverlayRoot(t *testing.T) {
--	if got := hullOverlayRoot(); got.Available || !strings.Contains(got.Why, "brew install e2fsprogs") {
-+	if got := hullOverlayRoot(); got.Available || !strings.Contains(got.Why, "reinstall Tugboat") {
- 		t.Errorf("no mke2fs: %+v, want unavailable with the fix", got)
- 	}
- 	overlayHost(t)
---- a/internal/runtime/gateway.go
-+++ b/internal/runtime/gateway.go
-@@ -298,2 +298,2 @@
--// leaseSharedGateway marks one boot as on the shared gateway, and returns the
--// lease file and its release.
-+// leaseSharedGateway marks one boot as using this gateway, and returns the
-+// lease file and its release. Isolated gateway recovery uses the same lease.
-@@ -931,7 +931,4 @@
--// Best effort, like releasing the network: a gateway left behind holds a
--// socket and 28.7 MB, but nothing about stopping or removing the sandbox
--// depends on it, and there is no answer to "the kill failed" worth
--// interrupting a `brig rm` with. The shared gateway is never stopped here: it
--// serves sandboxes this one knows nothing about. PruneSharedNetwork stops it,
--// once the process table shows nothing on it.
--func shutDownGateway(name string) {
-+// The result confirms that the isolated endpoint is gone. Stop reports a
-+// failure if the gateway could not be stopped. PruneSharedNetwork owns the
-+// lifecycle of the shared gateway.
-+func shutDownGateway(name string) bool {
-@@ -940 +937,2 @@
--		return
-+		// This directory has no usable path for the sandbox's gateway.
-+		return true
-@@ -942 +940 @@
--	stopGatewayAt(sock)
-+	return stopGatewayAt(sock)
---- a/internal/runtime/hull.go
-+++ b/internal/runtime/hull.go
-@@ -451 +451 @@
--func (h *hull) Run(spec RunSpec) error {
-+func (h *hull) Run(spec RunSpec) (runErr error) {
-@@ -473 +473 @@
--			sock, err := ensureIsolatedGateway(h.bin, spec.Name, index, spec.Egress)
-+			sock, err := isolatedSocket(spec.Name)
-@@ -476,0 +477,14 @@
-+			lease, release, err := leaseSharedGateway(sock)
-+			if err != nil {
-+				return err
-+			}
-+			defer release()
-+			sock, err = ensureIsolatedGateway(h.bin, spec.Name, index, spec.Egress)
-+			if err != nil {
-+				return err
-+			}
-+			defer func() {
-+				if runErr != nil {
-+					h.releaseAbsentGateway(spec.Name, lease)
-+				}
-+			}()
-@@ -945,4 +959,5 @@
--// Stop also stops the gateway of an isolated sandbox. That gateway serves
--// this sandbox alone, so a stopped sandbox holding one is 28.7 MB and a socket
--// spent on a VM that is not running -- a leak the shared gateway cannot have,
--// because it is still serving everything else.
-+// ErrStopUnconfirmed means the adapter could not confirm cleanup. An
-+// inventory check cannot override an error from the runtime's process check.
-+var ErrStopUnconfirmed = errors.New("sandbox stop was not confirmed")
-+
-+// Stop also stops the gateway that serves this isolated sandbox.
-@@ -950,3 +965,10 @@
--	err := h.quiet("stop", name, true)
--	releaseGateway(name, err)
--	return err
-+	if err := h.quiet("stop", name, true); err != nil {
-+		if h.releaseAbsentGateway(name, "") {
-+			return nil
-+		}
-+		return fmt.Errorf("%w: %w", ErrStopUnconfirmed, err)
-+	}
-+	if !releaseGateway(name, nil) {
-+		return fmt.Errorf("%w: could not stop the isolated gateway for %s", ErrStopUnconfirmed, name)
-+	}
-+	return nil
-@@ -954,0 +977,27 @@
-+// Release a gateway left by a failed boot only when the pinned hull confirms
-+// the exact instance is absent. A boot that still holds this gateway may not
-+// have created its hull record yet. Keep the lock across the check and release
-+// so a new boot cannot acquire a lease between them.
-+func (h *hull) releaseAbsentGateway(name, ownLease string) bool {
-+	sock, err := isolatedSocket(name)
-+	if err != nil {
-+		// This directory has no usable path for the sandbox's gateway.
-+		return h.instanceAbsent(name)
-+	}
-+	unlock, err := flock(sock)
-+	if err != nil {
-+		return false
-+	}
-+	defer unlock()
-+	if bootsInFlight(sock, ownLease) || !h.instanceAbsent(name) {
-+		return false
-+	}
-+	return stopGatewayAt(sock)
-+}
-+
-+func (h *hull) instanceAbsent(name string) bool {
-+	_, stderr, err := inspectNetwork(h.bin, "inspect", name)
-+	var exit *exec.ExitError
-+	return errors.As(err, &exit) && exit.ExitCode() == 1 && stderr == "error: instance not found: "+name
-+}
-+
-@@ -1250 +1299 @@
--func releaseGateway(name string, err error) {
-+func releaseGateway(name string, err error) bool {
-@@ -1252 +1301 @@
--		return
-+		return false
-@@ -1265 +1314 @@
--	shutDownGateway(name)
-+	return shutDownGateway(name)
---- a/internal/wrap/run.go
-+++ b/internal/wrap/run.go
-@@ -897,0 +898,5 @@
-+	// Hull handles idempotent absence in its stop adapter. A stopped record
-+	// can still have an owned process that hull could not reap.
-+	if errors.Is(err, runtime.ErrStopUnconfirmed) {
-+		return fmt.Errorf("the sandbox %s would not stop (%s): %w", c.VMName, c.logHint(), err)
-+	}
+diff --git a/internal/runtime/desktop_gateway_lifecycle_test.go b/internal/runtime/desktop_gateway_lifecycle_test.go
+new file mode 100644
+index 0000000..60d40af
 --- /dev/null
 +++ b/internal/runtime/desktop_gateway_lifecycle_test.go
 @@ -0,0 +1,144 @@
@@ -331,90 +155,307 @@
 +		t.Fatal("stop ended the wrong gateway or failed to reap its own gateway")
 +	}
 +}
---- /dev/null
-+++ b/internal/wrap/desktop_stop_test.go
-@@ -0,0 +1,50 @@
-+package wrap
+diff --git a/internal/runtime/gateway.go b/internal/runtime/gateway.go
+index 11795bd..64b84bc 100644
+--- a/internal/runtime/gateway.go
++++ b/internal/runtime/gateway.go
+@@ -313,2 +313,2 @@ func ensureSharedGateway(bin string, membersSeen bool) (string, func(), error) {
+-// leaseSharedGateway marks one boot as on the shared gateway, and returns the
+-// lease file and its release.
++// leaseSharedGateway marks one boot as using this gateway, and returns the
++// lease file and its release. Isolated gateway recovery uses the same lease.
+@@ -1036,7 +1036,4 @@ func recordedSpec(sock string) string {
+-// Best effort, like releasing the network: a gateway left behind holds a
+-// socket and 28.7 MB, but nothing about stopping or removing the sandbox
+-// depends on it, and there is no answer to "the kill failed" worth
+-// interrupting a `brig rm` with. The shared gateway is never stopped here: it
+-// serves sandboxes this one knows nothing about. PruneSharedNetwork stops it,
+-// once nothing is on it.
+-func shutDownGateway(name string) {
++// The result confirms that the isolated endpoint is gone. Stop reports a
++// failure if the gateway could not be stopped. PruneSharedNetwork owns the
++// lifecycle of the shared gateway.
++func shutDownGateway(name string) bool {
+@@ -1045 +1042,2 @@ func shutDownGateway(name string) {
+-		return
++		// This directory has no usable path for the sandbox's gateway.
++		return true
+@@ -1047 +1045 @@ func shutDownGateway(name string) {
+-	stopGatewayAt(sock)
++	return stopGatewayAt(sock)
+diff --git a/internal/runtime/hull.go b/internal/runtime/hull.go
+index 750f839..7c3ce21 100644
+--- a/internal/runtime/hull.go
++++ b/internal/runtime/hull.go
+@@ -615 +615 @@ func (h *hull) List() ([]Instance, error) {
+-func (h *hull) Run(spec RunSpec) error {
++func (h *hull) Run(spec RunSpec) (runErr error) {
+@@ -630 +630 @@ func (h *hull) Run(spec RunSpec) error {
+-		var release func()
++		var release func(bool)
+@@ -636 +636 @@ func (h *hull) Run(spec RunSpec) error {
+-		defer release()
++		defer func() { release(runErr != nil) }()
+@@ -677 +677 @@ func (h *hull) Run(spec RunSpec) error {
+-// is run once `hull run` has returned.
++// is run once `hull run` has returned and receives whether boot failed.
+@@ -682 +682 @@ func (h *hull) Run(spec RunSpec) error {
+-func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string, isolated bool, release func(), err error) {
++func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string, isolated bool, release func(bool), err error) {
+@@ -691 +691 @@ func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string,
+-		sock, err := ensureIsolatedGateway(h.bin, h.gatewayPath(), name, index, policy)
++		sock, err := isolatedSocket(name)
+@@ -695 +695,15 @@ func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string,
+-		return sock, sandboxCIDR(index), true, func() {}, nil
++		lease, release, err := leaseSharedGateway(sock)
++		if err != nil {
++			return "", "", false, nil, err
++		}
++		sock, err = ensureIsolatedGateway(h.bin, h.gatewayPath(), name, index, policy)
++		if err != nil {
++			release()
++			return "", "", false, nil, err
++		}
++		return sock, sandboxCIDR(index), true, func(failed bool) {
++			defer release()
++			if failed {
++				h.releaseAbsentGateway(name, lease)
++			}
++		}, nil
+@@ -697 +711 @@ func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string,
+-	sock, release, err = ensureSharedGateway(h.bin, !h.linux)
++	sock, releaseShared, err := ensureSharedGateway(h.bin, !h.linux)
+@@ -705 +719 @@ func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string,
+-		release()
++		releaseShared()
+@@ -711 +725 @@ func (h *hull) joinGateway(name, net string, policy Egress) (sock, cidr string,
+-	return sock, cidr, false, release, nil
++	return sock, cidr, false, func(bool) { releaseShared() }, nil
+@@ -762 +776 @@ func (h *hull) boot(spec RunSpec, args, envVals []string) error {
+-func (h *hull) runLinux(spec RunSpec) error {
++func (h *hull) runLinux(spec RunSpec) (runErr error) {
+@@ -770 +784 @@ func (h *hull) runLinux(spec RunSpec) error {
+-		var release func()
++		var release func(bool)
+@@ -776 +790 @@ func (h *hull) runLinux(spec RunSpec) error {
+-		defer release()
++		defer func() { release(runErr != nil) }()
+@@ -1534,4 +1548,5 @@ func (h *hull) replaceCmd(spec ExecSpec) (argv, env []string, err error) {
+-// Stop also stops the gateway of an isolated sandbox. That gateway serves
+-// this sandbox alone, so a stopped sandbox holding one is 28.7 MB and a socket
+-// spent on a VM that is not running -- a leak the shared gateway cannot have,
+-// because it is still serving everything else.
++// ErrStopUnconfirmed means the adapter could not confirm cleanup. An
++// inventory check cannot override an error from the runtime's process check.
++var ErrStopUnconfirmed = errors.New("sandbox stop was not confirmed")
 +
-+import (
-+	"os"
-+	"path/filepath"
-+	"strings"
-+	"testing"
-+
-+	"github.com/brig-sh/brig/internal/runtime"
-+)
-+
-+func TestDesktopStopDoesNotHideHullCleanupFailure(t *testing.T) {
-+	t.Setenv("BRIG_RUNTIME", "hull")
-+	t.Setenv("DO_NOT_TRACK", "1")
-+	t.Setenv("BRIG_STATE_DIR", filepath.Join(t.TempDir(), "state"))
-+	t.Setenv("BRIG_GATEWAY_DIR", t.TempDir())
-+	bin := filepath.Join(t.TempDir(), "hull")
-+	const script = `#!/bin/sh
-+case "$1" in
-+  stop) printf 'failed to reap the recorded virtual machine\n' >&2; exit 1 ;;
-+  inspect)
-+    if [ "$TUGBOAT_STOP_TEST_STATE" = absent ]; then
-+      printf 'error: instance not found: %s\n' "$2" >&2; exit 1
-+    fi
-+    printf '{"id":"%s","status":"stopped"}\n' "$2" ;;
-+  ps) printf '%s stopped\n' "$TUGBOAT_STOP_TEST_VM" ;;
-+  *) exit 9 ;;
-+esac
-+`
-+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
-+		t.Fatal(err)
++// Stop also stops the gateway that serves this isolated sandbox.
+@@ -1539,3 +1554,37 @@ func (h *hull) Stop(name string) error {
+-	err := h.quiet("stop", name, true)
+-	releaseGateway(name, err)
+-	return err
++	if err := h.quiet("stop", name, true); err != nil {
++		if h.releaseAbsentGateway(name, "") {
++			return nil
++		}
++		return fmt.Errorf("%w: %w", ErrStopUnconfirmed, err)
 +	}
-+	t.Setenv("BRIG_RUNTIME_BIN", bin)
-+	c := testConfig(t, t.TempDir(), t.TempDir())
-+	c.broker = &fakeBroker{}
-+	t.Setenv("TUGBOAT_STOP_TEST_VM", c.VMName)
-+	t.Setenv("TUGBOAT_STOP_TEST_STATE", "stopped")
-+	var err error
-+	c.Runtime, err = runtime.Detect()
++	if !releaseGateway(name, nil) {
++		return fmt.Errorf("%w: could not stop the isolated gateway for %s", ErrStopUnconfirmed, name)
++	}
++	return nil
++}
++
++// Release a gateway left by a failed boot only when the pinned hull confirms
++// the exact instance is absent. A boot that still holds this gateway may not
++// have created its hull record yet. Keep the lock across the check and release
++// so a new boot cannot acquire a lease between them.
++func (h *hull) releaseAbsentGateway(name, ownLease string) bool {
++	sock, err := isolatedSocket(name)
 +	if err != nil {
-+		t.Fatal(err)
++		// This directory has no usable path for the sandbox's gateway.
++		return h.instanceAbsent(name)
 +	}
-+	if err := c.Stop(); err == nil || !strings.Contains(err.Error(), "failed to reap the recorded virtual machine") {
-+		t.Errorf("the stop did not report Hull's cleanup error: %v", err)
++	unlock, err := flock(sock)
++	if err != nil {
++		return false
 +	}
-+	t.Setenv("TUGBOAT_STOP_TEST_STATE", "absent")
-+	if err := c.Stop(); err != nil {
-+		t.Errorf("stopping an absent Hull instance failed: %v", err)
++	defer unlock()
++	if bootsInFlight(sock, ownLease) || !h.instanceAbsent(name) {
++		return false
 +	}
-+}
---- a/internal/wrap/index.go
-+++ b/internal/wrap/index.go
-@@ -381,2 +381,2 @@
--// PruneSessions drops every entry whose sandbox is not in the list of what the
--// runtime has.
-+// PruneSessions drops stale runtime entries. A recorded Brig home can
-+// outlive its VM during a restart and stays owned until explicit removal.
-@@ -387,3 +387,2 @@
--// lost with a runtime that was reinstalled. The cost of being wrong is small
--// in the direction that matters: a list that came back short prunes an entry
--// that was still good, and the session pays one restart for it.
-+// lost with a runtime that was reinstalled. The absence of a VM does not
-+// establish that its guest home was removed.
-@@ -411 +410 @@
--		if !have[entry.Sandbox] {
-+		if !have[entry.Sandbox] && !entry.hasRecoverableHome() {
-@@ -419,0 +419,14 @@
++	return stopGatewayAt(sock)
 +}
 +
-+// A retry can recreate the VM. Dropping its only ownership record would let
-+// reapOrphanHome delete the previous guest state before that boot.
-+func (entry sessionEntry) hasRecoverableHome() bool {
-+	if !entry.Ephemeral {
++func (h *hull) instanceAbsent(name string) bool {
++	_, stderr, err := inspectNetwork(h.bin, "inspect", name)
++	var exit *exec.ExitError
++	return errors.As(err, &exit) && exit.ExitCode() == 1 && stderr == "error: instance not found: "+name
+@@ -1921 +1970 @@ func (h *hull) onSharedGateway(sock string) bool {
+-func releaseGateway(name string, err error) {
++func releaseGateway(name string, err error) bool {
+@@ -1923 +1972 @@ func releaseGateway(name string, err error) {
+-		return
 +		return false
+@@ -1936 +1985 @@ func releaseGateway(name string, err error) {
+-	shutDownGateway(name)
++	return shutDownGateway(name)
+diff --git a/internal/runtime/hull_test.go b/internal/runtime/hull_test.go
+index 0c76a96..0048a5e 100644
+--- a/internal/runtime/hull_test.go
++++ b/internal/runtime/hull_test.go
+@@ -107 +107 @@ func TestRunArgsRootfsModeGoesToHullEnv(t *testing.T) {
+-		!strings.Contains(err.Error(), "brew install e2fsprogs") {
++		!strings.Contains(err.Error(), "reinstall Tugboat") {
+diff --git a/internal/runtime/rootfsmode.go b/internal/runtime/rootfsmode.go
+index 7397932..4b72a78 100644
+--- a/internal/runtime/rootfsmode.go
++++ b/internal/runtime/rootfsmode.go
+@@ -109,4 +109,15 @@ func OverlayRootFor(rt Runtime) OverlayRoot {
+-// hullMke2fs is the mke2fs hull formats the overlay disks with. hull runs this
+-// path and no other (cmd/hull/blockrootfs.go), so it is the one checked. A var
+-// for tests.
+-var hullMke2fs = "/opt/homebrew/opt/e2fsprogs/sbin/mke2fs"
++// Tugboat ships mke2fs beside brig and its patched hull. Resolve the actual
++// executable so a symlinked CLI still checks the matching bundled tool.
++// Keep a variable for the existing rootfs decision tests.
++var hullMke2fs = bundledMke2fs()
++
++func bundledMke2fs() string {
++	executable, err := os.Executable()
++	if err != nil {
++		return ""
 +	}
-+	_, name, ok := homeName(entry.Home)
-+	if !ok || name != entry.Sandbox {
-+		return false
++	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
++		executable = resolved
 +	}
-+	_, err := os.Lstat(entry.Home)
-+	return !os.IsNotExist(err)
++	return filepath.Join(filepath.Dir(executable), "mke2fs")
++}
+@@ -118 +129 @@ func hullOverlayRoot() OverlayRoot {
+-		return OverlayRoot{Why: "install e2fsprogs (brew install e2fsprogs): hull formats the disks with " + hullMke2fs}
++		return OverlayRoot{Why: "the bundled mke2fs is unavailable at " + hullMke2fs + "; reinstall Tugboat"}
+diff --git a/internal/runtime/rootfsmode_test.go b/internal/runtime/rootfsmode_test.go
+index 6240e9f..f792638 100644
+--- a/internal/runtime/rootfsmode_test.go
++++ b/internal/runtime/rootfsmode_test.go
+@@ -74 +74 @@ func TestHullOverlayRoot(t *testing.T) {
+-	if got := hullOverlayRoot(); got.Available || !strings.Contains(got.Why, "brew install e2fsprogs") {
++	if got := hullOverlayRoot(); got.Available || !strings.Contains(got.Why, "reinstall Tugboat") {
+diff --git a/internal/runtime/sandboxnet.go b/internal/runtime/sandboxnet.go
+index 6807ad6..3827457 100644
+--- a/internal/runtime/sandboxnet.go
++++ b/internal/runtime/sandboxnet.go
+@@ -20,20 +20,5 @@ import (
+-const (
+-	// The space the isolated networks are carved out of.
+-	//
+-	// A different /24 from the shared network's, and it has to be: the shared
+-	// gateway serves the whole of gatewaySubnet and hands out addresses across
+-	// it, so a /30 taken from there would be a network inside a network, with
+-	// two gateways claiming the same addresses.
+-	//
+-	// Adjacent to it, and inside the same 198.18.0.0/15 the shared network
+-	// already sits in, so brig's claim on the host's address space grows by
+-	// one /24 rather than moving somewhere new. Every reason gatewaySubnet
+-	// gives for that range applies here unchanged, including leaving the
+-	// sibling 198.19.0.0/16 to OrbStack.
+-	isolatedSpace = "198.18.1.0/24"
+-
+-	// One sandbox's slice of it: a network address, the gateway, the guest,
+-	// and a broadcast address. Four is every address a network with a single
+-	// member on it can use, so nothing is wasted by making them this small.
+-	sandboxNetBits   = 30
+-	sandboxBlockSize = 4
++// Keep the first range in place so saved sandbox slots keep their addresses.
++var isolatedSpaces = [...]netip.Prefix{
++	netip.MustParsePrefix("198.18.1.0/24"),
++	netip.MustParsePrefix("198.18.2.0/24"),
++}
+@@ -41,4 +26,5 @@ const (
+-	// How many sandboxes the space holds. Well past what a host can run one
+-	// microVM each for, and past what their gateways alone would fit in
+-	// memory: 64 of them is nearly 2 GB before a single guest boots.
+-	sandboxNets = 256 / sandboxBlockSize
++const (
++	sandboxNetBits      = 30
++	sandboxBlockSize    = 4
++	sandboxNetsPerRange = 256 / sandboxBlockSize
++	sandboxNets         = len(isolatedSpaces) * sandboxNetsPerRange
+@@ -61 +47 @@ func isolatedNets() (netAlloc, error) {
+-		space: "the isolated address space " + isolatedSpace,
++		space: "the isolated address space " + isolatedSpaces[0].String() + " and " + isolatedSpaces[1].String(),
+@@ -79 +65 @@ func sandboxNet(name string) (int, error) {
+-// spend one of the 64 networks; see netAlloc.lookup.
++// spend an isolated network; see netAlloc.lookup.
+@@ -96,4 +81,0 @@ func releaseSandboxNet(name string) {
+-//
+-// The arithmetic is on the last octet alone, which holds while the space is a
+-// /24 and the blocks divide it evenly. Both are constants above, and a test
+-// checks they still agree.
+@@ -101,2 +83,2 @@ func sandboxBase(index int) netip.Addr {
+-	octets := netip.MustParsePrefix(isolatedSpace).Addr().As4()
+-	octets[3] = byte(index * sandboxBlockSize)
++	octets := isolatedSpaces[index/sandboxNetsPerRange].Addr().As4()
++	octets[3] = byte((index % sandboxNetsPerRange) * sandboxBlockSize)
+diff --git a/internal/runtime/sandboxnet_test.go b/internal/runtime/sandboxnet_test.go
+index cdd1667..199a81c 100644
+--- a/internal/runtime/sandboxnet_test.go
++++ b/internal/runtime/sandboxnet_test.go
+@@ -97,3 +96,0 @@ func TestGatewayAddressMatchesHullsDerivation(t *testing.T) {
+-// Every isolated network stays inside the one /24 claimed for them, so brig's
+-// claim on the host's address space is two adjacent /24s and not whatever the
+-// arithmetic happens to produce.
+@@ -101 +98,12 @@ func TestEverySandboxNetworkFitsTheClaimedSpace(t *testing.T) {
+-	space, err := netip.ParsePrefix(isolatedSpace)
++	for index := range sandboxNets {
++		subnet := netip.MustParsePrefix(sandboxSubnet(index))
++		space := isolatedSpaces[index/sandboxNetsPerRange]
++		if !space.Contains(subnet.Addr()) || subnet.Bits() != sandboxNetBits {
++			t.Fatalf("sandbox %d got subnet %s outside %s", index, subnet, space)
++		}
++	}
++}
++
++func TestDesktopIsolatedNetworkAfter64SavedSandboxes(t *testing.T) {
++	scratchIsolatedDir(t)
++	alloc, err := isolatedNets()
+@@ -105,11 +113,3 @@ func TestEverySandboxNetworkFitsTheClaimedSpace(t *testing.T) {
+-	for index := range sandboxNets {
+-		subnet, err := netip.ParsePrefix(sandboxSubnet(index))
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		if !space.Contains(subnet.Addr()) {
+-			t.Fatalf("network %d (%s) is outside %s", index, subnet, space)
+-		}
+-		if subnet.Bits() != sandboxNetBits {
+-			t.Fatalf("network %d carries the wrong prefix: %s", index, subnet)
+-		}
++	saved := map[string]int{}
++	for index := range 64 {
++		saved[strings.Repeat("s", index+1)] = index
+@@ -117,5 +117,13 @@ func TestEverySandboxNetworkFitsTheClaimedSpace(t *testing.T) {
+-	// And the space holds exactly the number of them claimed, so the two
+-	// constants cannot drift into a sandbox addressed outside the space.
+-	if got := 1 << (32 - space.Bits()) / sandboxBlockSize; got != sandboxNets {
+-		t.Errorf("%s holds %d networks of %d addresses, but sandboxNets is %d",
+-			space, got, sandboxBlockSize, sandboxNets)
++	if err := alloc.write(saved); err != nil {
++		t.Fatal(err)
++	}
++	index, err := sandboxNet("new-project")
++	if err != nil || index != 64 || sandboxSubnet(index) != "198.18.2.0/30" {
++		t.Fatalf("first additional sandbox got slot %d, error %v", index, err)
++	}
++	for name, old := range saved {
++		slot, ok := lookupSandboxNet(name)
++		base := netip.AddrFrom4([4]byte{198, 18, 1, byte(old * 4)})
++		if !ok || slot != old || sandboxBase(slot) != base {
++			t.Fatalf("saved sandbox %s lost its original address", name)
++		}
+diff --git a/internal/wrap/desktop_history_test.go b/internal/wrap/desktop_history_test.go
+new file mode 100644
+index 0000000..cd1569d
 --- /dev/null
 +++ b/internal/wrap/desktop_history_test.go
 @@ -0,0 +1,65 @@
@@ -483,117 +524,102 @@
 +type desktopRetryRuntime struct{ livenessRuntime }
 +
 +func (*desktopRetryRuntime) Exists(string) (bool, error) { return false, nil }
---- a/internal/runtime/sandboxnet.go
-+++ b/internal/runtime/sandboxnet.go
-@@ -19,0 +20,6 @@
-+// Keep the first range in place so saved sandbox slots keep their addresses.
-+var isolatedSpaces = [...]netip.Prefix{
-+	netip.MustParsePrefix("198.18.1.0/24"),
-+	netip.MustParsePrefix("198.18.2.0/24"),
-+}
+diff --git a/internal/wrap/desktop_stop_test.go b/internal/wrap/desktop_stop_test.go
+new file mode 100644
+index 0000000..6553e35
+--- /dev/null
++++ b/internal/wrap/desktop_stop_test.go
+@@ -0,0 +1,50 @@
++package wrap
 +
-@@ -21,24 +27,4 @@
--	// The space the isolated networks are carved out of.
--	//
--	// A different /24 from the shared network's, and it has to be: the shared
--	// gateway serves the whole of gatewaySubnet and hands out addresses across
--	// it, so a /30 taken from there would be a network inside a network, with
--	// two gateways claiming the same addresses.
--	//
--	// Adjacent to it, and inside the same 198.18.0.0/15 the shared network
--	// already sits in, so brig's claim on the host's address space grows by
--	// one /24 rather than moving somewhere new. Every reason gatewaySubnet
--	// gives for that range applies here unchanged, including leaving the
--	// sibling 198.19.0.0/16 to OrbStack.
--	isolatedSpace = "198.18.1.0/24"
--
--	// One sandbox's slice of it: a network address, the gateway, the guest,
--	// and a broadcast address. Four is every address a network with a single
--	// member on it can use, so nothing is wasted by making them this small.
--	sandboxNetBits   = 30
--	sandboxBlockSize = 4
--
--	// How many sandboxes the space holds. Well past what a host can run one
--	// microVM each for, and past what their gateways alone would fit in
--	// memory: 64 of them is nearly 2 GB before a single guest boots.
--	sandboxNets = 256 / sandboxBlockSize
-+	sandboxNetBits      = 30
-+	sandboxBlockSize    = 4
-+	sandboxNetsPerRange = 256 / sandboxBlockSize
-+	sandboxNets         = len(isolatedSpaces) * sandboxNetsPerRange
-@@ -61 +47 @@
--		space: "the isolated address space " + isolatedSpace,
-+		space: "the isolated address space " + isolatedSpaces[0].String() + " and " + isolatedSpaces[1].String(),
-@@ -79 +65 @@
--// spend one of the 64 networks; see netAlloc.lookup.
-+// spend an isolated network; see netAlloc.lookup.
-@@ -96,4 +81,0 @@
--//
--// The arithmetic is on the last octet alone, which holds while the space is a
--// /24 and the blocks divide it evenly. Both are constants above, and a test
--// checks they still agree.
-@@ -101,2 +83,2 @@
--	octets := netip.MustParsePrefix(isolatedSpace).Addr().As4()
--	octets[3] = byte(index * sandboxBlockSize)
-+	octets := isolatedSpaces[index/sandboxNetsPerRange].Addr().As4()
-+	octets[3] = byte((index % sandboxNetsPerRange) * sandboxBlockSize)
---- a/internal/runtime/sandboxnet_test.go
-+++ b/internal/runtime/sandboxnet_test.go
-@@ -97,3 +96,0 @@
--// Every isolated network stays inside the one /24 claimed for them, so brig's
--// claim on the host's address space is two adjacent /24s and not whatever the
--// arithmetic happens to produce.
-@@ -101,21 +98,32 @@
--	space, err := netip.ParsePrefix(isolatedSpace)
--	if err != nil {
--		t.Fatal(err)
--	}
--	for index := range sandboxNets {
--		subnet, err := netip.ParsePrefix(sandboxSubnet(index))
--		if err != nil {
--			t.Fatal(err)
--		}
--		if !space.Contains(subnet.Addr()) {
--			t.Fatalf("network %d (%s) is outside %s", index, subnet, space)
--		}
--		if subnet.Bits() != sandboxNetBits {
--			t.Fatalf("network %d carries the wrong prefix: %s", index, subnet)
--		}
--	}
--	// And the space holds exactly the number of them claimed, so the two
--	// constants cannot drift into a sandbox addressed outside the space.
--	if got := 1 << (32 - space.Bits()) / sandboxBlockSize; got != sandboxNets {
--		t.Errorf("%s holds %d networks of %d addresses, but sandboxNets is %d",
--			space, got, sandboxBlockSize, sandboxNets)
-+	for index := range sandboxNets {
-+		subnet := netip.MustParsePrefix(sandboxSubnet(index))
-+		space := isolatedSpaces[index/sandboxNetsPerRange]
-+		if !space.Contains(subnet.Addr()) || subnet.Bits() != sandboxNetBits {
-+			t.Fatalf("sandbox %d got subnet %s outside %s", index, subnet, space)
-+		}
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/brig-sh/brig/internal/runtime"
++)
++
++func TestDesktopStopDoesNotHideHullCleanupFailure(t *testing.T) {
++	t.Setenv("BRIG_RUNTIME", "hull")
++	t.Setenv("DO_NOT_TRACK", "1")
++	t.Setenv("BRIG_STATE_DIR", filepath.Join(t.TempDir(), "state"))
++	t.Setenv("BRIG_GATEWAY_DIR", t.TempDir())
++	bin := filepath.Join(t.TempDir(), "hull")
++	const script = `#!/bin/sh
++case "$1" in
++  stop) printf 'failed to reap the recorded virtual machine\n' >&2; exit 1 ;;
++  inspect)
++    if [ "$TUGBOAT_STOP_TEST_STATE" = absent ]; then
++      printf 'error: instance not found: %s\n' "$2" >&2; exit 1
++    fi
++    printf '{"id":"%s","status":"stopped"}\n' "$2" ;;
++  ps) printf '%s stopped\n' "$TUGBOAT_STOP_TEST_VM" ;;
++  *) exit 9 ;;
++esac
++`
++	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
++		t.Fatal(err)
 +	}
-+}
-+
-+func TestDesktopIsolatedNetworkAfter64SavedSandboxes(t *testing.T) {
-+	scratchIsolatedDir(t)
-+	alloc, err := isolatedNets()
++	t.Setenv("BRIG_RUNTIME_BIN", bin)
++	c := testConfig(t, t.TempDir(), t.TempDir())
++	c.broker = &fakeBroker{}
++	t.Setenv("TUGBOAT_STOP_TEST_VM", c.VMName)
++	t.Setenv("TUGBOAT_STOP_TEST_STATE", "stopped")
++	var err error
++	c.Runtime, err = runtime.Detect()
 +	if err != nil {
 +		t.Fatal(err)
 +	}
-+	saved := map[string]int{}
-+	for index := range 64 {
-+		saved[strings.Repeat("s", index+1)] = index
++	if err := c.Stop(); err == nil || !strings.Contains(err.Error(), "failed to reap the recorded virtual machine") {
++		t.Errorf("the stop did not report Hull's cleanup error: %v", err)
 +	}
-+	if err := alloc.write(saved); err != nil {
-+		t.Fatal(err)
++	t.Setenv("TUGBOAT_STOP_TEST_STATE", "absent")
++	if err := c.Stop(); err != nil {
++		t.Errorf("stopping an absent Hull instance failed: %v", err)
 +	}
-+	index, err := sandboxNet("new-project")
-+	if err != nil || index != 64 || sandboxSubnet(index) != "198.18.2.0/30" {
-+		t.Fatalf("first additional sandbox got slot %d, error %v", index, err)
++}
+diff --git a/internal/wrap/index.go b/internal/wrap/index.go
+index 62df565..f0d75df 100644
+--- a/internal/wrap/index.go
++++ b/internal/wrap/index.go
+@@ -610,2 +610,2 @@ func OtherRuntimeSessions(kind string) []OtherRuntimeSession {
+-// PruneSessions drops every entry whose sandbox is not in the list of what the
+-// runtime has.
++// PruneSessions drops stale runtime entries. A recorded Brig home can
++// outlive its VM during a restart and stays owned until explicit removal.
+@@ -616,3 +616,2 @@ func OtherRuntimeSessions(kind string) []OtherRuntimeSession {
+-// lost with a runtime that was reinstalled. The cost of being wrong is small
+-// in the direction that matters: a list that came back short prunes an entry
+-// that was still good, and the session pays one restart for it.
++// lost with a runtime that was reinstalled. The absence of a VM does not
++// establish that its guest home was removed.
+@@ -640 +639 @@ func PruneSessions(live []string) {
+-		if !have[entry.Sandbox] {
++		if !have[entry.Sandbox] && !entry.hasRecoverableHome() {
+@@ -650,0 +650,14 @@ func PruneSessions(live []string) {
++// A retry can recreate the VM. Dropping its only ownership record would let
++// reapOrphanHome delete the previous guest state before that boot.
++func (entry sessionEntry) hasRecoverableHome() bool {
++	if !entry.Ephemeral {
++		return false
 +	}
-+	for name, old := range saved {
-+		slot, ok := lookupSandboxNet(name)
-+		base := netip.AddrFrom4([4]byte{198, 18, 1, byte(old * 4)})
-+		if !ok || slot != old || sandboxBase(slot) != base {
-+			t.Fatalf("saved sandbox %s lost its original address", name)
-+		}
++	_, name, ok := homeName(entry.Home)
++	if !ok || name != entry.Sandbox {
++		return false
++	}
++	_, err := os.Lstat(entry.Home)
++	return !os.IsNotExist(err)
++}
++
+diff --git a/internal/wrap/run.go b/internal/wrap/run.go
+index de37b4b..6096bbd 100644
+--- a/internal/wrap/run.go
++++ b/internal/wrap/run.go
+@@ -922,0 +923,5 @@ func (c *Config) Stop() error {
++	// Hull handles idempotent absence in its stop adapter. A stopped record
++	// can still have an owned process that hull could not reap.
++	if errors.Is(err, runtime.ErrStopUnconfirmed) {
++		return fmt.Errorf("the sandbox %s would not stop (%s): %w", c.VMName, c.logHint(), err)
++	}

@@ -174,6 +174,7 @@ pub async fn start_agent_session(
             }
         }
         if matches!(action, Action::NewChat | Action::Resume) {
+            environment::shared_runtime::verify_claude(&checked)?;
             let status = crate::providers::shared_claude::ensure_locked(
                 &prepare_app,
                 &mut account,

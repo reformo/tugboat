@@ -6,10 +6,11 @@ use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 
-pub const TOOLS: [&str; 10] = [
+pub const TOOLS: [&str; 11] = [
     "brig",
     "brigd",
     "brig-broker",
+    "agent-updater",
     "hull",
     "hvi",
     "vz-runner",
