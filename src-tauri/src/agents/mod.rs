@@ -24,6 +24,7 @@ pub struct AgentSettings {
 }
 
 pub enum AgentCommand<'a> {
+    #[cfg(test)]
     Version,
     LoginStatus,
     #[cfg(test)]

@@ -209,6 +209,8 @@ pub struct RequestUsage {
     pub key: String,
     pub at: String,
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
     pub tokens: Tokens,
     pub rates: Option<RateSnapshot>,
     pub cost_usd: Option<f64>,
@@ -341,6 +343,7 @@ fn request(
         key,
         at,
         model,
+        effort: None,
         tokens,
         rates,
         cost_usd: None,
@@ -432,6 +435,29 @@ impl Summary {
         self.missing_cache_write_requests += other.missing_cache_write_requests;
         self.unmeasured_turns += other.unmeasured_turns;
     }
+
+    pub(crate) fn add_request(&mut self, request: &RequestUsage) {
+        let tokens = &request.tokens;
+        self.input += tokens.input;
+        if tokens.cached_is_known() {
+            self.cached += tokens.cached;
+        }
+        if tokens.writes_are_known() {
+            self.cache_write += tokens.cache_write;
+        }
+        self.output += tokens.output;
+        self.reasoning += tokens.reasoning;
+        self.total += tokens.input + tokens.output;
+        self.requests += 1;
+        self.missing_cache_requests +=
+            u64::from(!tokens.cached_is_known() || !tokens.writes_are_known());
+        self.missing_cached_requests += u64::from(!tokens.cached_is_known());
+        self.missing_cache_write_requests += u64::from(!tokens.writes_are_known());
+        self.cost_usd += request.cost_usd.unwrap_or_default();
+        self.unpriced_requests += u64::from(request.cost_usd.is_none());
+        self.assumed_tier_requests +=
+            u64::from(request.rates.as_ref().is_some_and(|rate| rate.tier_assumed));
+    }
 }
 pub fn summarize(turns: &BTreeMap<String, TurnUsage>) -> Summary {
     let mut result = Summary::default();
@@ -451,34 +477,7 @@ pub fn summarize(turns: &BTreeMap<String, TurnUsage>) -> Summary {
             {
                 continue;
             }
-            let tokens = &request.tokens;
-            result.input += tokens.input;
-            if tokens.cached_is_known() {
-                result.cached += tokens.cached;
-            }
-            if tokens.writes_are_known() {
-                result.cache_write += tokens.cache_write;
-            }
-            result.output += tokens.output;
-            result.reasoning += tokens.reasoning;
-            result.total += tokens.input + tokens.output;
-            result.requests += 1;
-            if !tokens.cached_is_known() || !tokens.writes_are_known() {
-                result.missing_cache_requests += 1;
-            }
-            if !tokens.cached_is_known() {
-                result.missing_cached_requests += 1;
-            }
-            if !tokens.writes_are_known() {
-                result.missing_cache_write_requests += 1;
-            }
-            result.cost_usd += request.cost_usd.unwrap_or(0.0);
-            if request.cost_usd.is_none() {
-                result.unpriced_requests += 1;
-            }
-            if request.rates.as_ref().is_some_and(|rate| rate.tier_assumed) {
-                result.assumed_tier_requests += 1;
-            }
+            result.add_request(request);
         }
     }
     result

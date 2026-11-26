@@ -33,7 +33,7 @@ test('collecting notices preserves a UTF-8 BOM and rejects malformed or missing 
   assert.throws(() => renderNotices([{ name: 'Example', version: '1', notices: [{ name: 'LICENSE', text: '\n' }] }]), /Empty notice for Example 1/);
 });
 
-test('the package verifier requires both Brig patches and checks the disk tool sources', t => {
+test('the package verifier requires the Brig patches and checks the disk tool sources', t => {
   const app = fs.mkdtempSync(path.join(os.tmpdir(), 'tugboat-license-package-'));
   t.after(() => fs.rmSync(app, { recursive: true, force: true }));
   const directory = path.join(app, 'Contents/Resources/licenses');
@@ -53,7 +53,12 @@ test('the package verifier requires both Brig patches and checks the disk tool s
   fs.writeFileSync(path.join(brig, 'brig-disk-tools.patch'), 'patch fixture');
   const verificationPatch = path.join(brig, 'brig-verified-cache.patch');
   fs.writeFileSync(verificationPatch, 'verification cache patch fixture');
+  const activityPatch = path.join(brig, 'brig-network-activity.patch');
+  fs.writeFileSync(activityPatch, 'network activity patch fixture');
   verifyPackagedLicenses(app, pin);
+  fs.unlinkSync(activityPatch);
+  assert.throws(() => verifyPackagedLicenses(app, pin), /contents/);
+  fs.writeFileSync(activityPatch, 'network activity patch fixture');
   fs.unlinkSync(verificationPatch);
   assert.throws(() => verifyPackagedLicenses(app, pin), /contents/);
   fs.writeFileSync(verificationPatch, 'verification cache patch fixture');

@@ -1,5 +1,5 @@
 use super::*;
-use crate::usage_store::{Environment, Store};
+use crate::usage_store::{Environment, Store, SCHEMA_VERSION};
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::{
@@ -214,6 +214,32 @@ fn former(registry: &Registry, project: &Project, agents: &[AgentKind]) -> Value
         json!({"environmentId":EnvironmentId::for_agent(&project.id, *kind),"agentKind":kind,"profile":profile,"label":label,"network":"isolated","policy":null,"stage":"selected","ownsSession":*kind == AgentKind::Codex,"ownsBinding":false,"policyDetached":false,"environmentVerified":false,"environmentAttempt":null,"removal":null})
     }).collect());
     row
+}
+
+#[test]
+fn startup_reset_upgrades_the_canonical_database_before_the_store_opens() {
+    for version in [1, 2] {
+        let fixture = Fixture::new();
+        let database = fixture.database("usage.sqlite3");
+        if version == 2 {
+            database
+                .execute_batch(concat!(
+                    "PRAGMA foreign_keys=OFF;\n",
+                    include_str!("../../../usage_store/migrations/002_project_identity.sql")
+                ))
+                .unwrap();
+        }
+        drop(database);
+
+        fixture.bootstrap(|| Ok(())).unwrap();
+
+        let database = Connection::open(fixture.records.path().join("usage.sqlite3")).unwrap();
+        let upgraded_version: i64 = database
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(upgraded_version, SCHEMA_VERSION, "from version {version}");
+        assert_eq!(fixture.records.schema_version().unwrap(), 2);
+    }
 }
 
 #[test]

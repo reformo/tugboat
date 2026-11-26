@@ -11,72 +11,94 @@
     <div class="app-shell">
       <nav class="sidebar" id="sidebar" aria-label="Main navigation">
         <div id="sidebar-resizer" class="sidebar-resizer" role="separator" tabindex="0" aria-label="Resize sidebar" aria-controls="sidebar" aria-orientation="vertical" aria-valuemin="280" aria-valuenow="280"></div>
-        <button class="navigation-item" id="project-navigation" aria-current="page"><svg class="navigation-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span id="project-navigation-label">Projects</span></button>
+        <button class="navigation-item" id="project-navigation" aria-current="page">
+          <svg class="navigation-icon project-library-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+          <svg class="navigation-icon project-back-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 19-7-7 7-7M5 12h14"/></svg>
+          <span>Projects</span>
+        </button>
+        <button id="sidebar-current-project" class="sidebar-project" hidden></button>
         <div class="sidebar-projects" id="sidebar-projects">
           <ul id="sidebar-project-list" class="sidebar-list" aria-label="Projects"></ul>
-          <section id="sidebar-project-context" hidden aria-label="Selected project">
-            <button id="sidebar-current-project" class="sidebar-project" aria-current="page"></button>
-            <div class="session-list-heading"><h2>Sessions</h2><button id="refresh-sessions" class="sidebar-text-button">Refresh</button></div>
+          <section id="sidebar-project-context" hidden aria-labelledby="sidebar-current-project">
+            <div class="sidebar-list-heading">
+              <h2>Chats</h2>
+              <button id="refresh-sessions" class="sidebar-refresh" type="button" aria-label="Refresh chats" title="Refresh chats"><svg class="navigation-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 12a8 8 0 0 1 14-5l2 5M4 17v-5h5M20 12a8 8 0 0 1-14 5l-2-5"/></svg></button>
+            </div>
             <p id="session-list-status" class="sidebar-support" role="status"></p>
-            <ul id="sidebar-session-list" class="sidebar-list" aria-label="Saved sessions"></ul>
+            <ul id="sidebar-session-list" class="sidebar-list" aria-label="Active chats"></ul>
             <div id="sidebar-terminals" hidden>
-              <div class="session-list-heading"><h2>Terminals</h2></div>
+              <div class="sidebar-list-heading"><h2>Terminals</h2></div>
               <ul id="sidebar-terminal-list" class="sidebar-list" aria-label="Process terminals and results"></ul>
             </div>
           </section>
         </div>
         <div class="sidebar-footer">
           <button class="navigation-item" id="help-navigation"><svg class="navigation-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg><span>Help</span></button>
-          <div class="sidebar-settings">
-            <button class="navigation-item settings-navigation" id="settings-navigation" aria-haspopup="dialog"><svg class="navigation-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
-            <span id="sidebar-version" class="sidebar-version" title="Application version"></span>
-          </div>
+          <button class="navigation-item" id="settings-navigation" aria-haspopup="dialog"><svg class="navigation-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
+          <span id="sidebar-version" class="sidebar-version" title="Application version"></span>
         </div>
       </nav>
       <div class="workspace">
       <main>
     <div class="project-settings-backdrop" aria-hidden="true"></div>
-    <section id="project-settings-dialog" class="settings-dialog project-settings-dialog" role="dialog" aria-labelledby="project-settings-heading" data-inline-modal hidden>
-      <header class="dialog-header"><h2 id="project-settings-heading">Project settings</h2><button id="close-project-settings" class="icon-button" title="Close settings" aria-label="Close project settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
-      <div class="dialog-content project-settings-content">
-        <section id="project-actions" class="project-settings-layout" hidden aria-label="Project setup">
-          <nav class="project-settings-navigation" aria-label="Project settings sections">
-            <button type="button" class="project-settings-tab" data-settings-pane="project-setup-overview" aria-controls="project-setup-overview">Overview</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-resources" aria-controls="project-resources">General</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-agent-settings" aria-controls="project-agent-settings">Agents</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-network-settings" aria-controls="project-network-settings">Network</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-github-access" aria-controls="project-github-access">GitHub</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-preview-section" aria-controls="project-preview-section">Web preview</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-image-update" aria-controls="project-image-update">Guest image</button>
-            <button type="button" class="project-settings-tab" data-settings-pane="project-environment" aria-controls="project-environment">Environment</button>
+    <section id="project-settings-dialog" class="settings-dialog project-settings-dialog" role="dialog" aria-labelledby="project-settings-heading" aria-describedby="project-settings-name" data-inline-modal hidden>
+      <header class="dialog-header">
+        <div class="project-settings-identity">
+          <h2 id="project-settings-heading">Project settings</h2>
+          <p id="project-settings-name"></p>
+        </div>
+        <button id="close-project-settings" class="icon-button" title="Close settings" aria-label="Close project settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+      </header>
+        <div id="project-actions" class="project-settings-layout" hidden>
+          <nav class="settings-nav" aria-label="Project settings sections">
+            <button type="button" data-settings-pane="project-setup-overview" aria-controls="project-setup-overview" aria-current="true">Overview</button>
+            <button type="button" data-settings-group="project-resources" aria-controls="project-configuration-nav">Configuration</button>
+            <button type="button" data-settings-group="project-network-settings" aria-controls="project-connections-nav">Connections</button>
+            <button type="button" data-settings-group="project-environment" aria-controls="project-environment-nav">Environment</button>
           </nav>
-          <div class="project-settings-panes">
+          <nav id="project-configuration-nav" class="settings-subnav" aria-label="Project configuration" hidden>
+            <button type="button" data-settings-pane="project-resources" aria-controls="project-resources">General</button>
+            <button type="button" data-settings-pane="project-agent-settings" aria-controls="project-agent-settings">Agents</button>
+          </nav>
+          <nav id="project-connections-nav" class="settings-subnav" aria-label="Project connections" hidden>
+            <button type="button" data-settings-pane="project-network-settings" aria-controls="project-network-settings">Network</button>
+            <button type="button" data-settings-pane="project-github-access" aria-controls="project-github-access">GitHub</button>
+            <button type="button" data-settings-pane="project-preview-section" aria-controls="project-preview-section">Web preview</button>
+          </nav>
+          <nav id="project-environment-nav" class="settings-subnav" aria-label="Project environment" hidden>
+            <button type="button" data-settings-pane="project-environment" aria-controls="project-environment">Operations</button>
+            <button type="button" data-settings-pane="project-image-update" aria-controls="project-image-update">Guest image</button>
+          </nav>
+          <div class="dialog-content settings-dialog-panes">
             <details class="settings-pane" id="project-setup-overview" open><summary>Overview</summary>
-              <h3 class="pane-title">Overview</h3>
+              <div class="pane-header">
+                <h3 id="project-access-heading" class="pane-title">Project access</h3>
+                <div class="action-row" id="prepare-controls"><button class="primary-button" id="prepare-environment" hidden>Prepare environment</button><button class="secondary-button" id="refresh-plan" hidden>Refresh plan</button></div>
+              </div>
               <section id="project-access-summary" aria-labelledby="project-access-heading" hidden>
-                <h4 id="project-access-heading" class="group-title">Project access</h4>
                 <dl class="project-access-values settings-rows">
                   <div><dt>Agent for next chat</dt><dd id="project-access-agent"></dd></div>
-                  <div><dt>Shared folder on this Mac</dt><dd id="project-access-folder"></dd></div>
-                  <div><dt>Shared Brig environment</dt><dd id="managed-environment"></dd></div>
+                  <div><dt>Shared folder</dt><dd id="project-access-folder"></dd></div>
+                  <div><dt>Brig environment</dt><dd id="managed-environment"></dd></div>
                   <div><dt>Allowed guest destinations</dt><dd id="project-access-network"></dd></div>
-                  <div><dt>Image signature verification</dt><dd id="project-access-verification"></dd></div>
+                  <div><dt>Image signature</dt><dd id="project-access-verification"></dd></div>
                 </dl>
                 <p id="project-sharing-details" class="support-text">Codex and Claude Code can access the same project files and guest processes. They use the same network permissions. Tugboat keeps provider sign-in and token renewal on this Mac.</p>
               </section>
-              <div class="action-row" id="prepare-controls"><button class="primary-button" id="prepare-environment" hidden>Prepare environment</button><button class="secondary-button" id="refresh-plan" hidden>Refresh plan</button></div>
               <p id="preparation-status" class="support-text" role="status"></p>
               <button class="secondary-button" id="retry-preparation" hidden>Retry setup</button>
               <details id="sharing-plan" hidden><summary>Sharing and execution plan</summary><dl id="sharing-plan-values" class="plan-values"></dl></details>
             </details>
             <details class="settings-pane" id="project-resources"><summary>General</summary>
-              <h3 class="pane-title">General</h3>
               <form id="project-preferences"><fieldset id="project-preference-fields" class="loading-fields" disabled>
                 <label class="field-label" for="project-name">Project name</label><input id="project-name" class="text-field" maxlength="120" required>
                 <div class="field-pair"><div><label class="field-label" for="project-cpus">CPU count</label><input id="project-cpus" type="number" class="text-field" min="1" max="32" step="1" required></div><div><label class="field-label" for="project-memory">Memory (MB)</label><input id="project-memory" type="number" class="text-field" min="1024" max="65536" step="256" required></div></div>
                 <div class="field-pair"><div><label class="field-label" for="project-verification">Image signature</label><select id="project-verification" class="text-field" disabled><option value="require">Required</option></select></div><div><label class="field-label" for="project-network">Network</label><select id="project-network" class="text-field"><option value="isolated">Access allowed by policy</option><option value="offline">Offline</option></select></div></div>
-                <div class="action-row"><button type="submit" class="primary-button" id="save-project-preferences">Save project settings</button></div>
-                <p class="support-text">A rename keeps the environment running. A CPU, memory or network change stops a running environment, and Tugboat asks first when a process is still working. Guest home and chats are preserved. Offline blocks all guest traffic. Set the allowed destinations in Network.</p>
+                <div class="project-save-row">
+                  <p class="support-text">Resource and network changes stop a running environment. Tugboat asks first if a process is still working.</p>
+                  <button type="submit" class="primary-button" id="save-project-preferences">Save project settings</button>
+                </div>
+                <p class="support-text">Renaming keeps the environment running. Tugboat keeps the guest home and saved chats. Offline blocks guest traffic. Set allowed destinations under Connections → Network.</p>
               </fieldset>
               <section class="stop-warning" id="preferences-stop-warning" aria-labelledby="preferences-stop-warning-heading" hidden>
                 <p class="row-label" id="preferences-stop-warning-heading">Stop the environment to apply this change?</p>
@@ -87,39 +109,36 @@
               <p id="project-preferences-status" class="support-text" role="status"></p></form>
             </details>
             <details class="settings-pane" id="project-agent-settings"><summary>Agents</summary>
-              <h3 class="pane-title">Agents</h3>
-              <p class="pane-description">Tugboat adds these options to the agent command when a chat starts or resumes. Running chats keep their current options. An empty field keeps the agent's default.</p>
+              <p class="pane-description">Tugboat saves these changes as you make them. They apply to new and resumed chats. Empty fields use agent defaults.</p>
               <div class="agent-tabs" role="tablist" aria-label="Agent providers">
                 <button type="button" role="tab" class="agent-tab" id="agent-tab-claude" aria-controls="agent-panel-claude" aria-selected="true">Claude Code</button>
                 <button type="button" role="tab" class="agent-tab" id="agent-tab-codex" aria-controls="agent-panel-codex" aria-selected="false" tabindex="-1">Codex</button>
               </div>
               <section class="agent-panel" role="tabpanel" id="agent-panel-claude" aria-labelledby="agent-tab-claude">
-                <h4 class="group-title">Model</h4>
                 <div class="settings-rows">
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="claude-model">Model</label><p class="row-hint" id="claude-model-details">Default is Claude Opus 5.5. Adds --model with the full model ID.</p></div><select id="claude-model" class="text-field row-field" aria-describedby="claude-model-details" disabled><option value="">Default (Claude Opus 5.5)</option><optgroup label="Current models"><option value="claude-opus-5-5">Claude Opus 5.5</option><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5</option><option value="claude-fable-5-2">Claude Fable 5.2</option><option value="opusplan">Opus in plan mode, Sonnet in execution</option></optgroup><optgroup label="Older models"><option value="claude-fable-5-1">claude-fable-5-1</option><option value="claude-fable-5">claude-fable-5</option><option value="claude-opus-5">claude-opus-5</option><option value="claude-opus-4-8">claude-opus-4-8</option><option value="claude-opus-4-7">claude-opus-4-7</option><option value="claude-opus-4-6">claude-opus-4-6</option><option value="claude-sonnet-5">claude-sonnet-5</option><option value="claude-sonnet-4-6">claude-sonnet-4-6</option><option value="claude-haiku-4-5">claude-haiku-4-5</option></optgroup></select></div>
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="claude-effort">Effort</label><p class="row-hint" id="claude-effort-details">How much reasoning the model uses. Adds --effort. Claude Code lowers xhigh and max to high for models that do not support them.</p></div><select id="claude-effort" class="text-field row-field" aria-describedby="claude-effort-details" disabled><option value="">Default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></div>
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="claude-fallback-model">Fallback model</label><p class="row-hint" id="claude-fallback-model-details">Used when the main model is overloaded or not available. Adds --fallback-model.</p></div><select id="claude-fallback-model" class="text-field row-field" aria-describedby="claude-fallback-model-details" disabled><option value="">None</option><optgroup label="Current models"><option value="claude-opus-5-5">Claude Opus 5.5</option><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5</option><option value="claude-fable-5-2">Claude Fable 5.2</option></optgroup><optgroup label="Older models"><option value="claude-fable-5-1">claude-fable-5-1</option><option value="claude-fable-5">claude-fable-5</option><option value="claude-opus-5">claude-opus-5</option><option value="claude-opus-4-8">claude-opus-4-8</option><option value="claude-opus-4-7">claude-opus-4-7</option><option value="claude-opus-4-6">claude-opus-4-6</option><option value="claude-sonnet-5">claude-sonnet-5</option><option value="claude-sonnet-4-6">claude-sonnet-4-6</option><option value="claude-haiku-4-5">claude-haiku-4-5</option></optgroup></select></div>
                 </div>
-                <h4 class="group-title">Instructions</h4>
+                <h3 class="group-title">Instructions</h3>
                 <div class="settings-rows">
                   <div class="settings-row-editor">
                     <label class="field-label" for="claude-append-system-prompt">Append to system prompt<span id="claude-append-system-prompt-details">Claude Code adds this text to its default system prompt, for example a language or a coding rule. Saved when you leave the field. Adds --append-system-prompt.</span></label>
                     <textarea id="claude-append-system-prompt" class="text-field" rows="3" maxlength="4000" aria-describedby="claude-append-system-prompt-details" disabled></textarea>
                   </div>
                 </div>
-                <h4 class="group-title">Permissions and Git</h4>
+                <h3 class="group-title">Permissions and Git</h3>
                 <div class="settings-rows">
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="claude-auto-mode-switch">Auto mode</label><p class="row-hint" id="claude-auto-mode-details">On by default. Starts chats with --permission-mode auto. When off, chats use manual mode and ask before actions.</p></div><input type="checkbox" role="switch" class="switch" id="claude-auto-mode-switch" aria-describedby="claude-auto-mode-details" disabled></div>
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="claude-attribution-switch">Commit and pull request attribution</label><p class="row-hint" id="claude-attribution-details">Off by default. When on, Claude Code can add its attribution to commits and pull requests.</p></div><input type="checkbox" role="switch" class="switch" id="claude-attribution-switch" aria-describedby="claude-attribution-details" disabled></div>
                 </div>
               </section>
               <section class="agent-panel" role="tabpanel" id="agent-panel-codex" aria-labelledby="agent-tab-codex" hidden>
-                <h4 class="group-title">Model</h4>
                 <div class="settings-rows">
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="codex-model">Model</label><p class="row-hint" id="codex-model-details">Codex recommends GPT-6.2-Sol. Adds --model.</p></div><select id="codex-model" class="text-field row-field" aria-describedby="codex-model-details" disabled><option value="">Default (Codex configuration)</option><optgroup label="Current models"><option value="gpt-6.2-sol">GPT-6.2-Sol · everyday coding</option><option value="gpt-6.2-astra">GPT-6.2-Astra · demanding work</option><option value="gpt-6.1-terra">GPT-6.1 Terra · fast work, vision, computer use</option><option value="gpt-6.1-sol">GPT-6.1-Sol</option><option value="gpt-6-astra">GPT-6-Astra</option><option value="gpt-6-sol">GPT-6-Sol</option><option value="gpt-6-luna">GPT-6-Luna · focused, repeatable tasks</option></optgroup><optgroup label="Older models"><option value="gpt-5.6-sol">GPT-5.6-Sol</option><option value="gpt-5.6-terra">GPT-5.6-Terra</option><option value="gpt-5.6-luna">GPT-5.6-Luna</option></optgroup></select></div>
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="codex-reasoning-effort">Reasoning effort</label><p class="row-hint" id="codex-reasoning-effort-details">How much reasoning the model uses. GPT-6-Luna and GPT-5.6-Luna do not support Ultra. Adds -c model_reasoning_effort.</p></div><select id="codex-reasoning-effort" class="text-field row-field" aria-describedby="codex-reasoning-effort-details" disabled><option value="">Default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option><option value="ultra">Ultra</option></select></div>
                 </div>
-                <h4 class="group-title">Sandbox</h4>
+                <h3 class="group-title">Sandbox</h3>
                 <div class="settings-rows">
                   <div class="settings-row"><div class="row-text"><label class="row-label" for="codex-brig-boundary-switch">Use the Brig boundary</label><p class="row-hint" id="codex-brig-boundary-details">On by default. Codex runs with --sandbox danger-full-access and does not ask for approval. Brig controls file sharing and network access. When off, Codex uses its workspace sandbox with command network access disabled.</p></div><input type="checkbox" role="switch" class="switch" id="codex-brig-boundary-switch" aria-describedby="codex-brig-boundary-details" disabled></div>
                 </div>
@@ -130,7 +149,7 @@
               <p id="agent-settings-status" class="support-text" role="status"></p>
             </details>
             <details class="settings-pane" id="project-network-settings"><summary>Network</summary>
-              <div class="pane-header"><h3 class="pane-title">Network</h3><button type="button" class="pill-button" id="read-project-policy">Refresh</button></div>
+              <div class="pane-header"><h3 class="pane-title">Guest network access</h3><button type="button" class="secondary-button" id="read-project-policy">Refresh</button></div>
               <p id="project-policy-status" class="support-text" role="status"></p>
               <section class="stop-warning" id="network-stop-warning" aria-labelledby="network-stop-warning-heading" hidden>
                 <p class="row-label" id="network-stop-warning-heading">Stop the environment to apply this change?</p>
@@ -159,28 +178,28 @@
               </fieldset>
             </details>
             <details class="settings-pane" id="project-github-access"><summary>GitHub</summary>
-              <h3 class="pane-title">GitHub access</h3>
+              <h3 class="pane-title">Repository fetch access</h3>
               <p class="pane-description">Grant both agents fetch-only access to one repository. Tugboat saves the token in the Mac Keychain.</p>
               <form id="project-github-form" autocomplete="off">
-                <label class="field-label" for="project-github-repository">GitHub repository</label>
-                <input id="project-github-repository" class="text-field" type="text" placeholder="owner/repository" maxlength="140" spellcheck="false" required>
-                <label class="field-label" for="project-github-token">GitHub access token</label>
-                <input id="project-github-token" class="text-field" type="password" maxlength="512" autocomplete="off" spellcheck="false" required>
-                <p class="support-text">Use a token with Contents read permission for this repository.</p>
+                <div class="field-pair">
+                  <div><label class="field-label" for="project-github-repository">GitHub repository</label><input id="project-github-repository" class="text-field" type="text" placeholder="owner/repository" maxlength="140" spellcheck="false" required></div>
+                  <div><label class="field-label" for="project-github-token">GitHub access token</label><input id="project-github-token" class="text-field" type="password" maxlength="512" aria-describedby="project-github-token-help" autocomplete="off" spellcheck="false" required></div>
+                </div>
+                <p class="support-text" id="project-github-token-help">Use a token with Contents read permission for this repository.</p>
                 <p id="project-github-stop-impact" class="support-text" hidden>Stopping ends the Codex, Claude Code, and guest terminals for this project. Tugboat keeps saved chats.</p>
                 <div class="action-row"><button class="secondary-button" type="submit" id="save-project-github" aria-describedby="project-github-stop-impact" disabled>Save fetch access</button><button class="secondary-button" type="button" id="check-project-github">Check access</button><button class="secondary-button destructive-button" type="button" id="revoke-project-github" disabled>Revoke access</button><button class="secondary-button" type="button" id="cancel-project-github">Cancel</button></div>
               </form>
               <p id="project-github-status" class="support-text" role="status"></p>
-              <section class="pane-guide" aria-labelledby="github-guide-heading">
-                <h4 id="github-guide-heading" class="group-title">How to use GitHub access</h4>
+              <details class="advanced-actions pane-guide">
+                <summary>GitHub access guide</summary>
                 <p class="support-text">GitHub access lets Codex and Claude Code fetch one GitHub repository from the guest. Brig keeps the token on this Mac and adds it to each request. The guest never receives the token.</p>
-                <h5 class="guide-title">When to use it</h5>
+                <h4 class="guide-title">When to use it</h4>
                 <ul class="guide-list">
                   <li>The project repository is private, and an agent must run <code>git fetch</code> or <code>git pull</code> to get new commits.</li>
                   <li>An agent must compare the work with a remote branch, for example <code>git diff origin/main</code> after a fetch.</li>
                   <li>An agent must clone the same repository again in the guest, for example in a temporary folder for a test.</li>
                 </ul>
-                <h5 class="guide-title">How to use it</h5>
+                <h4 class="guide-title">How to use it</h4>
                 <ol class="guide-list">
                   <li>On GitHub, create a fine-grained personal access token. Select only this repository. Give it <strong>Contents: Read-only</strong> permission. Select an expiry date that suits the project.</li>
                   <li>In <strong>GitHub repository</strong>, enter <code>owner/repository</code>, for example <code>octo-org/web-app</code>. In <strong>GitHub access token</strong>, paste the token.</li>
@@ -188,7 +207,7 @@
                   <li>If macOS asks for Keychain access, allow it. Then select <strong>Check access</strong>.</li>
                   <li>Start a chat. Agents can use the normal GitHub addresses. Brig sends <code>https://github.com/…</code> and <code>git@github.com:…</code> addresses through the access route.</li>
                 </ol>
-                <h5 class="guide-title">Limits</h5>
+                <h4 class="guide-title">Limits</h4>
                 <ul class="guide-list">
                   <li>Only fetch and clone work. <code>git push</code>, the GitHub API, the <code>gh</code> command, issues and pull requests do not work through this access.</li>
                   <li>Only the saved repository works. A fetch from a different repository is refused. To change the repository, select <strong>Revoke access</strong> and save the new repository.</li>
@@ -196,14 +215,14 @@
                   <li>The GitHub access policy denies all other destinations. You cannot use it together with <strong>Enable all public internet access</strong> in Network.</li>
                   <li>Tugboat checks the local grant only. GitHub decides if the token can read the repository, so the status shows GitHub fetch permission as unverified.</li>
                 </ul>
-                <h5 class="guide-title">If it does not work</h5>
+                <h4 class="guide-title">If it does not work</h4>
                 <ul class="guide-list">
                   <li>GitHub refuses the fetch: check that the token is not expired, that it includes this repository, and that it has Contents read permission. Then select <strong>Replace token</strong>.</li>
                   <li><em>Brig cannot verify the saved grant</em>: replace the token, or revoke access and save it again.</li>
-                  <li><em>Attach the project policy and use Isolated mode before saving GitHub access</em>: in General, set Network to <strong>Access allowed by policy</strong>. In Network, open <strong>Policy document and binding</strong> and attach the policy.</li>
+                  <li><em>Attach the project policy and use Isolated mode before saving GitHub access</em>: in Configuration → General, set Network to <strong>Access allowed by policy</strong>. In Connections → Network, open <strong>Policy document and binding</strong> and attach the policy.</li>
                   <li>A save or revoke stopped before it completed: select <strong>Check access</strong>, then retry the same action.</li>
                 </ul>
-              </section>
+              </details>
             </details>
             <details class="settings-pane" id="project-preview-section"><summary>Web preview</summary>
               <h3 class="pane-title">Local web preview</h3>
@@ -216,24 +235,24 @@
                 <div class="action-row"><button class="secondary-button" type="submit" id="publish-preview-port">Publish preview</button><button class="secondary-button" type="button" id="check-preview-port">Check preview</button><button class="secondary-button" type="button" id="open-preview-browser" disabled>Open in browser</button><button class="secondary-button" type="button" id="close-preview-port" disabled>Close preview</button></div>
               </form>
               <p id="project-preview-status" class="support-text" role="status"></p>
-              <section class="pane-guide" aria-labelledby="preview-guide-heading">
-                <h4 id="preview-guide-heading" class="group-title">How to use the preview</h4>
+              <details class="advanced-actions pane-guide">
+                <summary>Web preview guide</summary>
                 <p class="support-text">The preview connects a port on this Mac to a port in the project guest. Your Mac browser and tools can then reach a server that runs in the guest.</p>
-                <h5 class="guide-title">When to use it</h5>
+                <h4 class="guide-title">When to use it</h4>
                 <ul class="guide-list">
                   <li>Look at a web app that an agent started in the guest, for example a Vite, Next.js, Rails, Django or Laravel development server.</li>
                   <li>Check a user interface change in your Mac browser while the chat continues.</li>
                   <li>Send requests to an HTTP API in the guest from a Mac tool, for example <code>curl</code> or an API client.</li>
                 </ul>
-                <h5 class="guide-title">How to use it</h5>
+                <h4 class="guide-title">How to use it</h4>
                 <ol class="guide-list">
                   <li>Prepare the project environment. The Overview section shows its state.</li>
-                  <li>Start the server in the guest. Ask the agent, or open Environment → Guest terminal. Example: <code>npm run dev -- --host 0.0.0.0 --port 5173</code>.</li>
+                  <li>Start the server in the guest. Ask the agent, or open Environment → Operations → Guest terminal. Example: <code>npm run dev -- --host 0.0.0.0 --port 5173</code>.</li>
                   <li>In <strong>Guest port</strong>, enter the port of the server, for example <code>5173</code>. In <strong>Mac port</strong>, enter a free port on this Mac, for example <code>5173</code> or <code>8080</code>.</li>
                   <li>Select <strong>Publish preview</strong>. Then select <strong>Check preview</strong>. When the server is ready, select <strong>Open in browser</strong>. The address is <code>http://127.0.0.1:&lt;Mac port&gt;</code>.</li>
                   <li>When you do not need the preview, select <strong>Close preview</strong>.</li>
                 </ol>
-                <h5 class="guide-title">Limits</h5>
+                <h4 class="guide-title">Limits</h4>
                 <ul class="guide-list">
                   <li>Only this Mac can open the preview. Other devices on your network cannot reach it.</li>
                   <li>Each project publishes one port. Close the preview before you select different ports. A Mac port can serve only one project.</li>
@@ -241,13 +260,13 @@
                   <li>The preview does not change the network policy. It does not give the guest access to services on this Mac.</li>
                   <li>When the environment stops, Tugboat keeps the approved port. Brig opens it again when the environment starts.</li>
                 </ul>
-                <h5 class="guide-title">If it does not work</h5>
+                <h4 class="guide-title">If it does not work</h4>
                 <ul class="guide-list">
                   <li><em>The guest web server has not responded</em>: make sure that the server runs and uses the guest port. If it still does not respond, start it on all guest addresses (<code>0.0.0.0</code>), not only on <code>localhost</code>.</li>
                   <li><em>The host port is already in use</em>: close the Mac program that uses the port, or select a different Mac port.</li>
                   <li><em>Prepare the project environment before publishing a preview</em>: open Overview and select <strong>Prepare environment</strong>.</li>
                 </ul>
-              </section>
+              </details>
             </details>
             <details class="settings-pane" id="project-image-update"><summary>Guest image</summary>
               <h3 class="pane-title">Update guest image</h3>
@@ -268,8 +287,8 @@
                 <button class="secondary-button" id="recover-project-image" hidden disabled>Recover image</button>
               </div>
             </details>
-            <details class="settings-pane" id="project-environment"><summary>Environment</summary>
-              <h3 class="pane-title">Environment</h3>
+            <details class="settings-pane" id="project-environment"><summary>Operations</summary>
+              <h3 class="pane-title">Terminals and diagnostics</h3>
               <div id="codex-actions" hidden>
                 <div class="action-row" id="codex-launch-actions"><button class="secondary-button" id="guest-shell">Guest terminal</button></div>
                 <p id="agent-update-status" class="support-text" role="status"></p>
@@ -298,14 +317,13 @@
               <p id="operation-status" class="support-text" role="status"></p>
             </details>
           </div>
-        </section>
-      </div>
+        </div>
     </section>
         <section id="project-view" class="project-view" aria-labelledby="project-heading">
           <header class="workspace-header">
             <div class="project-identity">
-              <div class="project-title-row"><h1 id="project-heading" tabindex="-1">Projects</h1><span id="selected-branch" hidden></span></div>
-              <p id="project-meta" hidden><span id="selected-folder"></span></p>
+              <h1 id="project-heading" tabindex="-1">Projects</h1>
+              <p id="project-meta" hidden><span id="selected-folder"></span><span id="selected-branch" hidden></span></p>
             </div>
             <div class="workspace-header-actions">
               <button class="primary-button icon-label-button" id="choose-folder" title="Add new project (⌘O)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add new project</span></button>
@@ -315,14 +333,39 @@
           </header>
           <div class="project-content">
             <p id="folder-error" class="error-message" role="alert" hidden></p>
-            <div id="project-plan-feedback" hidden><p id="project-plan-status" class="support-text" role="status"></p><p id="project-preparation-last-stage" class="support-text" hidden></p><div class="action-row"><button id="retry-project-plan" class="secondary-button" hidden>Retry setup</button><button id="project-preparation-output" class="secondary-button" hidden>View preparation output</button></div></div>
+            <div id="project-plan-feedback" class="project-notice" hidden>
+              <div id="project-plan-copy" hidden>
+                <p id="project-plan-status" class="support-text" role="status"></p>
+                <p id="project-preparation-last-stage" class="support-text" hidden></p>
+              </div>
+              <div class="action-row">
+                <button id="retry-project-plan" class="secondary-button" hidden>Retry setup</button>
+                <button id="project-preparation-output" class="secondary-button" hidden>View preparation output</button>
+                <span id="project-setup" hidden><button type="button" class="secondary-button" id="setup-project" aria-haspopup="dialog" aria-controls="project-settings-dialog">Open project settings</button></span>
+              </div>
+            </div>
             <button id="resume-removal" class="secondary-button" hidden>Review incomplete removal…</button>
-            <p id="project-description">Choose where Brig and your agents will work.</p>
+            <p id="project-description" class="support-text" role="status" hidden></p>
             <p id="project-rescan-status" class="support-text" role="status" hidden></p>
             <section id="recent-projects" hidden aria-label="Projects, most recently opened first">
-              <div class="table-scroll"><table class="data-table project-table"><colgroup><col class="project-name-column"><col class="project-branch-column"><col class="project-opened-column"></colgroup><thead><tr><th scope="col">Project</th><th scope="col">Branch</th><th scope="col">Last opened</th></tr></thead><tbody id="recent-project-list"></tbody></table></div>
+              <div class="table-scroll">
+                <table class="data-table project-table" aria-describedby="project-cost-note">
+                  <colgroup><col><col class="project-opened-column"><col class="project-cost-column"></colgroup>
+                  <thead><tr><th scope="col">Project</th><th scope="col">Last opened</th><th scope="col">Total cost</th></tr></thead>
+                  <tbody id="recent-project-list"></tbody>
+                </table>
+              </div>
+              <p id="project-cost-note" class="support-text">Total cost is the estimated API equivalent in USD for recorded usage, including archived chats and Trash. Subscription billing is separate.</p>
+              <p id="project-cost-coverage-note" class="support-text" hidden>* Saved records may omit requests or prices. Marked amounts include only priced usage.</p>
             </section>
-            <section id="empty-projects" hidden><h2>Your projects, in one place</h2><p>Add a project folder to start working with Codex or Claude Code.</p><button id="choose-first-chat" class="primary-button">Choose a folder for your first chat…</button></section>
+            <section id="empty-projects" aria-labelledby="empty-projects-heading" hidden>
+              <svg class="project-welcome-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6m-3-3h6"/></svg>
+              <div>
+                <h2 id="empty-projects-heading">Add your first project</h2>
+                <p>Choose a local folder to start a chat with Codex or Claude Code.</p>
+                <button id="choose-first-chat" class="primary-button">Choose a folder for your first chat…</button>
+              </div>
+            </section>
             <section id="project-dashboard" hidden aria-label="Project overview">
               <p id="project-agent-update" class="support-text" role="status" hidden></p>
               <section id="first-chat-setup" class="first-chat-setup" aria-labelledby="first-chat-heading" hidden>
@@ -343,29 +386,53 @@
                 </div>
                 <button id="first-chat-open" class="primary-button" hidden>Start first chat</button>
               </section>
-              <div id="project-setup" class="project-setup" hidden>
-                <button class="setup-settings-button" id="setup-project"><svg class="navigation-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><span>Review project settings</span></button>
-                <p>Open project settings to review the details that need your attention.</p>
-              </div>
               <div id="project-overview" hidden>
-                <dl id="project-usage" class="usage-summary" aria-label="Total project usage">
-                  <div><dt>Total tokens</dt><dd></dd></div>
-                  <div><dt>Input</dt><dd></dd></div>
-                  <div><dt>Cached input</dt><dd></dd></div>
-                  <div><dt>Output</dt><dd></dd></div>
-                  <div class="usage-cost"><dt>Estimated API equivalent <details id="usage-info" class="usage-info" hidden><summary aria-label="About the estimated API equivalent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 11v5M12 8h.01"/></svg></summary><div class="usage-info-popover"><p id="usage-note" class="support-text usage-note"></p></div></details><span id="usage-billing-note">Subscription billing is separate.</span></dt><dd></dd></div>
-                </dl>
-                <div class="dashboard-toolbar">
-                  <div class="session-tabs" role="group" aria-label="Session view"><button class="session-tab" data-session-state="active" aria-pressed="true">Sessions</button><button class="session-tab" data-session-state="archived" aria-pressed="false">Archived</button><button class="session-tab" data-session-state="deleted" aria-pressed="false">Trash</button></div>
-                  <div class="action-row" id="dashboard-new-chat"><label class="agent-choice"><span class="visually-hidden">Agent for New Chat</span><select id="agent-choice" class="text-field"><option value="codex">Codex</option><option value="claude-code">Claude Code</option></select></label><button class="primary-button icon-label-button" id="start-codex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg><span>New Chat</span></button></div>
-                </div>
-                <div id="project-account-feedback" hidden><p id="project-account-status" class="support-text" role="status"></p><button id="project-provider-settings" class="secondary-button">Open application settings…</button></div>
-                <p id="dashboard-session-status" class="support-text" role="status"></p>
-                <div class="table-scroll"><table id="session-table" class="data-table session-table"><thead><tr><th scope="col">Session</th><th scope="col" class="number-column">Input</th><th scope="col" class="number-column">Cached</th><th scope="col" class="number-column">Output</th><th scope="col" class="number-column">Total</th><th scope="col" class="number-column">Estimated API equivalent</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead><tbody id="session-table-body"></tbody></table></div>
+                <section id="project-usage-panel" class="project-usage-panel" aria-labelledby="project-usage-summary-heading">
+                  <header class="project-usage-header">
+                    <h2 id="project-usage-summary-heading">Project usage</h2>
+                    <button type="button" id="open-project-usage" class="secondary-button" aria-haspopup="dialog" aria-controls="project-usage-dialog" hidden>View usage breakdown</button>
+                  </header>
+                  <dl id="project-usage" class="usage-summary" aria-label="Total project usage">
+                    <div><dt>Total tokens</dt><dd></dd></div>
+                    <div><dt>Input</dt><dd></dd></div>
+                    <div><dt>Cached input</dt><dd></dd></div>
+                    <div><dt>Output</dt><dd></dd></div>
+                    <div>
+                      <dt>Estimated API equivalent <details id="usage-info" class="usage-info" hidden>
+                        <summary aria-label="About the estimated API equivalent" aria-controls="project-usage-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 11v5M12 8h.01"/></svg></summary>
+                        <div id="project-usage-note" class="usage-info-note" role="region" aria-label="Pricing explanation" tabindex="0"><p id="usage-note" class="support-text"></p></div>
+                      </details></dt>
+                      <dd></dd>
+                    </div>
+                  </dl>
+                  <p id="usage-billing-note" class="support-text">Subscription billing is separate.</p>
+                </section>
+                <section class="project-sessions" aria-labelledby="project-sessions-heading">
+                  <header class="dashboard-toolbar">
+                    <div class="session-filters">
+                      <h2 id="project-sessions-heading">Sessions</h2>
+                      <div class="session-tabs" role="group" aria-label="Session status"><button class="session-tab" data-session-state="active" aria-pressed="true">Active</button><button class="session-tab" data-session-state="archived" aria-pressed="false">Archived</button><button class="session-tab" data-session-state="deleted" aria-pressed="false">Trash</button></div>
+                    </div>
+                    <div class="action-row" id="dashboard-new-chat">
+                      <details id="project-account-notice" class="project-account-notice">
+                        <summary id="project-account-summary"><span id="project-account-label" role="status">Checking account…</span></summary>
+                        <div class="project-account-popover">
+                          <p id="project-account-status" class="support-text"></p>
+                          <div id="project-account-feedback" hidden>
+                            <button type="button" id="project-provider-settings" class="secondary-button" aria-haspopup="dialog" aria-controls="settings-view">Open provider settings</button>
+                          </div>
+                        </div>
+                      </details>
+                      <label class="agent-choice"><span class="visually-hidden">Agent for New Chat</span><select id="agent-choice" class="text-field"><option value="codex">Codex</option><option value="claude-code">Claude Code</option></select></label><button class="primary-button icon-label-button" id="start-codex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg><span>New Chat</span></button>
+                    </div>
+                  </header>
+                  <p id="dashboard-session-status" class="support-text" role="status"></p>
+                  <div class="table-scroll"><table id="session-table" class="data-table session-table" aria-labelledby="project-sessions-heading"><thead><tr><th scope="col">Session</th><th scope="col" class="number-column">Input</th><th scope="col" class="number-column">Cached input</th><th scope="col" class="number-column">Output</th><th scope="col" class="number-column">Total</th><th scope="col" class="number-column" aria-label="Estimated API equivalent" title="Estimated API equivalent in USD">Est. cost</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead><tbody id="session-table-body"></tbody></table></div>
+                </section>
                 <section id="unlinked-subagents" class="unlinked-subagents" aria-labelledby="unlinked-subagents-heading" hidden>
                   <h2 id="unlinked-subagents-heading">Unlinked subagents</h2>
                   <p class="support-text">Read-only recorded usage. These agents could not be linked to a main session. Open usage to inspect their own requests.</p>
-                  <div class="table-scroll"><table class="data-table session-table" aria-labelledby="unlinked-subagents-heading"><thead><tr><th scope="col">Subagent</th><th scope="col" class="number-column">Input</th><th scope="col" class="number-column">Cached</th><th scope="col" class="number-column">Output</th><th scope="col" class="number-column">Total</th><th scope="col" class="number-column">Estimated API equivalent</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead><tbody id="unlinked-subagent-body"></tbody></table></div>
+                  <div class="table-scroll"><table class="data-table session-table" aria-labelledby="unlinked-subagents-heading"><thead><tr><th scope="col">Subagent</th><th scope="col" class="number-column">Input</th><th scope="col" class="number-column">Cached input</th><th scope="col" class="number-column">Output</th><th scope="col" class="number-column">Total</th><th scope="col" class="number-column" aria-label="Estimated API equivalent" title="Estimated API equivalent in USD">Est. cost</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead><tbody id="unlinked-subagent-body"></tbody></table></div>
                 </section>
               </div>
             </section>
@@ -384,91 +451,99 @@
           </section>
         </section>
         <section id="help-view" class="help-view" aria-labelledby="help-heading" hidden></section>
-    <section id="settings-view" class="settings-dialog app-settings-dialog" role="dialog" aria-labelledby="settings-heading" data-inline-modal hidden>
+    <section id="settings-view" class="settings-dialog" role="dialog" aria-labelledby="settings-heading" data-inline-modal hidden>
       <header class="dialog-header"><h2 id="settings-heading" tabindex="-1">Settings</h2><button type="button" id="close-settings" class="icon-button" title="Close settings" aria-label="Close settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
-      <div class="dialog-content project-settings-content">
-        <div class="project-settings-layout">
-          <nav id="settings-tabs" class="project-settings-navigation" aria-label="Settings sections">
-            <button type="button" id="settings-tab-general" class="project-settings-tab" aria-controls="settings-panel-general" aria-current="true">General</button>
-            <button type="button" id="settings-tab-providers" class="project-settings-tab" aria-controls="settings-panel-providers" aria-current="false">Providers</button>
-            <button type="button" id="settings-tab-brig" class="project-settings-tab" aria-controls="settings-panel-brig" aria-current="false">Brig</button>
-            <button type="button" id="settings-tab-system-checks" class="project-settings-tab" aria-controls="settings-panel-system-checks" aria-current="false">System Checks</button>
-            <div class="navigation-group" role="group" aria-labelledby="settings-new-projects-label">
-              <p class="navigation-group-title" id="settings-new-projects-label">New projects</p>
-              <button type="button" id="settings-tab-resources" class="project-settings-tab" aria-controls="settings-panel-resources" aria-current="false">Resources</button>
-              <button type="button" id="settings-tab-network" class="project-settings-tab" aria-controls="settings-panel-network" aria-current="false">Network</button>
-              <button type="button" id="settings-tab-agents" class="project-settings-tab" aria-controls="settings-panel-agents" aria-current="false">Agents</button>
-            </div>
-          </nav>
-          <div class="project-settings-panes">
-            <section id="settings-panel-general" class="settings-panel" aria-labelledby="settings-panel-general-title">
-              <h3 class="pane-title" id="settings-panel-general-title">General</h3>
-              <dl class="settings-group">
-                <div><dt>Appearance</dt><dd>Dark sidebar and settings · Light workspace</dd></div>
-                <div><dt>Application</dt><dd>Tugboat</dd></div>
-                <div><dt>Version</dt><dd id="application-version" class="loading-value is-loading" aria-busy="true">Loading…</dd></div>
-              </dl>
-              <section id="app-updates" aria-label="Application updates" hidden>
+      <nav id="settings-tabs" class="settings-nav" aria-label="Settings sections">
+        <button type="button" id="settings-tab-general" data-settings-section="general" aria-controls="settings-panel-general" aria-current="true">General</button>
+        <button type="button" id="settings-tab-providers" data-settings-section="providers" aria-controls="settings-panel-providers">Accounts</button>
+        <button type="button" id="settings-tab-new-projects" data-settings-section="resources" aria-controls="settings-project-tabs">New projects</button>
+        <button type="button" id="settings-tab-system" data-settings-section="system-checks" aria-controls="settings-system-tabs">System</button>
+      </nav>
+      <nav id="settings-project-tabs" class="settings-subnav" aria-label="New project defaults" hidden>
+        <button type="button" id="settings-tab-resources" data-settings-section="resources" aria-controls="settings-panel-resources">Resources</button>
+        <button type="button" id="settings-tab-network" data-settings-section="network" aria-controls="settings-panel-network">Network</button>
+        <button type="button" id="settings-tab-agents" data-settings-section="agents" aria-controls="settings-panel-agents">Agents</button>
+      </nav>
+      <nav id="settings-system-tabs" class="settings-subnav" aria-label="System settings" hidden>
+        <button type="button" id="settings-tab-system-checks" data-settings-section="system-checks" aria-controls="settings-panel-system-checks">Checks</button>
+        <button type="button" id="settings-tab-brig" data-settings-section="brig" aria-controls="settings-panel-brig">Brig</button>
+      </nav>
+      <div class="dialog-content settings-dialog-panes">
+            <section id="settings-panel-general" class="settings-panel" aria-labelledby="settings-tab-general">
+              <section class="app-settings-block" aria-labelledby="records-folder-heading">
+                <div class="app-settings-row">
+                  <div>
+                    <h3 id="records-folder-heading">Records folder</h3>
+                    <p id="records-folder" class="loading-value is-loading" aria-busy="true">Loading…</p>
+                  </div>
+                  <button class="secondary-button" id="change-records-folder" disabled>Change folder…</button>
+                </div>
+                <p id="records-folder-hint" class="support-text">Settings, project records, saved usage and checks are stored here.</p>
                 <div class="action-row">
-                  <button class="secondary-button" id="check-app-updates">Check for Updates…</button>
-                  <button class="secondary-button" id="review-app-update" hidden>Review Update…</button>
+                  <button class="secondary-button" id="default-records-folder" hidden>Use default folder</button>
+                  <button class="secondary-button" id="cancel-records-move" hidden>Cancel folder change</button>
+                  <button class="primary-button" id="restart-for-records" hidden>Restart Tugboat</button>
                 </div>
-                <p id="app-updates-status" class="support-text field-help" role="status"></p>
+                <p id="records-folder-status" class="support-text" role="status"></p>
               </section>
-              <h4 class="group-title">Records folder</h4>
-              <dl class="settings-group"><div><dt>Location</dt><dd id="records-folder" class="loading-value is-loading" aria-busy="true">Loading…</dd></div></dl>
-              <p id="records-folder-hint" class="support-text field-help">Settings, project records, saved usage and checks are stored here.</p>
-              <div class="action-row">
-                <button class="secondary-button" id="change-records-folder" disabled>Change folder…</button>
-                <button class="secondary-button" id="default-records-folder" hidden>Use default folder</button>
-                <button class="secondary-button" id="cancel-records-move" hidden>Cancel folder change</button>
-                <button class="primary-button" id="restart-for-records" hidden>Restart Tugboat</button>
-              </div>
-              <p id="records-folder-status" class="support-text" role="status"></p>
-            </section>
-            <section id="settings-panel-providers" class="settings-panel" aria-labelledby="settings-panel-providers-title" hidden>
-              <h3 class="pane-title" id="settings-panel-providers-title">Provider accounts</h3>
-              <p class="pane-description">Connect your accounts here, before opening a project. Each project keeps its own environment, policy and chats.</p>
-              <section id="shared-chatgpt-section" aria-labelledby="shared-chatgpt-heading">
-                <h4 id="shared-chatgpt-heading" class="group-title" tabindex="-1">ChatGPT</h4>
-                <dl class="settings-group"><div><dt>Shared account</dt><dd id="shared-chatgpt-email" class="loading-value is-loading" aria-busy="true">Loading…</dd></div></dl>
-                <p class="support-text field-help">Sign in once for Codex in every project.</p>
-                <div id="saved-chatgpt-accounts" hidden>
-                  <label class="field-label" for="saved-chatgpt-project">Saved project sign-in</label>
-                  <select id="saved-chatgpt-project" class="text-field"></select>
-                  <div class="action-row"><button class="secondary-button" id="use-saved-chatgpt" disabled>Use saved sign-in</button></div>
+              <section class="app-settings-block" aria-labelledby="app-version-heading">
+                <div class="app-settings-row">
+                  <div>
+                    <h3 id="app-version-heading">Tugboat</h3>
+                    <p>Version <span id="application-version" class="loading-value is-loading" aria-busy="true">Loading…</span></p>
+                  </div>
+                  <div id="app-updates" hidden>
+                    <div class="action-row">
+                      <button class="secondary-button" id="check-app-updates">Check for Updates…</button>
+                      <button class="secondary-button" id="review-app-update" hidden>Review Update…</button>
+                    </div>
+                    <p id="app-updates-status" class="support-text" role="status"></p>
+                  </div>
                 </div>
+              </section>
+            </section>
+            <section id="settings-panel-providers" class="settings-panel" aria-labelledby="settings-tab-providers" hidden>
+              <section id="shared-chatgpt-section" class="app-settings-block" aria-labelledby="shared-chatgpt-heading">
+                <h3 id="shared-chatgpt-heading" tabindex="-1">ChatGPT for Codex</h3>
+                <p id="shared-chatgpt-email" class="support-text loading-value is-loading" aria-busy="true">Loading…</p>
+                <p id="shared-chatgpt-status" class="support-text" role="status">Loading the shared account…</p>
                 <div class="action-row">
                   <button class="primary-button" id="shared-chatgpt-sign-in" disabled>Sign in with ChatGPT</button>
                   <button class="secondary-button" id="shared-chatgpt-retry" hidden>Retry connection</button>
                   <button class="secondary-button" id="shared-chatgpt-disconnect" hidden>Sign out of Tugboat</button>
                   <button class="secondary-button" id="shared-chatgpt-cancel" hidden>Cancel sign-in</button>
                 </div>
-                <p id="shared-chatgpt-status" class="support-text" role="status">Loading the shared account…</p>
                 <div id="chatgpt-device-code-field" class="provider-device-code" hidden><label class="field-label" for="chatgpt-device-code">ChatGPT device code</label><input id="chatgpt-device-code" class="text-field" readonly autocomplete="off" spellcheck="false"></div>
-                <p id="shared-chatgpt-hint" class="support-text field-help" role="status"></p>
+                <p id="shared-chatgpt-hint" class="support-text" role="status"></p>
+                <div id="saved-chatgpt-accounts" hidden>
+                  <label class="field-label" for="saved-chatgpt-project">Saved project sign-in</label>
+                  <select id="saved-chatgpt-project" class="text-field"></select>
+                  <div class="action-row"><button class="secondary-button" id="use-saved-chatgpt" disabled>Use saved sign-in</button></div>
+                </div>
               </section>
-              <section id="claude-account-section" aria-labelledby="claude-account-heading">
-                <h4 id="claude-account-heading" class="group-title" tabindex="-1">Claude Code</h4>
-                <dl class="settings-group"><div><dt>Shared account</dt><dd id="claude-account-email" class="loading-value is-loading" aria-busy="true">Loading…</dd></div></dl>
-                <p class="support-text field-help">Sign in once for Claude Code in every project. Your account stays connected when environments stop.</p>
-                <div class="action-row"><button class="primary-button" id="claude-sign-in" disabled>Sign in with Claude</button><button class="secondary-button" id="claude-check-account" disabled>Check connection</button><button class="secondary-button" id="claude-sign-out" hidden>Sign out of Tugboat</button><button class="secondary-button" id="claude-cancel" hidden>Cancel sign-in</button></div>
+              <section id="claude-account-section" class="app-settings-block" aria-labelledby="claude-account-heading">
+                <h3 id="claude-account-heading" tabindex="-1">Claude Code</h3>
+                <p id="claude-account-email" class="support-text loading-value is-loading" aria-busy="true">Loading…</p>
                 <p id="claude-account-status" class="support-text" role="status">Loading the shared account…</p>
-                <p id="claude-sign-in-status" class="support-text field-help" role="status"></p>
+                <div class="action-row">
+                  <button class="primary-button" id="claude-sign-in" disabled>Sign in with Claude</button>
+                  <button class="secondary-button" id="claude-check-account" disabled>Check connection</button>
+                  <button class="secondary-button" id="claude-sign-out" hidden>Sign out of Tugboat</button>
+                  <button class="secondary-button" id="claude-cancel" hidden>Cancel sign-in</button>
+                </div>
+                <p id="claude-sign-in-status" class="support-text" role="status"></p>
               </section>
             </section>
             <form id="brig-settings">
             <fieldset id="settings-fields" class="loading-fields is-loading" aria-busy="true" disabled>
-            <section id="settings-panel-brig" class="settings-panel" aria-labelledby="settings-panel-brig-title" hidden>
-              <h3 class="pane-title" id="settings-panel-brig-title">Brig</h3>
+            <section id="settings-panel-brig" class="settings-panel" aria-labelledby="settings-tab-brig" hidden>
               <label class="field-label" for="cli-path">Brig CLI path <span>Leave blank to use the bundled Brig.</span></label>
               <input type="text" id="cli-path" class="text-field" spellcheck="false" autocomplete="off" placeholder="Bundled Brig">
               <label class="checkbox-field"><input type="checkbox" id="telemetry-preference"> Enable Brig usage telemetry</label>
               <p id="telemetry-status" class="support-text" role="status"></p>
             </section>
-            <section id="settings-panel-resources" class="settings-panel" aria-labelledby="settings-panel-resources-title" hidden>
-              <h3 class="pane-title" id="settings-panel-resources-title">Resources</h3>
-              <p class="pane-description">A project uses these values until you save its own values in Project settings → General.</p>
+            <section id="settings-panel-resources" class="settings-panel" aria-labelledby="settings-tab-resources" hidden>
+              <p class="pane-description">A project uses these values until you save its own values in Project settings → Configuration → General.</p>
               <div class="field-pair">
                 <div><label class="field-label" for="cpu-count">CPU count</label><input type="number" id="cpu-count" class="text-field" min="1" max="32" step="1" required value="4"></div>
                 <div><label class="field-label" for="memory-mb">Memory (MB)</label><input type="number" id="memory-mb" class="text-field" min="1024" max="65536" step="256" required value="4096"></div>
@@ -477,16 +552,15 @@
               <select id="network-preference" class="text-field" aria-describedby="network-hint"><option value="isolated">Access allowed by policy</option><option value="offline">Offline</option></select>
               <p id="network-hint" class="support-text field-help"></p>
             </section>
-            <section id="settings-panel-network" class="settings-panel" aria-labelledby="settings-panel-network-title" hidden>
-              <h3 class="pane-title" id="settings-panel-network-title">Network</h3>
+            <section id="settings-panel-network" class="settings-panel" aria-labelledby="settings-tab-network" hidden>
               <p class="pane-description">Tugboat writes these values to the project policy when it prepares a new project for the first time. Existing policies keep their saved host lists.</p>
-              <h4 class="group-title">Agent domains</h4>
+              <h3 class="group-title">Agent domains</h3>
               <label class="field-label" for="allowed-hosts">Default Codex destinations<span>Enter one host per line. Other guest command destinations are denied. Add hosts needed by guest tools.</span></label>
               <textarea id="allowed-hosts" class="text-field" rows="4" spellcheck="false"></textarea>
               <label class="field-label" for="claude-code-allowed-hosts">Default Claude Code destinations<span>Enter one host per line. Other guest command destinations are denied. Add hosts needed by guest tools.</span></label>
               <textarea id="claude-code-allowed-hosts" class="text-field" rows="4" spellcheck="false"></textarea>
               <p class="support-text field-help">New project policies combine these two host lists. Every project network section shows them as always allowed.</p>
-              <h4 class="group-title">Public internet access</h4>
+              <h3 class="group-title">Public internet access</h3>
               <div class="settings-rows">
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-network-public-internet">Enable all public internet access</label><p class="row-hint" id="default-network-public-internet-details">Off by default. Guest commands can reach any public destination.</p></div><input type="checkbox" role="switch" class="switch" id="default-network-public-internet" aria-describedby="default-network-public-internet-details"></div>
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-network-package-managers">Enable package manager domains</label><p class="row-hint" id="default-network-package-managers-details">Off by default. npm, Yarn, PyPI, crates.io, Go modules, Packagist and RubyGems registries.</p></div><input type="checkbox" role="switch" class="switch" id="default-network-package-managers" aria-describedby="default-network-package-managers-details"></div>
@@ -496,10 +570,9 @@
                 </div>
               </div>
             </section>
-            <section id="settings-panel-agents" class="settings-panel" aria-labelledby="settings-panel-agents-title" hidden>
-              <h3 class="pane-title" id="settings-panel-agents-title">Agents</h3>
-              <p class="pane-description">A new project starts with these agent options. Change them for one project in Project settings → Agents. An empty field keeps the agent's default.</p>
-              <h4 class="group-title">Claude Code</h4>
+            <section id="settings-panel-agents" class="settings-panel" aria-labelledby="settings-tab-agents" hidden>
+              <p class="pane-description">A new project starts with these agent options. Change them for one project in Project settings → Configuration → Agents. An empty field keeps the agent's default.</p>
+              <h3 class="group-title">Claude Code</h3>
               <div class="settings-rows">
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-claude-model">Model</label><p class="row-hint" id="default-claude-model-details">Adds --model with the full model ID.</p></div><select id="default-claude-model" class="text-field row-field" aria-describedby="default-claude-model-details" data-options-from="claude-model"></select></div>
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-claude-effort">Effort</label><p class="row-hint" id="default-claude-effort-details">Adds --effort. Claude Code lowers xhigh and max to high for models that do not support them.</p></div><select id="default-claude-effort" class="text-field row-field" aria-describedby="default-claude-effort-details" data-options-from="claude-effort"></select></div>
@@ -511,17 +584,13 @@
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-claude-auto-mode">Auto mode</label><p class="row-hint" id="default-claude-auto-mode-details">On by default. When off, chats use manual mode and ask before actions.</p></div><input type="checkbox" role="switch" class="switch" id="default-claude-auto-mode" aria-describedby="default-claude-auto-mode-details" checked></div>
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-claude-attribution">Commit and pull request attribution</label><p class="row-hint" id="default-claude-attribution-details">Off by default. When on, Claude Code can add its attribution to commits and pull requests.</p></div><input type="checkbox" role="switch" class="switch" id="default-claude-attribution" aria-describedby="default-claude-attribution-details"></div>
               </div>
-              <h4 class="group-title">Codex</h4>
+              <h3 class="group-title">Codex</h3>
               <div class="settings-rows">
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-codex-model">Model</label><p class="row-hint" id="default-codex-model-details">Adds --model.</p></div><select id="default-codex-model" class="text-field row-field" aria-describedby="default-codex-model-details" data-options-from="codex-model"></select></div>
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-codex-reasoning-effort">Reasoning effort</label><p class="row-hint" id="default-codex-reasoning-effort-details">GPT-6-Luna and GPT-5.6-Luna do not support Ultra. Adds -c model_reasoning_effort.</p></div><select id="default-codex-reasoning-effort" class="text-field row-field" aria-describedby="default-codex-reasoning-effort-details" data-options-from="codex-reasoning-effort"></select></div>
                 <div class="settings-row"><div class="row-text"><label class="row-label" for="default-codex-brig-boundary">Use the Brig boundary</label><p class="row-hint" id="default-codex-brig-boundary-details">On by default. When off, Codex uses its workspace sandbox with command network access disabled.</p></div><input type="checkbox" role="switch" class="switch" id="default-codex-brig-boundary" aria-describedby="default-codex-brig-boundary-details" checked></div>
               </div>
             </section>
-            <div id="settings-form-footer" class="settings-form-footer" hidden>
-              <button type="submit" class="primary-button" id="save-settings">Save settings</button>
-              <p id="settings-status" class="support-text" role="status"></p>
-            </div>
             </fieldset>
             </form>
             <section id="settings-panel-system-checks" class="settings-panel" aria-labelledby="settings-panel-system-checks-title" hidden>
@@ -531,14 +600,36 @@
               <dl id="host-tools" class="settings-group tool-paths"></dl>
               <details class="doctor-details"><summary>Brig doctor results</summary><ul id="host-doctor"></ul></details>
             </section>
-          </div>
-        </div>
+      </div>
+      <div id="settings-form-footer" class="settings-form-footer" hidden>
+        <p id="settings-status" class="support-text" role="status"></p>
+        <button type="submit" form="brig-settings" class="primary-button" id="save-settings" disabled>Save settings</button>
       </div>
     </section>
       </main>
-      <div id="workspace-status-bar" class="workspace-status-bar" role="status" aria-live="polite" aria-atomic="true" hidden>
-        <span class="workspace-status-indicator" aria-hidden="true"></span><span id="workspace-status-text"></span>
+      <div id="workspace-status-bar" class="workspace-status-bar" hidden>
+        <span id="workspace-status-text" role="status" aria-live="polite" aria-atomic="true"></span>
+        <button type="button" id="open-network-activity" class="secondary-button" aria-haspopup="dialog" aria-controls="network-activity-dialog" hidden>Network activity</button>
       </div>
+      <div class="network-activity-backdrop" aria-hidden="true"></div>
+      <section id="network-activity-dialog" class="session-usage-dialog" role="dialog" aria-labelledby="network-activity-heading" aria-describedby="network-activity-project" data-inline-modal hidden>
+        <header class="dialog-header"><h2 id="network-activity-heading">Network activity</h2><button type="button" id="close-network-activity" class="icon-button" aria-label="Close network activity"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
+        <div class="dialog-content">
+          <p id="network-activity-project" class="usage-session-title"></p>
+          <p id="network-activity-status" class="support-text" role="status"></p>
+          <p id="network-activity-incomplete" class="support-text" role="status" hidden>Recording is incomplete. Some connections or byte counts may be missing.</p>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Recorded connections" hidden>
+            <table class="data-table" aria-label="Recorded connections, newest first">
+              <thead><tr><th scope="col">Time</th><th scope="col">Direction</th><th scope="col">Started from</th><th scope="col">Process (PID)</th><th scope="col">Remote endpoint</th><th scope="col">Protocol</th><th scope="col">Result</th><th scope="col" class="number-column">Sent</th><th scope="col" class="number-column">Received</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="action-row network-activity-actions">
+            <button type="button" id="refresh-network-activity" class="secondary-button">Refresh</button>
+            <button type="button" id="older-network-activity" class="secondary-button" hidden>Load older activity</button>
+          </div>
+        </div>
+      </section>
       </div>
     </div>
     <dialog id="forget-project-dialog" aria-labelledby="forget-project-heading">
@@ -547,6 +638,16 @@
       <p class="support-text">Only the Tugboat library record will be removed. Project files, Brig environments, guest homes and saved usage stay on disk. To reconnect a moved folder, cancel and choose Add new project.</p>
       <p id="forget-project-error" class="error-message" role="alert"></p>
       <div class="action-row"><button id="cancel-forget-project" class="secondary-button">Cancel</button><button id="confirm-forget-project" class="secondary-button destructive-button">Forget record</button></div>
+    </dialog>
+    <dialog id="existing-records-dialog" aria-labelledby="existing-records-heading" aria-describedby="existing-records-description">
+      <h2 id="existing-records-heading">Use existing Tugboat records?</h2>
+      <pre id="existing-records-path"></pre>
+      <p id="existing-records-description" class="support-text">Tugboat can open these records after it restarts. Your current records stay in their folder. To move your current records, choose an empty folder.</p>
+      <div class="action-row">
+        <button type="button" class="secondary-button" id="cancel-existing-records" autofocus>Cancel</button>
+        <button type="button" class="secondary-button" id="move-current-records">Choose empty folder…</button>
+        <button type="button" class="primary-button" id="use-existing-records">Use existing records</button>
+      </div>
     </dialog>
     <dialog id="app-update-dialog" aria-labelledby="app-update-heading">
       <h2 id="app-update-heading">Tugboat Update</h2>
@@ -572,27 +673,46 @@
       <header class="dialog-header"><h2 id="session-usage-heading">Session usage</h2><button id="close-session-usage" class="icon-button" aria-label="Close session usage"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
       <div class="dialog-content"><p id="session-usage-title" class="usage-session-title"></p><p id="session-usage-status" class="support-text" role="status"></p><div id="session-usage-details"></div></div>
     </dialog>
+    <dialog id="project-usage-dialog" class="session-usage-dialog" aria-labelledby="project-usage-heading">
+      <header class="dialog-header"><h2 id="project-usage-heading">Project usage breakdown</h2><button id="close-project-usage" class="icon-button" aria-label="Close project usage breakdown" autofocus><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
+      <div class="dialog-content">
+        <div class="project-usage-controls">
+          <label for="project-usage-group"><span class="field-label">Group by</span><select id="project-usage-group" class="text-field"><option value="agentKind">Agent</option><option value="model">Model</option><option value="effort">Effort</option><option value="all">Agent, model and effort</option></select></label>
+          <label for="project-usage-sort"><span class="field-label">Sort by</span><select id="project-usage-sort" class="text-field"><option value="tokens">Total tokens (highest first)</option><option value="cost">Estimated cost (highest first)</option><option value="group">Group name</option><option value="agentKind" hidden disabled>Agent</option><option value="model" hidden disabled>Model</option><option value="effort" hidden disabled>Effort</option></select></label>
+        </div>
+        <p id="project-usage-status" class="support-text" role="status" hidden></p>
+        <button id="retry-project-usage" class="secondary-button" hidden>Retry</button>
+        <div id="project-usage-results" hidden>
+          <h3 id="project-usage-chart-heading">Share of measured tokens</h3>
+          <ul id="project-usage-chart" role="list" aria-labelledby="project-usage-chart-heading" tabindex="0"></ul>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Project usage by group">
+            <table class="data-table usage-scope-table project-usage-table" aria-label="Project usage by group"><thead><tr></tr></thead><tbody></tbody></table>
+          </div>
+        </div>
+      </div>
+    </dialog>
     <template id="prompt-usage-template">
       <section class="turn-usage">
-        <h3></h3>
-        <div class="table-scroll" tabindex="0" role="group">
-          <table class="data-table request-usage">
-            <thead>
-              <tr>
-                <th scope="col">Model</th>
-                <th scope="col">Input</th>
-                <th scope="col">Cached input</th>
-                <th scope="col">Cache writes</th>
-                <th scope="col">Output</th>
-                <th scope="col">Estimated API equivalent</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-            <tfoot>
-              <tr><th scope="row" colspan="5">Total estimated API equivalent</th><td></td></tr>
-            </tfoot>
-          </table>
-        </div>
+        <details class="usage-disclosure usage-turn">
+          <summary><span class="usage-turn-heading"></span><span class="usage-turn-metrics"><span class="usage-turn-count"></span><span class="usage-turn-total"></span></span></summary>
+          <div class="usage-disclosure-body">
+            <div class="table-scroll" tabindex="0" role="group">
+              <table class="data-table request-usage">
+                <thead>
+                  <tr>
+                    <th scope="col">Model</th>
+                    <th scope="col">Input</th>
+                    <th scope="col">Cached input</th>
+                    <th scope="col">Cache writes</th>
+                    <th scope="col">Output</th>
+                    <th scope="col">Estimated API equivalent</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </details>
       </section>
     </template>
     <dialog id="removal-dialog" aria-labelledby="removal-heading">

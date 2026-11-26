@@ -25,23 +25,49 @@ function toggle(harness, id) {
   choice.dispatchEvent(new harness.dom.window.Event('change'));
 }
 
-test('the left menu shows one section at a time and opens on the overview', async t => {
+test('project settings shows one section at a time and opens on the overview', async t => {
   const harness = await setup(t, { read_project_policy: () => policy(closed), read_agent_settings: () => ({ claude: { permissionMode: 'auto', attribution: 'hidden' }, codex: { boundary: 'brig' } }) });
-  const panes = [...harness.element('project-settings-dialog').querySelectorAll('.settings-pane')];
-  const tabs = [...harness.element('project-settings-dialog').querySelectorAll('[data-settings-pane]')];
-  assert.deepEqual(tabs.map(tab => tab.textContent), ['Overview', 'General', 'Agents', 'Network', 'GitHub', 'Web preview', 'Guest image', 'Environment']);
+  const dialog = harness.element('project-settings-dialog');
+  const panes = [...dialog.querySelectorAll('.settings-pane')];
+  const [overview, configuration, connections, environment] = dialog.querySelectorAll('.settings-nav button');
+  assert.deepEqual([overview, configuration, connections, environment].map(button => button.textContent), ['Overview', 'Configuration', 'Connections', 'Environment']);
+  assert.equal(harness.element('project-settings-name').textContent, project.name);
   assert.deepEqual(panes.filter(item => item.open).map(item => item.id), ['project-setup-overview']);
-  assert.equal(tabs[0].getAttribute('aria-current'), 'true');
+  assert.equal(overview.getAttribute('aria-current'), 'true');
+  configuration.click();
+  assert.equal(harness.element('project-resources').open, true);
+  assert.equal(harness.element('project-configuration-nav').hidden, false);
+  connections.click(); await flush();
   pane(harness, 'project-network-settings'); await flush();
   assert.deepEqual(panes.filter(item => item.open).map(item => item.id), ['project-network-settings']);
-  assert.equal(tabs[3].getAttribute('aria-current'), 'true');
-  assert.equal(tabs[0].getAttribute('aria-current'), 'false');
-  harness.element('project-github-access').open = true; await flush();
-  assert.deepEqual(panes.filter(item => item.open).map(item => item.id), ['project-github-access']);
-  assert.equal(tabs[4].getAttribute('aria-current'), 'true');
+  assert.equal(connections.getAttribute('aria-current'), 'true');
+  assert.equal(harness.element('project-configuration-nav').hidden, true);
+  assert.equal(overview.getAttribute('aria-current'), 'false');
+  harness.element('project-image-update').open = true; await flush();
+  assert.deepEqual(panes.filter(item => item.open).map(item => item.id), ['project-image-update']);
+  assert.equal(environment.getAttribute('aria-current'), 'true');
+  assert.equal(harness.element('project-environment-nav').hidden, false);
   harness.element('close-project-settings').click(); await flush();
   harness.element('project-settings-button').click(); await flush();
   assert.deepEqual(panes.filter(item => item.open).map(item => item.id), ['project-setup-overview']);
+});
+
+test('cancelling GitHub access returns to the overview and restores focus', async t => {
+  const harness = await setup(t, { read_project_policy: () => policy(closed) });
+  const dialog = harness.element('project-settings-dialog');
+  dialog.querySelector('[data-settings-group="project-network-settings"]').click(); await flush();
+  pane(harness, 'project-github-access'); await flush();
+  const guide = harness.element('project-github-access').querySelector('.pane-guide');
+  assert.equal(guide.open, false);
+  guide.open = true; await flush();
+  assert.equal(harness.element('project-github-access').open, true);
+  const cancel = harness.element('cancel-project-github');
+  cancel.focus();
+  cancel.click(); await flush();
+  const overview = dialog.querySelector('[data-settings-pane="project-setup-overview"]');
+  assert.equal(harness.element('project-github-access').open, false);
+  assert.equal(harness.element('project-setup-overview').open, true);
+  assert.equal(harness.dom.window.document.activeElement, overview);
 });
 
 test('opening Network reads the policy and shows the three access options', async t => {
@@ -216,5 +242,6 @@ test('a rename keeps the running environment and its processes', async t => {
   assert.ok(commands.includes('save_project_preferences'));
   for (const command of ['project_environment_running', 'stop_project', 'prepare_project', 'prepare_environment']) assert.equal(commands.includes(command), false, command);
   assert.equal(harness.element('project-heading').textContent, 'Renamed project');
+  assert.equal(harness.element('project-settings-name').textContent, 'Renamed project');
   assert.equal(harness.element('project-preferences-status').textContent, 'Project settings saved.');
 });

@@ -142,7 +142,7 @@ An agent turn without recorded request usage has unknown token counts and API co
 
 These USD amounts are token API equivalents, separate from subscription charges, account discounts, server-tool charges, and taxes. They are not an invoice. Recorded supported Anthropic inference geography is included. Stored request prices do not change when a future build updates the catalogue. The reader records whether a tier came from a request, applied session settings, the turn context, or an assumption. A correction uses the original dated price snapshot and retains the previous rates and cost as evidence. It does not count the request again. Missing source files or historical rates remain explicit.
 
-The current SQLite schema is version 2. Tugboat verifies the dataset, publishes a private empty database for new records, and advances the records marker to version 2. The database uses permission `0600` inside a private `0700` records folder.
+The current SQLite schema is version 3. Tugboat verifies the dataset, publishes a private empty database for new records, and advances the records marker to version 2. The database uses permission `0600` inside a private `0700` records folder.
 
 
 After activation, saved Claude pricing policy version 1 runs before the first dashboard, details, or live usage read for that environment. It also runs offline. It processes selected and historical records, including unavailable and excluded records, without starting a guest or reading a transcript. Changed prices, correction evidence, summaries, and the policy version commit together. A failed commit leaves the policy pending and publishes no new price. Repeated reads skip a completed policy. Valid historical tariffs remain in use. Later source replay can attach proven identities or correct proven amounts without counting a request again. Amount corrections remain separate from rate and provider corrections.
@@ -192,7 +192,7 @@ Boundary checks target the selected environment. They select comparison hosts fr
 
 The installed app stores records in `~/Library/Application Support/Tugboat` by default. In **Settings → Records folder**, choose an empty folder and select **Restart Tugboat**. The project registry, settings, provider records, and closed usage database move together. Tugboat verifies the copy and commits the new location before cleaning the old records.
 
-`Application Support/Tugboat/storage-location.json` remembers the selected folder and any pending move; a separate lock file prevents concurrent instances from changing the same records. When a custom folder is active, other Tugboat records reside there. **Use default folder** schedules a move back. Missing drives never create an empty replacement dataset. Connect the drive and restart, or use **Locate records folder…** to find the same records at a new path. Failed and interrupted moves retain the original records and retry on a later launch. Partial copies cannot be selected as active records.
+`Application Support/Tugboat/storage-location.json` remembers the selected folder and the pending change. Tugboat locks the location pointer and the active records folder. Select **Use existing records** to open a verified dataset after restart. Both datasets stay in place. Select **Choose empty folder…** to move your current records. **Use default folder** follows the same steps. Missing drives never create an empty replacement dataset. Connect the drive and restart, or use **Locate records folder…** to find the same records at a new path. Failed and interrupted moves retain the original records and retry on a later launch. Partial copies cannot be selected as active records.
 
 Earlier directory markers are upgraded using the saved location transaction. The committed active folder remains available without changing project or settings files. Unselected older copies still require proof of completion before they can be used as active records.
 
@@ -288,7 +288,7 @@ This check creates one disposable guest with a shared home, a deny-by-default po
 
 ### Application icon
 
-The logo source is [src-tauri/icons/brig-desktop.svg](src-tauri/icons/brig-desktop.svg). Rebuild the native macOS icon assets with:
+The macOS app uses the [1024 × 1024 shield logo](tugboat-logo-1024.png). Rebuild its icon assets with the following command.
 
 ```sh
 npm run icon:build
@@ -319,7 +319,7 @@ This command requires Xcode with Icon Composer. Rebuild the app bundle to includ
 
 The build generates `Tugboat.app/Contents/Resources/licenses/THIRD-PARTY-NOTICES.txt`. Its index maps each component and version to its full notice texts. Components with identical texts share one copy.
 
-The adjacent `sources/e2fsprogs/` folder contains the exact source archive, build instructions, build script, and version information for the bundled disk tools. The Brig patch and its source information are in `sources/brig/`.
+The adjacent `sources/e2fsprogs/` folder contains the exact source archive, build instructions, build script, and version information for the bundled disk tools. The Brig patches and source pin are in `sources/brig/`. The notice file also covers the Linux guest probe used for network activity.
 
 Tauri generates these files before each bundle. To regenerate them separately, run `npm run native:prepare` and then `npm run licenses:bundle`. Output goes to `.build/licenses/`. Git keeps the [curated notice inputs](resources/license-supplements/) and the build scripts.
 

@@ -113,10 +113,10 @@ fn opening_an_active_v1_store_upgrades_once_and_keeps_session_keys() {
 #[test]
 fn automatic_usage_upgrade_preserves_unrecognized_or_inconsistent_databases() {
     for (setup, message) in [
-        ("PRAGMA user_version=3", "schema version"),
+        ("PRAGMA user_version=5", "schema version"),
         ("PRAGMA user_version=1; PRAGMA application_id=0", "another application"),
         ("PRAGMA user_version=1; UPDATE store_identity SET records_directory_id=lower(hex(randomblob(16)))", "different records folder"),
-        ("PRAGMA user_version=1; PRAGMA foreign_keys=OFF; INSERT INTO session_groups VALUES(11,7,'00000000-0000-4000-8000-000000000001',0)", "broken references"),
+        ("ALTER TABLE usage_requests DROP COLUMN effort; PRAGMA user_version=1; PRAGMA foreign_keys=OFF; INSERT INTO session_groups VALUES(11,7,'00000000-0000-4000-8000-000000000001',0)", "broken references"),
     ] {
         let fixture = Fixture::new();
         let (records, store) = fixture.store();
@@ -128,6 +128,83 @@ fn automatic_usage_upgrade_preserves_unrecognized_or_inconsistent_databases() {
         assert!(failure.contains(message), "{failure}");
         assert_eq!(fs::read(&path).unwrap(), original);
     }
+}
+
+#[test]
+fn usage_breakdown_upgrades_v2_without_changing_saved_prices() {
+    let fixture = Fixture::new();
+    let (records, mut store) = fixture.store();
+    let environment = environment(AgentKind::Codex);
+    let mut ledger = Ledger::default();
+    let mut saved = record();
+    saved.project_exclusion = None;
+    ledger.sessions.insert(SESSION.into(), saved);
+    store.save_environment(&environment, &ledger).unwrap();
+    store
+        .connection
+        .execute_batch("ALTER TABLE usage_requests DROP COLUMN effort; PRAGMA user_version=2;")
+        .unwrap();
+    drop(store);
+
+    let path = records.path().join("usage.sqlite3");
+    let before_move = fs::read(&path).unwrap();
+    assert!(move_support::recover(&records).unwrap().is_some());
+    assert_eq!(fs::read(path).unwrap(), before_move);
+
+    let upgraded = Store::open(&records).unwrap();
+    let rows = serde_json::to_value(upgraded.usage_breakdown(&environment).unwrap()).unwrap();
+    let measured = &rows[1];
+    assert_eq!(measured["model"], "removed-model");
+    assert!(measured["effort"].is_null());
+    assert_eq!(measured["usage"]["costUsd"], 0.12345678901234566);
+    assert_eq!(measured["usage"]["requests"], 1);
+    assert_eq!(rows[0]["usage"]["unmeasuredTurns"], 1);
+    upgraded.integrity_check().unwrap();
+}
+
+#[test]
+fn usage_breakdown_includes_historical_own_usage_and_excludes_other_projects() {
+    let fixture = Fixture::new();
+    let (_, mut store) = fixture.store();
+    let environment = environment(AgentKind::Codex);
+    let mut ledger = Ledger::default();
+    let excluded = record();
+    let mut selected = excluded.clone();
+    selected.project_exclusion = None;
+    let mut historical = selected.clone();
+    for request in &mut historical.turns.get_mut("bucket-differs").unwrap().requests {
+        request.effort = Some("high".into());
+        request.source.as_mut().unwrap().guest_namespace = "older-guest".into();
+    }
+    ledger.sessions.insert(SESSION.into(), selected);
+    ledger.variants.insert(
+        SESSION.into(),
+        BTreeMap::from([
+            ("excluded".into(), excluded),
+            ("older-guest".into(), historical),
+        ]),
+    );
+    store.save_environment(&environment, &ledger).unwrap();
+    let sibling = "22222222222222222222222222222222";
+    let sibling = Environment::new(
+        sibling.into(),
+        EnvironmentId::for_project(sibling),
+        AgentKind::Codex,
+    )
+    .unwrap();
+    store.save_environment(&sibling, &ledger).unwrap();
+
+    let rows = serde_json::to_value(store.usage_breakdown(&environment).unwrap()).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 3);
+    assert_eq!(rows[0]["usage"]["unmeasuredTurns"], 2);
+    for row in [&rows[1], &rows[2]] {
+        assert_eq!(row["agentKind"], "codex");
+        assert_eq!(row["model"], "removed-model");
+        assert_eq!(row["usage"]["total"], 118);
+        assert_eq!(row["usage"]["requests"], 1);
+    }
+    assert!(rows[1]["effort"].is_null());
+    assert_eq!(rows[2]["effort"], "high");
 }
 
 #[test]
@@ -158,7 +235,7 @@ fn exact_schema_and_all_fields_round_trip_after_reopen() {
                 |row| row.get::<_, i64>(0)
             )
             .unwrap(),
-        8
+        11
     );
     assert_eq!(
         store
@@ -169,7 +246,7 @@ fn exact_schema_and_all_fields_round_trip_after_reopen() {
                 |row| row.get::<_, i64>(0)
             )
             .unwrap(),
-        2
+        3
     );
     store.integrity_check().unwrap();
     store.close().unwrap();

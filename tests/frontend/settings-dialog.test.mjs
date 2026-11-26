@@ -4,7 +4,7 @@ import { flush, settings, interfaceHarness } from './frontend-harness.mjs';
 
 const saved = () => ({ recorded: 'off', effective: 'off', message: null });
 
-test('Settings opens as a modal with a section menu and closes back to the opening control', async t => {
+test('Settings groups its sections and returns focus to the opening control', async t => {
   const harness = await interfaceHarness();
   t.after(() => harness.dom.window.close());
   await harness.ready;
@@ -19,14 +19,28 @@ test('Settings opens as a modal with a section menu and closes back to the openi
   assert.equal(dialog.hasAttribute('inert'), false);
   assert.equal(document.activeElement, harness.element('settings-heading'));
   const menu = [...harness.element('settings-tabs').querySelectorAll('button')].map(button => button.textContent);
-  assert.deepEqual(menu, ['General', 'Providers', 'Brig', 'System Checks', 'Resources', 'Network', 'Agents']);
+  assert.deepEqual(menu, ['General', 'Accounts', 'New projects', 'System']);
   assert.equal(harness.element('settings-tab-general').getAttribute('aria-current'), 'true');
   assert.equal(harness.element('settings-panel-general').hidden, false);
+  assert.equal(harness.element('settings-project-tabs').hidden, true);
+  assert.equal(harness.element('settings-system-tabs').hidden, true);
   assert.equal(harness.element('settings-form-footer').hidden, true);
+  harness.element('settings-tab-new-projects').click();
+  assert.equal(harness.element('settings-tab-new-projects').getAttribute('aria-current'), 'true');
+  assert.equal(harness.element('settings-panel-resources').hidden, false);
+  assert.equal(harness.element('settings-project-tabs').hidden, false);
   harness.element('settings-tab-agents').click();
   assert.equal(harness.element('settings-panel-general').hidden, true);
   assert.equal(harness.element('settings-panel-agents').hidden, false);
   assert.equal(harness.element('settings-tab-general').getAttribute('aria-current'), 'false');
+  assert.equal(harness.element('settings-form-footer').hidden, false);
+  harness.element('settings-tab-system').click();
+  assert.equal(harness.element('settings-project-tabs').hidden, true);
+  assert.equal(harness.element('settings-system-tabs').hidden, false);
+  assert.equal(harness.element('settings-panel-system-checks').hidden, false);
+  assert.equal(harness.element('settings-form-footer').hidden, true);
+  harness.element('settings-tab-brig').click();
+  assert.equal(harness.element('settings-panel-brig').hidden, false);
   assert.equal(harness.element('settings-form-footer').hidden, false);
   dialog.dispatchEvent(new harness.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await flush();
   assert.equal(dialog.hidden, true);
@@ -66,6 +80,7 @@ test('project defaults start with the agent defaults when settings leave them ou
     assert.ok(copied(from, to), to);
   }
   harness.element('settings-navigation').click(); await flush();
+  harness.element('settings-tab-new-projects').click();
   harness.element('settings-tab-agents').click();
   harness.element('save-settings').click(); await flush();
   const request = harness.calls.find(call => call.command === 'save_settings');
@@ -100,6 +115,7 @@ test('saved project defaults load into their sections and a save sends the edite
   assert.equal(harness.element('default-network-public-internet').checked, true);
   assert.equal(harness.element('default-network-hosts').value, 'api.example.com');
   harness.element('settings-navigation').click(); await flush();
+  harness.element('settings-tab-new-projects').click();
   harness.element('settings-tab-agents').click();
   const codexModel = harness.element('default-codex-model');
   codexModel.value = 'gpt-6-luna'; codexModel.dispatchEvent(new harness.dom.window.Event('change'));
@@ -137,7 +153,8 @@ test('an invalid resource value clears the previous save result and opens Resour
   t.after(() => harness.dom.window.close());
   await harness.ready;
   harness.element('settings-navigation').click(); await flush();
-  harness.element('settings-tab-agents').click();
+  harness.element('settings-tab-system').click();
+  harness.element('settings-tab-brig').click();
   const save = harness.element('save-settings');
   const cpuCount = harness.element('cpu-count');
   const status = harness.element('settings-status');
@@ -145,6 +162,8 @@ test('an invalid resource value clears the previous save result and opens Resour
   assert.equal(status.textContent, 'Settings saved.');
   cpuCount.value = '0';
   save.click();
+  assert.equal(harness.element('settings-tab-new-projects').getAttribute('aria-current'), 'true');
+  assert.equal(harness.element('settings-system-tabs').hidden, true);
   assert.equal(harness.element('settings-panel-resources').hidden, false);
   assert.equal(harness.element('settings-tab-resources').getAttribute('aria-current'), 'true');
   assert.equal(harness.dom.window.document.activeElement, cpuCount);

@@ -8,7 +8,7 @@ fn a_temporary_name_collision_preserves_the_existing_file() {
     let file = root.join("record.json");
     let temporary = root.join("foreign.tmp");
     fs::write(&temporary, b"foreign temporary").unwrap();
-    assert!(write_staged_bytes(&file, b"new record", temporary.clone()).is_err());
+    assert!(write_staged_bytes(&file, b"new record", temporary.clone(), 0o600).is_err());
     assert_eq!(fs::read(&temporary).unwrap(), b"foreign temporary");
     assert!(!file.exists());
     fs::remove_dir_all(root).unwrap();

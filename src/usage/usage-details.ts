@@ -70,7 +70,7 @@ function requestLink(ref: RequestRef | TurnRef, agents: AgentUsageDetails[]): HT
   link.addEventListener('click', event => {
     const target = document.getElementById(id); if (!target) return;
     event.preventDefault();
-    let disclosure = target.closest('details');
+    let disclosure = target.querySelector<HTMLDetailsElement>('details.usage-turn') ?? target.closest('details');
     while (disclosure) { disclosure.open = true; disclosure = disclosure.parentElement?.closest('details') ?? null; }
     target.focus({ preventScroll: true }); target.scrollIntoView?.({ block: 'nearest' });
   });
@@ -91,17 +91,23 @@ function appendPromptAttribution(section: HTMLElement, prompt: PromptUsage, deta
   appendReferences(section, prompt.requestRefs, prompt.unmeasuredTurnRefs, details.agents);
 }
 
-function turnSection(turn: TurnUsage, index: number, agent: AgentUsageDetails, promptLabel: boolean, headingLevel: 'h3' | 'h4' = 'h3'): HTMLElement {
+function turnSection(turn: TurnUsage, index: number, agent: AgentUsageDetails, promptLabel: boolean): HTMLElement {
   const template = document.querySelector<HTMLTemplateElement>('#prompt-usage-template')!;
   const fragment = document.importNode(template.content, true);
   const section = fragment.querySelector('section')!;
   section.id = turnIdentity({ sessionId: agent.sessionId, turnId: turn.id }); section.tabIndex = -1; section.dataset.agentTurn = agent.sessionId; section.dataset.usageFocusKey = section.id;
-  const oldHeading = section.querySelector('h3')!;
-  const heading = document.createElement(headingLevel); heading.id = identity('heading', agent.sessionId, turn.id);
-  heading.textContent = (promptLabel ? 'Prompt ' : 'Agent turn ') + (index + 1) + ' · ' + turn.status; oldHeading.replaceWith(heading);
+  const disclosure = section.querySelector('details')!;
+  disclosure.dataset.usageDisclosureKey = section.id;
+  const summary = disclosure.querySelector('summary')!; summary.dataset.usageFocusKey = section.id + '-summary';
+  const heading = summary.querySelector<HTMLElement>('.usage-turn-heading')!;
+  heading.id = identity('heading', agent.sessionId, turn.id);
+  heading.textContent = (promptLabel ? 'Prompt ' : 'Agent turn ') + (index + 1) + ' · ' + turn.status;
+  section.setAttribute('aria-labelledby', heading.id);
+  const requestCount = summary.querySelector('.usage-turn-count')!;
+  requestCount.textContent = turn.requests.length ? quantity(turn.requests.length, 'request') : 'No measured requests';
   if (!turn.requests.length) {
     section.querySelector('.table-scroll')!.remove();
-    section.append(note('No request usage was recorded for this ' + (promptLabel ? 'prompt' : 'agent turn') + '. Token counts and the estimated API equivalent are unknown.'));
+    section.querySelector('.usage-disclosure-body')!.append(note('No request usage was recorded for this ' + (promptLabel ? 'prompt' : 'agent turn') + '. Token counts and the estimated API equivalent are unknown.'));
     return section;
   }
   const table = section.querySelector('table')!; table.setAttribute('aria-labelledby', heading.id);
@@ -112,8 +118,44 @@ function turnSection(turn: TurnUsage, index: number, agent: AgentUsageDetails, p
     if (request.costUsd === null) usage.unpricedRequests++;
     else usage.costUsd += request.costUsd;
   }
-  renderMoney(table.tFoot!.querySelector('td')!, usage);
+  const total = summary.querySelector<HTMLElement>('.usage-turn-total')!;
+  total.title = 'Estimated API equivalent for recorded requests in this turn';
+  renderMoney(total, usage);
   return section;
+}
+
+function usageDisclosure(label: string, key: string): HTMLDetailsElement {
+  const disclosure = document.createElement('details');
+  disclosure.className = 'usage-disclosure';
+  disclosure.dataset.usageDisclosureKey = key;
+  const summary = document.createElement('summary'); summary.textContent = label; summary.dataset.usageFocusKey = key + '-summary';
+  disclosure.append(summary);
+  return disclosure;
+}
+
+function sessionTotals(usage: UsageSummary): DocumentFragment {
+  const totals = document.createElement('dl'); totals.className = 'session-usage-totals'; totals.setAttribute('aria-label', 'Total recorded session usage');
+  const breakdownValues = document.createElement('dl'); breakdownValues.className = 'session-token-breakdown-values';
+  const metrics: [HTMLDListElement, string, string | null][] = [
+    [totals, 'Total tokens', usageCount(usage, 'total')],
+    [totals, 'Estimated API equivalent', null],
+    [breakdownValues, 'Input', usageCount(usage, 'input')],
+    [breakdownValues, 'Cached input', cachedCount(usage)],
+    [breakdownValues, 'Cache writes', cacheWrites(usage)],
+    [breakdownValues, 'Output', usageCount(usage, 'output')],
+  ];
+  for (const [list, label, value] of metrics) {
+    const term = document.createElement('dt'); term.textContent = label;
+    const amount = document.createElement('dd'); amount.textContent = value;
+    if (value === null) renderMoney(amount, usage);
+    const field = document.createElement('div'); field.append(term, amount); list.append(field);
+  }
+  const breakdown = usageDisclosure('Token breakdown', 'session-token-breakdown');
+  breakdown.classList.add('session-token-breakdown');
+  breakdown.open = true;
+  breakdown.append(breakdownValues);
+  const summary = document.createDocumentFragment(); summary.append(totals, breakdown);
+  return summary;
 }
 
 function scopeTable(details: ConversationUsageDetails, selected: AgentUsageDetails): HTMLElement {
@@ -134,20 +176,30 @@ function scopeTable(details: ConversationUsageDetails, selected: AgentUsageDetai
 
 export function usageDetailsStatus(details: ConversationUsageDetails): string {
   const selected = details.agents.find(agent => agent.sessionId === details.sessionId)!;
-  const agentTurns = selected.lineage.kind === 'subagent' || selected.agentKind === 'claude-code';
-  const base = !details.agentTurnCount ? (agentTurns ? 'No agent turns have been recorded for this session yet.' : 'No prompts have been recorded for this session yet.') : details.combinedUsage.requests ? 'Recorded after each response. Available prices are retained with each request.' : (agentTurns ? 'Agent turns are recorded, but no request usage is available. Token counts and the estimated API equivalent are unknown.' : 'Prompts are recorded, but no request usage is available. Token counts and the estimated API equivalent are unknown.');
-  const messages = [base];
-  if (agentTurns || details.agents.length > 1 || details.userPromptCount !== null) {
-    messages.push(details.userPromptCount === null ? 'User prompt count unknown.' : count(details.userPromptCount) + ' user prompt(s).');
-    messages.push(count(details.agentTurnCount) + ' agent turn(s).');
-    messages.push('Recorded source coverage: ' + details.coverage + '.');
+  const messages = [...details.warnings];
+  if (!details.agentTurnCount) messages.unshift('No ' + (usesPromptLabels(selected) ? 'prompts' : 'agent turns') + ' have been recorded for this session yet.');
+  if (details.agentTurnCount && !details.combinedUsage.requests) {
+    messages.unshift((usesPromptLabels(selected) ? 'Prompts' : 'Agent turns') + ' are recorded, but no request usage is available. Token counts and the estimated API equivalent are unknown.');
   }
+  return messages.join(' ');
+}
+
+function usesPromptLabels(agent: AgentUsageDetails): boolean { return agent.lineage.kind !== 'subagent' && agent.agentKind !== 'claude-code'; }
+
+function quantity(value: number, unit: string): string { return count(value) + ' ' + unit + (value === 1 ? '' : 's'); }
+
+function recordingNotes(details: ConversationUsageDetails, selected: AgentUsageDetails): HTMLDetailsElement {
+  const messages = [details.userPromptCount === null ? 'User prompt count unknown.' : quantity(details.userPromptCount, 'user prompt') + '.', quantity(details.agentTurnCount, 'agent turn') + '.'];
+  messages.push(details.coverage === 'partial' ? 'Saved records may omit requests or turns.' : 'Recorded source coverage is ' + details.coverage + '.');
   if (selected.lineage.kind === 'subagent') messages.push('Selected agent subtree only' + (details.rootSessionId ? '; ancestor main session is excluded.' : '; main session could not be established.'));
-  if (details.combinedUsage.unmeasuredTurns) messages.push(count(details.combinedUsage.unmeasuredTurns) + ' agent turn(s) have unknown token counts and an unknown API equivalent.');
+  const unmeasured = details.combinedUsage.unmeasuredTurns;
+  if (unmeasured) messages.push(quantity(unmeasured, 'agent turn') + (unmeasured === 1 ? ' has' : ' have') + ' unknown token counts and an unknown API equivalent.');
   const claude = details.agents.some(agent => agent.agentKind === 'claude-code');
   messages.push(claude ? 'Estimated API equivalent in USD. Estimates use saved rates and labelled assumptions. Subscription charges, account discounts, and server-tool charges are separate.' : 'Estimated API equivalent in USD. ChatGPT subscription billing is separate.');
-  messages.push(...details.warnings);
-  return messages.join(' ');
+  const disclosure = usageDisclosure('Recording and billing notes', 'recording-notes');
+  const paragraph = note(messages.join(' '), 'support-text usage-disclosure-body'); paragraph.id = 'session-usage-notes';
+  disclosure.append(paragraph);
+  return disclosure;
 }
 
 function preserveUsageView(content: HTMLElement): () => void {
@@ -158,7 +210,7 @@ function preserveUsageView(content: HTMLElement): () => void {
   const scrollTop = panel?.scrollTop ?? 0;
   const scrolls = new Map([...content.querySelectorAll<HTMLElement>('.table-scroll[data-usage-focus-key]')].map(group => [group.dataset.usageFocusKey!, [group.scrollLeft, group.scrollTop]]));
   return () => {
-    for (const disclosure of content.querySelectorAll<HTMLDetailsElement>('[data-usage-disclosure-key]')) disclosure.open = disclosures.get(disclosure.dataset.usageDisclosureKey!) ?? false;
+    for (const disclosure of content.querySelectorAll<HTMLDetailsElement>('[data-usage-disclosure-key]')) disclosure.open = disclosures.get(disclosure.dataset.usageDisclosureKey!) ?? disclosure.open;
     if (focusedKey && document.hasFocus() && document.activeElement === document.body) {
       const target = [...content.querySelectorAll<HTMLElement>('[data-usage-focus-key]')].find(element => element.dataset.usageFocusKey === focusedKey) ?? document.getElementById('close-session-usage');
       target?.focus({ preventScroll: true });
@@ -175,13 +227,23 @@ export function renderUsageDetails(details: ConversationUsageDetails): void {
   const restore = content.dataset.usageSessionId === details.sessionId ? preserveUsageView(content) : () => {};
   const selected = details.agents.find(agent => agent.sessionId === details.sessionId)!;
   const report = document.createDocumentFragment();
-  if (details.agents.length > 1) report.append(scopeTable(details, selected));
-  const promptLabel = selected.lineage.kind !== 'subagent' && selected.agentKind !== 'claude-code';
-  for (const [index, turn] of selected.turns.entries()) {
-    const section = turnSection(turn, index, selected, promptLabel);
-    const prompt = details.prompts.find(prompt => prompt.turnId === turn.id);
-    if (promptLabel && prompt) appendPromptAttribution(section, prompt, details);
-    report.append(section);
+  if (details.combinedUsage.requests || details.combinedUsage.unmeasuredTurns) report.append(sessionTotals(details.combinedUsage));
+  if (details.agents.length > 1) {
+    const comparison = usageDisclosure('Usage by agent', 'agent-usage-comparison');
+    const table = scopeTable(details, selected); table.classList.add('usage-comparison-table');
+    comparison.append(table); report.append(comparison);
+  }
+  const promptLabel = usesPromptLabels(selected);
+  if (selected.turns.length) {
+    const history = document.createElement('section'); history.className = 'usage-history';
+    const heading = document.createElement('h3'); heading.textContent = promptLabel ? 'Prompts' : 'Agent turns'; history.append(heading);
+    for (const [index, turn] of selected.turns.entries()) {
+      const section = turnSection(turn, index, selected, promptLabel);
+      const prompt = details.prompts.find(prompt => prompt.turnId === turn.id);
+      if (promptLabel && prompt) appendPromptAttribution(section.querySelector('.usage-disclosure-body')!, prompt, details);
+      history.append(section);
+    }
+    report.append(history);
   }
   if (!promptLabel && details.prompts.length) {
     const section = document.createElement('section'); section.className = 'turn-usage';
@@ -198,12 +260,13 @@ export function renderUsageDetails(details: ConversationUsageDetails): void {
     const section = document.createElement('section'); section.className = 'turn-usage';
     const heading = document.createElement('h3'); heading.textContent = 'Subagents'; section.append(heading);
     for (const agent of details.agents.filter(agent => agent.sessionId !== details.sessionId)) {
-      const disclosure = document.createElement('details'); disclosure.className = 'advanced-actions usage-agent'; disclosure.id = identity('agent', agent.sessionId); disclosure.dataset.usageDisclosureKey = agent.sessionId;
-      const summary = document.createElement('summary'); summary.textContent = agentName(agent); summary.dataset.usageFocusKey = identity('agent-summary', agent.sessionId); disclosure.append(summary);
-      disclosure.append(note(summaryText(agent.ownUsage)));
-      disclosure.append(note('Parent: ' + (agent.lineage.parentSessionId ?? 'unknown') + ' · Relationship: ' + agent.relationStatus + ' · Recorded source coverage: ' + agent.coverage + (agent.available ? '' : ' · Session file unavailable')));
-      for (const [index, turn] of agent.turns.entries()) disclosure.append(turnSection(turn, index, agent, false, 'h4'));
-      if (!agent.turns.length) disclosure.append(note('No agent turns have been recorded.'));
+      const disclosure = usageDisclosure(agentName(agent), identity('agent', agent.sessionId)); disclosure.classList.add('usage-agent'); disclosure.id = disclosure.dataset.usageDisclosureKey!;
+      const body = document.createElement('div'); body.className = 'usage-disclosure-body';
+      body.append(note(summaryText(agent.ownUsage)));
+      body.append(note('Parent: ' + (agent.lineage.parentSessionId ?? 'unknown') + ' · Relationship: ' + agent.relationStatus + ' · Recorded source coverage: ' + agent.coverage + (agent.available ? '' : ' · Session file unavailable')));
+      for (const [index, turn] of agent.turns.entries()) body.append(turnSection(turn, index, agent, false));
+      if (!agent.turns.length) body.append(note('No agent turns have been recorded.'));
+      disclosure.append(body);
       section.append(disclosure);
     }
     report.append(section);
@@ -215,5 +278,6 @@ export function renderUsageDetails(details: ConversationUsageDetails): void {
     section.append(note(summaryText(details.unassigned.usage)));
     appendReferences(section, details.unassigned.requestRefs, details.unassigned.unmeasuredTurnRefs, details.agents); report.append(section);
   }
+  if (report.childNodes.length) report.append(recordingNotes(details, selected));
   content.replaceChildren(report); content.dataset.usageSessionId = details.sessionId; restore();
 }

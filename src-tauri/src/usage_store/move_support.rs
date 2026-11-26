@@ -37,7 +37,8 @@ pub(crate) fn recover(records: &RecordsDirectory) -> Result<Option<Snapshot>, St
     if records.schema_version()? == 1 && !path.try_exists().map_err(error)? {
         return Ok(None);
     }
-    let store = Store::open(records)?;
+    // Cleanup compares the original and copied bytes after an interrupted move.
+    let store = Store::open_for_move(records)?;
     store.integrity_check()?;
     store.close()?;
     records.verify()?;
@@ -167,7 +168,7 @@ fn verify_identity(database: &Connection, expected_identity: &str) -> Result<(),
     let version: i64 = database
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(error)?;
-    if application != APPLICATION_ID || version != SCHEMA_VERSION {
+    if application != APPLICATION_ID || !(1..=SCHEMA_VERSION).contains(&version) {
         return Err("The copied usage database has a different application or schema.".into());
     }
     let identity: String = database

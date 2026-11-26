@@ -105,7 +105,7 @@ export function renderDashboard(dashboard: Dashboard, state: SessionState, resum
   renderSessionRows(unlinkedBody, unlinked, state, resume, change, details, busy, true, unverified);
   const status = document.getElementById('dashboard-session-status')!;
   const warning = dashboard.warnings?.filter(message => !unverified || message !== savedSessionsStatus).join(' ');
-  status.textContent = warning || (sessions.length || unverified ? '' : state === 'active' ? 'No sessions yet. Start a New Chat to begin.' : state === 'archived' ? 'No archived sessions. Archive a session to keep it out of the main list.' : 'Trash is empty. Deleted sessions can be restored here.');
+  status.textContent = warning || (sessions.length || unverified ? '' : { active: 'No active sessions.', archived: 'No archived sessions.', deleted: 'Trash is empty.' }[state]);
   status.hidden = (sessions.length > 0 || unverified) && !warning;
   document.getElementById('session-table')!.hidden = sessions.length === 0;
   for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-session-state]')) tab.setAttribute('aria-pressed', String(tab.dataset.sessionState === state));

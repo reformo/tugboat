@@ -8,8 +8,8 @@ use std::path::Path;
 mod record;
 mod request;
 pub(crate) use record::{
-    insert_record, read_cursors, read_record, read_record_metadata, update_record_metadata,
-    write_rollup,
+    insert_record, read_cursors, read_record, read_record_metadata, read_turns,
+    update_record_metadata, write_rollup,
 };
 pub(crate) use request::{insert_request, read_request, request_upsert};
 

@@ -31,6 +31,7 @@ struct Binding {
     inode: u64,
     directory_device: u64,
     directory_inode: u64,
+    schema_version: i64,
     prepared_codex: HashSet<i64>,
     recovery: RecoveryState,
 }
@@ -42,10 +43,14 @@ pub(crate) struct Store {
 
 impl Store {
     pub(crate) fn open(records: &RecordsDirectory) -> Result<Self, String> {
-        Self::open_at(records, &records.path().join("usage.sqlite3"))
+        Self::open_at(records, &records.path().join("usage.sqlite3"), true)
     }
 
-    pub(crate) fn open_at(records: &RecordsDirectory, path: &Path) -> Result<Self, String> {
+    pub(super) fn open_for_move(records: &RecordsDirectory) -> Result<Self, String> {
+        Self::open_at(records, &records.path().join("usage.sqlite3"), false)
+    }
+
+    fn open_at(records: &RecordsDirectory, path: &Path, upgrade: bool) -> Result<Self, String> {
         let directory = verified_directory(records)?;
         if path.parent() != Some(records.path()) {
             return Err("The usage database is outside its verified records folder.".into());
@@ -53,13 +58,13 @@ impl Store {
         let before = regular(path)?;
         verify_journal(path)?;
         let mut connection = open_existing(path)?;
-        let version = schema::verified_version(&connection, records)?;
+        let mut version = schema::verified_version(&connection, records)?;
         let after = regular(path)?;
         if before.dev() != after.dev() || before.ino() != after.ino() {
             return Err("The usage database changed while opening it. Reconnect the original records folder.".into());
         }
         require_same_directory(records, &directory)?;
-        if version == 1
+        if version != SCHEMA_VERSION
             && (path != records.path().join("usage.sqlite3")
                 || after.nlink() != 1
                 || records.schema_version()? != 2)
@@ -67,8 +72,9 @@ impl Store {
             return Err("Only the active usage database can be upgraded.".into());
         }
         configure(&connection)?;
-        if version == 1 {
-            schema::upgrade_identity(&mut connection, records)?;
+        if upgrade && version != SCHEMA_VERSION {
+            schema::upgrade(&mut connection, records)?;
+            version = SCHEMA_VERSION;
         }
         let store = Self {
             connection,
@@ -79,6 +85,7 @@ impl Store {
                 inode: after.ino(),
                 directory_device: directory.dev(),
                 directory_inode: directory.ino(),
+                schema_version: version,
                 prepared_codex: HashSet::new(),
                 recovery: RecoveryState::Verified,
             },
@@ -115,6 +122,7 @@ impl Store {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(error)?;
         transaction.execute_batch(SCHEMA).map_err(error)?;
+        transaction.execute_batch(schema::ADD_NETWORK_ACTIVITY).map_err(error)?;
         transaction
             .execute(
                 "INSERT INTO store_identity(singleton,records_directory_id) VALUES(1,?1)",
@@ -132,6 +140,7 @@ impl Store {
                 inode: metadata.ino(),
                 directory_device: directory.dev(),
                 directory_inode: directory.ino(),
+                schema_version: SCHEMA_VERSION,
                 prepared_codex: HashSet::new(),
                 recovery: RecoveryState::Verified,
             },
@@ -142,7 +151,7 @@ impl Store {
 
     pub(crate) fn verify(&self) -> Result<(), String> {
         self.verify_paths()?;
-        verify_database(&self.connection, &self.binding.records)
+        self.verify_database(&self.connection)
     }
 
     fn verify_paths(&self) -> Result<(), String> {
@@ -199,7 +208,7 @@ impl Store {
         }
         let connection = open_existing(&self.binding.path)?;
         self.verify_paths()?;
-        verify_database(&connection, &self.binding.records)?;
+        self.verify_database(&connection)?;
         self.verify_paths()?;
         configure(&connection)?;
         let fresh = Self {
@@ -222,7 +231,8 @@ impl Store {
 
     pub(crate) fn require_active(&self) -> Result<(), String> {
         self.verify()?;
-        if self.binding.records.schema_version()? != 2
+        if self.binding.schema_version != SCHEMA_VERSION
+            || self.binding.records.schema_version()? != 2
             || self
                 .binding
                 .path
@@ -232,6 +242,15 @@ impl Store {
             return Err(
                 "The usage database is not active. Finish records setup first.".into(),
             );
+        }
+        Ok(())
+    }
+
+    fn verify_database(&self, connection: &Connection) -> Result<(), String> {
+        if schema::verified_version(connection, &self.binding.records)?
+            != self.binding.schema_version
+        {
+            return Err("The usage database schema changed while it was open.".into());
         }
         Ok(())
     }
@@ -441,13 +460,6 @@ fn open_existing(path: &Path) -> Result<Connection, String> {
             | OpenFlags::SQLITE_OPEN_NOFOLLOW,
     )
     .map_err(error)
-}
-
-fn verify_database(connection: &Connection, records: &RecordsDirectory) -> Result<(), String> {
-    if schema::verified_version(connection, records)? != SCHEMA_VERSION {
-        return Err("The usage database needs a schema upgrade.".into());
-    }
-    Ok(())
 }
 
 fn configure(connection: &Connection) -> Result<(), String> {

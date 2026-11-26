@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { root, flush, deferred, project, plan, interfaceHarness } from './frontend-harness.mjs';
 
-test('Help opens the complete bundled user guide above Settings and supports view navigation', async () => {
+test('Help opens the complete bundled user guide and supports view navigation', async () => {
   const harness = await interfaceHarness();
   await harness.ready;
   const document = harness.dom.window.document;

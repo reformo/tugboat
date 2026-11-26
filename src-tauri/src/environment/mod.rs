@@ -55,8 +55,12 @@ pub fn brig_for_project(
 ) -> Result<Brig, String> {
     let mut checked = settings.clone();
     checked.cli_path = None;
-    let directory = crate::storage::data_location::directory(app)?;
-    Brig::new(&checked)?.for_registered_project(project, &directory)
+    let records = crate::storage::data_location::records_directory(app)?;
+    let mut brig = Brig::new(&checked)?.for_registered_project(project, records.path())?;
+    if crate::network_activity::configure(&mut brig, &records, project).is_err() {
+        eprintln!("Could not configure the project's network activity queue.");
+    }
+    Ok(brig)
 }
 
 pub fn checked_project(
@@ -521,6 +525,7 @@ fn verify_running_attempt(
     if !is_running(&checked.brig, &checked.project, &checked.paths)? {
         return Err("The Brig environment did not remain running. Prepare it again.".into());
     }
+    crate::network_activity::start_attribution(&checked);
     Ok(())
 }
 

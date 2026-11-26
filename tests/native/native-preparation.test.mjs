@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const macOnly = { skip: process.platform !== 'darwin' || process.arch !== 'arm64' ? 'requires an Apple silicon Mac' : false };
 
-function fixture(context, tool, { testMode = true, goAvailable = true, goVersion = '1.27.4', failTest = false, noSign = false } = {}) {
+function fixture(context, tool, { testMode = true, goAvailable = true, goVersion = '1.27.4', failTest = false, noSign = false, goDownload = '' } = {}) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tugboat-native-prepare-'));
   context.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
   const write = (relative, contents) => {
@@ -27,13 +27,17 @@ function fixture(context, tool, { testMode = true, goAvailable = true, goVersion
     write(`scripts/runtime/prepare-${name}.mjs`, fs.readFileSync(path.join(root, `scripts/runtime/prepare-${name}.mjs`)));
     write(`.build/${name}-compat/downloads/${name}.tar.gz`, archive);
     write(`resources/runtime/${name}-disk-tools.patch`, 'fixture patch');
+    write(`resources/runtime/${name}-network-activity.patch`, 'fixture patch');
+  }
+  for (const name of ['activity.go', 'actors.go', 'incoming.go', 'guest/main.go', 'guest/probes.go']) {
+    write(`resources/network-activity/${name}`, 'fixture source');
   }
   write('resources/runtime/brig-verified-cache.patch', 'fixture patch');
   write('resources/agent-updater/go.mod', 'fixture module');
-  write('.build/hull-compat/downloads/go.tar.gz', archive);
+  if (!goDownload) write('.build/hull-compat/downloads/go.tar.gz', archive);
   write('resources/runtime/hull-spaces.patch', 'fixture patch');
   write('resources/runtime/hull-rootfs-restore.patch', fs.readFileSync(path.join(root, 'resources/runtime/hull-rootfs-restore.patch')));
-  for (const name of ['hull_spaces_test.go', 'hull_disk_tools_test.go', 'hull_rootfs_restore_test.go', 'brig_disk_tools_test.go']) write(`tests/native/${name}`, 'fixture test');
+  for (const name of ['hull_spaces_test.go', 'hull_disk_tools_test.go', 'hull_rootfs_restore_test.go', 'hull_network_activity_test.go', 'brig_disk_tools_test.go']) write(`tests/native/${name}`, 'fixture test');
   if (goAvailable) {
     write('.build/hull-compat/go/bin/go', 'fixture Go');
     write('.build/hull-compat/go/VERSION', 'go' + goVersion + '\n');
@@ -45,7 +49,7 @@ function fixture(context, tool, { testMode = true, goAvailable = true, goVersion
     ...argumentsList,
   ], {
     cwd: workspace, encoding: 'utf8', timeout: 10_000,
-    env: { ...process.env, TUGBOAT_NATIVE_COMMANDS: commands, TUGBOAT_FAIL_NATIVE_TEST: String(failTest) },
+    env: { ...process.env, TUGBOAT_NATIVE_COMMANDS: commands, TUGBOAT_FAIL_NATIVE_TEST: String(failTest), TUGBOAT_TEST_GO_DOWNLOAD: goDownload },
   });
   const result = run();
   assert.ifError(result.error);
@@ -64,9 +68,11 @@ for (const tool of ['hull', 'brig']) {
   test(`default ${tool} preparation still builds, signs, and caches its executables`, macOnly, context => {
     const { result, run, commands, workspace } = fixture(context, tool, { testMode: false });
     assert.equal(result.status, 0, result.stderr);
-    const count = tool === 'hull' ? 1 : 4;
-    assert.equal(commands().filter(command => command.argumentsList[0] === 'build').length, count);
-    assert.equal(commands().filter(command => command.binary === '/usr/bin/codesign').length, count);
+    const builds = commands().filter(command => command.argumentsList[0] === 'build');
+    assert.equal(builds.length, tool === 'hull' ? 2 : 4);
+    const signatures = commands().filter(command => command.binary === '/usr/bin/codesign');
+    assert.equal(signatures.length, tool === 'hull' ? 1 : 4);
+    assert.ok(signatures.every(command => !command.argumentsList.some(argument => argument.endsWith('/network-attribution'))));
     assert.equal(fs.existsSync(path.join(workspace, `.build/${tool}-compat/prepared.json`)), true);
     const before = commands();
     const cached = run();
@@ -107,6 +113,27 @@ test('Brig refreshes the Go installation when the cached version is stale', macO
   assert.ok(commands().every(command => command.binary !== '/usr/bin/codesign'));
 });
 
+test('Hull prepares the pinned Go archive with bounded download retries', context => {
+  const { result, commands, workspace } = fixture(context, 'hull', { goAvailable: false, goDownload: 'valid' });
+  assert.equal(result.status, 0, result.stderr);
+  const download = commands().find(command => command.binary === '/usr/bin/curl');
+  const archive = path.join(fs.realpathSync(workspace), '.build/hull-compat/downloads/go.tar.gz');
+  assert.ok(download);
+  assert.deepEqual(download.argumentsList, ['-fsSL', '--retry', '2', '--connect-timeout', '15', '--max-time', '180', 'https://fixture.invalid/go.tar.gz', '-o', archive + '.partial']);
+  assert.equal(fs.readFileSync(archive, 'utf8'), 'synthetic native archive');
+  assert.ok(commands().some(command => command.argumentsList[0] === 'test'));
+});
+
+test('Hull rejects and discards a downloaded Go archive with a different checksum', context => {
+  const { result, commands, workspace } = fixture(context, 'hull', { goAvailable: false, goDownload: 'invalid' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Archive checksum mismatch: go.tar.gz/);
+  const archive = path.join(fs.realpathSync(workspace), '.build/hull-compat/downloads/go.tar.gz');
+  assert.equal(fs.existsSync(archive), false);
+  assert.equal(fs.existsSync(archive + '.partial'), false);
+  assert.ok(commands().every(command => !command.argumentsList.includes(archive)));
+});
+
 test('Hull rebuilds when the writable-root recovery patch changes', macOnly, context => {
   const { result, run, commands, workspace } = fixture(context, 'hull', { testMode: false });
   assert.equal(result.status, 0, result.stderr);
@@ -118,7 +145,7 @@ test('Hull rebuilds when the writable-root recovery patch changes', macOnly, con
   assert.equal(recorded(), digest());
   fs.appendFileSync(patch, '\n');
   assert.equal(run().status, 0);
-  assert.equal(commands().filter(command => command.argumentsList[0] === 'build').length, 2);
+  assert.equal(commands().filter(command => command.argumentsList[0] === 'build' && command.argumentsList.at(-1) === './cmd/hull').length, 2);
   assert.equal(recorded(), digest());
 });
 

@@ -31,41 +31,17 @@ let document = output.appendingPathComponent("AppIcon.icon")
 let assets = document.appendingPathComponent("Assets")
 try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
 
-// The standalone logo supplies the colors and paths for the native icon.
-let artwork = try XMLDocument(contentsOf: icons.appendingPathComponent("brig-desktop.svg"))
-func element(_ id: String) throws -> XMLElement {
-    guard let node = try artwork.nodes(forXPath: "//*[@id='\(id)']").first as? XMLElement else {
-        throw iconError("Missing SVG element: \(id)")
-    }
-    return node
-}
-guard let fill = try element("background").attribute(forName: "fill")?.stringValue,
-      fill.count == 7, fill.first == "#", let rgb = UInt32(fill.dropFirst(), radix: 16) else {
-    throw iconError("Expected an sRGB background color in the logo")
-}
-let channels = [16, 8, 0].map { String(Double((rgb >> $0) & 255) / 255) }
-
-// Icon Composer lists foreground groups first. The dots must sit behind the opaque sandbox.
-var groups: [[String: Any]] = []
-for name in ["sandbox", "dots"] {
-    let layer = try element(name)
-    let svg = """
-        <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-        \(layer.xmlString)
-        </svg>
-        """
-    try svg.write(to: assets.appendingPathComponent("\(name).svg"), atomically: true, encoding: .utf8)
-    groups.append([
-        "name": name,
-        "layers": [["name": name, "image-name": "\(name).svg", "glass": false]],
+let artwork = try Data(contentsOf: project.appendingPathComponent("tugboat-logo-1024.png"))
+try artwork.write(to: assets.appendingPathComponent("shield.png"), options: .atomic)
+let settings: [String: Any] = [
+    "fill": ["solid": "srgb:0.969,0.976,0.984,1"],
+    "groups": [[
+        "name": "shield",
+        "layers": [["name": "shield", "image-name": "shield.png", "glass": false]],
         "specular": false,
         "shadow": ["kind": "neutral", "opacity": 0],
         "translucency": ["enabled": false, "value": 0.5]
-    ])
-}
-let settings: [String: Any] = [
-    "fill": ["solid": "srgb:" + (channels + ["1"]).joined(separator: ",")],
-    "groups": groups,
+    ]],
     "supported-platforms": ["squares": ["macOS"]]
 ]
 try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])

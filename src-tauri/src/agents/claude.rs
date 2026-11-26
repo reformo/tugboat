@@ -156,6 +156,7 @@ impl ChatSettings {
 
 pub fn command(command: AgentCommand<'_>, settings: &ChatSettings) -> Result<GuestCommand, String> {
     let arguments = match command {
+        #[cfg(test)]
         AgentCommand::Version => vec!["--version".into()],
         AgentCommand::LoginStatus => vec!["auth".into(), "status".into(), "--json".into()],
         #[cfg(test)]

@@ -6,12 +6,14 @@ import './style.css';
 import { initializeHost, type HostReadiness } from './settings/host';
 import { initializeSettings, initializeSettingsTabs, selectSettingsTab, type SettingsSection } from './settings/settings';
 import { initializeAppUpdates } from './settings/app-updates';
-import { renderProjects, renderConversations, renderTerminals, isStandaloneConversation, standaloneConversations, terminalCaption, terminalNames, conversationKey, terminalMatches, agentName, isChat, sameProject, sameProjectView, type AgentKind, type Conversation, type Project, type ProjectContext, type TerminalStatus } from './projects/projects';
+import { renderProjects, projectLibraryAction, renderConversations, renderTerminals, isStandaloneConversation, standaloneConversations, terminalCaption, terminalNames, conversationKey, terminalMatches, agentName, isChat, sameProject, sameProjectView, type AgentKind, type Conversation, type Project, type ProjectContext, type TerminalStatus } from './projects/projects';
+import { initializeProjectLibraryCosts } from './projects/project-library-costs';
 import { createAgentLogo } from './providers/agent-logo';
 import { prepareProject, renderPlan, type Plan } from './projects/preparation';
 import { initializeBoundaryTests } from './projects/boundaries';
 import { initializeOperations, renderStopImpact, stopImpact, type StopImpact } from './projects/operations';
 import { EnvironmentStopGate } from './projects/environment-stop';
+import { initializeNetworkActivity, type ActivityUpdate } from './projects/network-activity';
 import { initializeGatewayLogs } from './projects/gateway-logs';
 import { initializeProjectPreview } from './projects/project-preview';
 import { initializeProjectGitHubAccess } from './projects/project-github-access';
@@ -35,6 +37,7 @@ import { RequestState } from './ui/request-state';
 import { ProjectRescan } from './projects/project-rescan';
 import { DashboardState, type DashboardRequest } from './dashboard/dashboard-state';
 import { initializeUsageDetails } from './usage/usage-details-controller';
+import { initializeProjectUsage } from './usage/project-usage';
 import { renderWorkspaceStatus, setWorkspaceStatus, showWorkspaceError } from './app/workspace-status';
 import { appData, appDataStore, type ProjectPreferences } from './app/app-data';
 
@@ -53,15 +56,23 @@ const helpNavigation = element<HTMLButtonElement>('help-navigation');
 initializeSettingsTabs();
 initializeHelp();
 const chooseFolderButton = element<HTMLButtonElement>('choose-folder');
+const projectLibraryCosts = initializeProjectLibraryCosts();
 const refreshSessionsButton = element<HTMLButtonElement>('refresh-sessions');
 const projectSettingsDialog = element('project-settings-dialog');
 const usageDialog = element<HTMLDialogElement>('session-usage-dialog');
 const usageInfo = element<HTMLDetailsElement>('usage-info');
-document.addEventListener('click', event => { if (!usageInfo.contains(event.target as Node)) usageInfo.open = false; });
+const projectAccountNotice = element<HTMLDetailsElement>('project-account-notice');
+document.addEventListener('click', event => {
+  const target = event.target as Node;
+  if (!usageInfo.contains(target)) usageInfo.open = false;
+  if (!projectAccountNotice.contains(target)) projectAccountNotice.open = false;
+});
 document.addEventListener('keydown', event => {
-  if (event.key !== 'Escape' || !usageInfo.open) return;
-  usageInfo.open = false;
-  usageInfo.querySelector<HTMLElement>('summary')!.focus();
+  if (event.key !== 'Escape') return;
+  const disclosure = projectAccountNotice.open ? projectAccountNotice : usageInfo;
+  if (!disclosure.open) return;
+  disclosure.open = false;
+  disclosure.querySelector<HTMLElement>('summary')!.focus();
 });
 const folderError = element('folder-error');
 const folderChoice = new RequestState();
@@ -136,6 +147,8 @@ const usageDetails = initializeUsageDetails({
   fingerprint: selectedUsageFingerprint,
   updateTerminalLayout,
 });
+const networkActivity = initializeNetworkActivity(() => appData.selectedProject, updateTerminalLayout);
+const projectUsage = initializeProjectUsage(() => appData.selectedProject?.id ?? null, updateTerminalLayout);
 
 function selectedConversations(): Conversation[] { return dashboardState.current()?.conversations ?? []; }
 function projectContext(): ProjectContext | null { return appData.selectedProject ? { id: appData.selectedProject.id, environmentId: appData.selectedProject.environmentId, fingerprint: selectedPlanFingerprint, epoch: projectEpoch, view: projectSettingsEpoch } : null; }
@@ -280,8 +293,16 @@ async function syncProjectAccount(): Promise<void> {
   finally { accountSync.finish(request); updateCodexActions(); }
 }
 
+function renderProjectPlanFeedback(): void {
+  const project = appData.selectedProject;
+  const setup = element('project-setup');
+  setup.hidden = !project || guidedFirstChat(project) || ['environment-ready', 'environment-starting'].includes(project.stage)
+    || planRequests.pending() || projectSelection.pending() || preparingSelected() || selectedPlanFingerprint !== null;
+  element('project-plan-feedback').hidden = element('project-plan-copy').hidden && setup.hidden;
+}
+
 function planFeedback(message: string | null, retry = false, busy = false): void {
-  element('project-plan-feedback').hidden = message === null || busy;
+  element('project-plan-copy').hidden = message === null || busy;
   element('project-plan-status').textContent = message ?? '';
   setBusy(element('project-plan-status'), busy);
   setBusy(element('preparation-status'), busy);
@@ -291,6 +312,7 @@ function planFeedback(message: string | null, retry = false, busy = false): void
   element('retry-project-plan').textContent = planRetryAction === 'environment' ? 'Retry environment' : 'Retry setup';
   element('project-preparation-last-stage').hidden = true;
   element('project-preparation-output').hidden = true;
+  renderProjectPlanFeedback();
 }
 
 function environmentFeedback(message: string | null = null): void {
@@ -530,6 +552,11 @@ function showTerminalStatus(message: string): void {
 
 function renderProjectLists(): void {
   renderProjects(appData.projects, appData.selectedProject, project => selectProject(project, true), showForgetProject);
+  projectLibraryCosts.render();
+  void projectLibraryCosts.refresh();
+  const settingsName = element('project-settings-name');
+  settingsName.textContent = appData.selectedProject?.name ?? '';
+  settingsName.title = settingsName.textContent;
   setLoading(element('recent-projects'), !appData.projectsLoaded);
   setLoading(element('sidebar-project-list'), !appData.projectsLoaded);
   if (!appData.projectsLoaded && !appData.selectedProject) {
@@ -593,7 +620,7 @@ forgetProjectDialog.addEventListener('cancel', event => { if (forgetting) event.
 forgetProjectDialog.addEventListener('close', () => {
   const id = forgettingProject?.id; forgettingProject = null;
   const button = [...document.querySelectorAll<HTMLButtonElement>('.project-record-forget')].find(button => button.dataset.projectId === id);
-  (button ?? chooseFolderButton).focus(); void updateTerminalLayout();
+  (button ?? projectLibraryAction()).focus(); void updateTerminalLayout();
 });
 element('confirm-forget-project').addEventListener('click', async () => {
   if (!forgettingProject || forgetting) return;
@@ -664,13 +691,13 @@ async function refreshConversations(saved = false): Promise<void> {
   renderSessionDashboard();
   const status = element('session-list-status');
   status.hidden = true;
-  status.textContent = 'Loading sessions…';
+  status.textContent = 'Loading chats…';
   try {
     const result = await invoke<Dashboard>(saved ? 'saved_project_dashboard' : 'project_dashboard', { identifier: projectId });
     if (!dashboardState.accepts(request) || appData.selectedProject?.id !== projectId) return;
     if (!applyDashboard(saved ? { ...result, sessionAvailability: 'unverified' } : result, request)) return;
     const hasActive = standaloneConversations(selectedConversations(), 'active').length > 0 || appData.terminals.some(terminal => terminal.running && isChat(terminal));
-    status.textContent = hasActive ? '' : 'No active sessions. Start a New Chat or restore an archived session.';
+    status.textContent = hasActive ? '' : 'No active chats.';
     status.hidden = hasActive;
   } catch (error) {
     if (appData.selectedProject?.id === projectId && dashboardState.fail(request, String(error))) {
@@ -715,6 +742,8 @@ function renderSessionDashboard(): void {
   setLoading(element('sidebar-session-list'), loading && !liveChat);
   if (!dashboardLoaded && dashboardError && !liveChat) element('sidebar-session-list').replaceChildren();
   element('project-usage').hidden = !dashboardLoaded && !loading;
+  element('project-usage-panel').hidden = !dashboardLoaded && !loading;
+  projectUsage.button.hidden = !dashboardLoaded;
   usageInfo.hidden = !dashboardLoaded;
   if (!dashboardLoaded) usageInfo.open = false;
   if (loading) {
@@ -726,7 +755,7 @@ function renderSessionDashboard(): void {
   element('project-overview').setAttribute('aria-busy', String(refreshing || (!dashboardLoaded && !dashboardError)));
   if (!dashboardLoaded || dashboardError) {
     const status = element('dashboard-session-status');
-    status.textContent = dashboardError ? dashboardError + ' Select Refresh to try again.' : '';
+    status.textContent = dashboardError ? dashboardError + ' Select Refresh chats in the sidebar to try again.' : '';
     status.hidden = !dashboardError;
     if (!dashboardLoaded && !loading) element('session-table').hidden = true;
   }
@@ -847,6 +876,7 @@ function renderFirstChat(): void {
 
 element<HTMLSelectElement>('agent-choice').addEventListener('change', () => {
   dashboardAgentChosen = true;
+  projectAccountNotice.open = false;
   updateCodexActions();
 });
 element<HTMLSelectElement>('first-chat-agent').addEventListener('change', event => {
@@ -910,12 +940,18 @@ async function selectProject(project: Project, recordOpen = false): Promise<void
 }
 
 async function applySelectedProject(project: Project): Promise<void> {
+  if (projectUsage.dialog.open) projectUsage.dialog.close();
+  if (dialogOpen(networkActivity.dialog)) closeDialog(networkActivity.dialog);
+  usageInfo.open = false;
+  projectAccountNotice.open = false;
   await hideTerminal();
   terminalIdentifier = null;
   requestedChat = null;
   waitingForFirstSetup = null;
+  accountConnectionError = null;
   dashboardAgentChosen = false;
   appData.selectedProject = project;
+  networkActivity.reset();
   if (project.stage === 'selected' && !project.policy && !firstChatAgents.has(preparationKey(project))) {
     firstChatAgents.set(preparationKey(project), null);
   }
@@ -935,7 +971,7 @@ async function applySelectedProject(project: Project): Promise<void> {
   dashboardState.reset(appData.selectedProject?.id ?? null);
   sessionView = 'active'; renderSessionDashboard();
   renderSessionSidebar();
-  element('session-list-status').textContent = dashboardState.loaded() ? 'No active sessions. Start a New Chat or restore an archived session.' : 'Loading sessions…';
+  element('session-list-status').textContent = dashboardState.loaded() ? 'No active chats.' : 'Loading chats…';
   element('session-list-status').hidden = !dashboardState.loaded() || standaloneConversations(selectedConversations(), 'active').length > 0;
   renderProjectLists();
   projectView.classList.add('has-project');
@@ -1135,21 +1171,40 @@ function updateCodexActions(): void {
   element('resume-removal').hidden = appData.selectedProject?.stage !== 'removing';
   element('codex-actions').hidden = !ready;
   element('project-overview').hidden = appData.selectedProject === null || guidedFirstChat();
-  element('project-setup').hidden = guidedFirstChat() || ready || planRequests.pending() || projectSelection.pending() || preparingSelected()
-    || appData.selectedProject?.stage === 'environment-starting' || selectedPlanFingerprint !== null;
+  renderProjectPlanFeedback();
   continueRequestedChat();
   updateNewChatButtons();
   const claude = newChatAgent() === 'claude-code';
   const accountBusy = !claude && accountSync.pending() && environmentReady();
-  element('project-account-feedback').hidden = hasFirstChat() || !environmentReady() || canStartChat() || accountBusy;
-  element('project-account-status').textContent = claude ? claudeAccount?.status()?.message ?? 'Connect your shared Claude account in Settings, Providers.' : accountConnectionError ?? (accountSync.pending()
-    ? 'Connecting the shared ChatGPT account…' : sharedChatgpt?.status()?.message ?? 'Checking the shared ChatGPT account…');
-  setBusy(element('project-account-status'), !claude && accountSync.pending());
-  setWorkspaceStatus('project-account', accountBusy ? element('project-account-status').textContent : null, 'project-dashboard');
+  const account = projectAccountPresentation(claude, accountBusy);
+  const label = element('project-account-label');
+  if (label.textContent !== account.label) label.textContent = account.label;
+  const status = element('project-account-status');
+  if (status.textContent !== account.message) {
+    status.textContent = account.message;
+    element('project-account-summary').title = account.message;
+  }
+  element('project-account-feedback').hidden = hasFirstChat() || !environmentReady() || !account.needsSettings;
+  setWorkspaceStatus('project-account', accountBusy && hasFirstChat() ? account.message : null, 'project-dashboard');
   claudeAccount?.select();
   element<HTMLButtonElement>('guest-shell').disabled = !environmentReady() || terminalLaunch.blocksChanges() || projectSelection.pending() || folderChoice.pending() || preparingSelected();
   sharedChatgpt?.updateAvailability();
   if (ready && !claude && agent && agentStatuses.codex?.active) void syncProjectAccount();
+}
+
+function projectAccountPresentation(claude: boolean, busy: boolean): { label: string; message: string; needsSettings: boolean } {
+  if (busy) return { label: 'Connecting ChatGPT…', message: 'Connecting ChatGPT to this project…', needsSettings: false };
+  const provider = claude ? 'Claude' : 'ChatGPT';
+  const account = claude ? claudeAccount?.status() : sharedChatgpt?.status();
+  if (!account) return { label: `Check ${provider}`, message: `${provider} account status is unavailable.`, needsSettings: true };
+  if (account.state === 'signed-out' || account.state === 'needs-sign-in') {
+    const label = `Sign in to ${provider}`;
+    const action = account.state === 'needs-sign-in' ? `${label} again` : label;
+    return { label, message: `${action} to start a chat.`, needsSettings: true };
+  }
+  if (account.state === 'signing-in') return { label: 'Signing in…', message: account.message, needsSettings: true };
+  if (!claude && accountConnectionError && environmentReady()) return { label: 'Check ChatGPT', message: accountConnectionError, needsSettings: true };
+  return { label: `${provider} connected`, message: account.message, needsSettings: false };
 }
 
 element('start-codex').addEventListener('click', requestNewChat);
@@ -1160,7 +1215,9 @@ element('guest-shell').addEventListener('click', () => {
   void openTerminal('start_agent_session', { identifier: id, environmentId, agentKind: 'codex', fingerprint: selectedPlanFingerprint, action: 'shell' }, 'Guest terminal');
 });
 element('project-provider-settings').addEventListener('click', () => {
-  showSettings('providers', 'project-provider-settings'); element(newChatAgent() === 'claude-code' ? 'claude-account-heading' : 'shared-chatgpt-heading').focus();
+  projectAccountNotice.open = false;
+  showSettings('providers', 'project-account-summary');
+  element(newChatAgent() === 'claude-code' ? 'claude-account-heading' : 'shared-chatgpt-heading').focus();
 });
 
 // Application settings open as a modal above the current view.
@@ -1180,12 +1237,14 @@ settingsView.addEventListener('close', () => {
   renderWorkspaceStatus();
   scheduleProjectRescan();
   rescanVisibleProjectLibrary();
+  void projectLibraryCosts.refresh();
   void updateTerminalLayout();
 });
 
 function showView(view: 'project' | 'help'): void {
   closeProjectDialogs();
   if (dialogOpen(settingsView)) closeDialog(settingsView);
+  const projectWasHidden = projectView.hidden;
   projectView.hidden = view !== 'project';
   helpView.hidden = view !== 'help';
   renderWorkspaceStatus();
@@ -1193,14 +1252,16 @@ function showView(view: 'project' | 'help'): void {
   const navigation = { project: appData.selectedProject ? element('sidebar-current-project') : projectNavigation, help: helpNavigation };
   navigation[view].setAttribute('aria-current', 'page');
   element(view + '-heading').focus();
+  if (view === 'project' && projectWasHidden) void projectLibraryCosts.refresh();
   scheduleProjectRescan();
   sharedChatgpt?.updateAvailability();
   void updateTerminalLayout();
   if (view === 'project' && !terminalPanel.hidden && terminalIdentifier !== null) void focusTerminal(terminalIdentifier).catch(error => { showFolderError(String(error)); });
 }
 
-async function showProjects(message = 'Choose where Brig and your agents will work.'): Promise<void> {
+async function showProjects(message = ''): Promise<void> {
   if (terminalLaunch.blocksChanges() || projectSelection.pending() || preparingSelected()) return;
+  if (dialogOpen(networkActivity.dialog)) closeDialog(networkActivity.dialog);
   await hideTerminal();
   requestedChat = null;
   waitingForFirstSetup = null;
@@ -1219,13 +1280,14 @@ async function showProjects(message = 'Choose where Brig and your agents will wo
   dashboardState.reset(null);
   renderConversations([], null, resumeConversation);
   projectView.classList.remove('has-project');
+  networkActivity.reset();
   updateTerminalActions();
   for (const id of ['project-actions', 'project-meta', 'selected-branch', 'project-settings-button', 'project-reference', 'project-dashboard']) element(id).hidden = true;
   startTerminalButton.hidden = true;
   element('project-heading').textContent = 'Projects';
   element('project-heading').removeAttribute('title');
   element('project-description').textContent = message;
-  element('project-description').hidden = false;
+  element('project-description').hidden = !message;
   chooseFolderButton.hidden = false;
   claudeAccount?.select();
   folderError.hidden = true;
@@ -1259,13 +1321,13 @@ async function chooseFolder(): Promise<void> {
     chooseFolderButton.disabled = false;
     renderFirstChat();
     void syncMenus();
-    if (!projectView.hidden && !hasOpenDialog() && terminalPanel.hidden) element('project-heading').focus();
+    if (!projectView.hidden && !hasOpenDialog() && terminalPanel.hidden) (appData.selectedProject ? element('project-heading') : projectLibraryAction()).focus();
     if (!projectView.hidden && !hasOpenDialog() && !terminalPanel.hidden && terminalIdentifier !== null) void focusTerminal(terminalIdentifier).catch(error => { showFolderError(String(error)); });
   }
 }
 
 function closeProjectDialogs(): void {
-  for (const dialog of [projectSettingsDialog, usageDialog, element<HTMLDialogElement>('removal-dialog')]) if (dialogOpen(dialog)) closeDialog(dialog);
+  for (const dialog of [projectSettingsDialog, usageDialog, projectUsage.dialog, networkActivity.dialog, element<HTMLDialogElement>('removal-dialog')]) if (dialogOpen(dialog)) closeDialog(dialog);
 }
 
 function projectPreferencesKey(project: Pick<Project, 'id' | 'environmentId'>): string {
@@ -1408,8 +1470,7 @@ async function showProjectSettings(returnFocusId = 'project-settings-button'): P
   }
   renderStopImpact(appData.selectedProject, appData.terminals, selectedConversations());
   element<HTMLDetailsElement>('sharing-plan').open = false;
-  projectSettingsNavigation?.select('project-setup-overview');
-  if (appData.selectedProject.stage === 'updating-image') element<HTMLDetailsElement>('project-image-update').open = true;
+  projectSettingsNavigation?.select(appData.selectedProject.stage === 'updating-image' ? 'project-image-update' : 'project-setup-overview');
   showDialog(projectSettingsDialog, returnFocusId); await updateTerminalLayout();
   if (!sameProjectView(projectContext(), context) || !projectPreferences.accepts(request) || !dialogOpen(projectSettingsDialog)) return;
   const cached = appDataStore.getState().projectPreferences.get(projectPreferencesKey(appData.selectedProject!));
@@ -1481,8 +1542,10 @@ element<HTMLFormElement>('project-preferences').addEventListener('submit', async
   finally { if (sameProjectView(projectContext(), context) && projectPreferences.accepts(request)) { projectPreferences.finish(request); setBusy(element('save-project-preferences'), false); fields.disabled = false; finishProjectRecordRefresh(); } }
 });
 for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-session-state]')) tab.addEventListener('click', () => { sessionView = tab.dataset.sessionState as SessionState; renderSessionDashboard(); });
+await listen<ActivityUpdate>('network-activity-recorded', event => networkActivity.accept(event.payload));
 await listen<[string, Dashboard]>('project-usage-updated', event => {
   if (!appData.projects.some(project => project.id === event.payload[0])) return;
+  void projectLibraryCosts.refresh();
   if (appData.selectedProject?.id !== event.payload[0]) {
     dashboardState.event(event.payload[0], event.payload[1]);
     return;
@@ -1490,7 +1553,7 @@ await listen<[string, Dashboard]>('project-usage-updated', event => {
   if (!applyDashboard(event.payload[1], event.payload[0])) return;
   const hasActive = standaloneConversations(selectedConversations(), 'active').length > 0 || appData.terminals.some(terminal => terminal.running && isChat(terminal));
   element('session-list-status').hidden = hasActive;
-  element('session-list-status').textContent = hasActive ? '' : 'No active sessions. Start a New Chat or restore an archived session.';
+  element('session-list-status').textContent = hasActive ? '' : 'No active chats.';
 });
 await listen<[string, string, number]>('project-usage-error', event => {
   if (appData.selectedProject?.id === event.payload[0] && dashboardState.errorEvent(event.payload[0], event.payload[2], event.payload[1])) {
@@ -1545,6 +1608,7 @@ await listen<string[]>('records-changed', async event => {
   }
   if (event.payload.includes('usage')) {
     ++usageRecordRevision; usageDetails.clearCache();
+    updates.push(projectLibraryCosts.refresh());
     updates.push(Promise.all(dashboardState.projectIds().map(refreshRecordedDashboard)).then(usageDetails.refresh));
   }
   if (event.payload.includes('chatgpt') && sharedChatgpt) updates.push(sharedChatgpt.refresh());
@@ -1583,7 +1647,14 @@ async function retryProjectSetup(action: ProjectPlanAction): Promise<void> {
 }
 element('retry-preparation').addEventListener('click', () => { void retryProjectSetup('prepare'); });
 element('retry-project-plan').addEventListener('click', () => { void retryProjectSetup(planRetryAction); });
-element('resume-removal').addEventListener('click', async () => { await showProjectSettings('resume-removal'); element('preview-removal').click(); });
+element('resume-removal').addEventListener('click', async () => {
+  const context = projectContext();
+  if (!context) return;
+  await showProjectSettings('resume-removal');
+  if (!sameProject(projectContext(), context) || !dialogOpen(projectSettingsDialog)) return;
+  projectSettingsNavigation?.select('project-environment');
+  element('preview-removal').click();
+});
 element('refresh-plan').addEventListener('click', () => { void refreshSelectedPlan(); });
 element('hide-terminal').addEventListener('click', async () => { await hideTerminal(); element('project-heading').focus(); });
 element('project-preparation-output').addEventListener('click', () => {

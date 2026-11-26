@@ -8,6 +8,7 @@ export const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 export const brigSourceFiles = [
   'resources/runtime/brig-disk-tools.patch',
   'resources/runtime/brig-verified-cache.patch',
+  'resources/runtime/brig-network-activity.patch',
   'config/brig-compat.json',
 ];
 

@@ -109,7 +109,7 @@ pub async fn start_agent_session(
                 );
             }
             let arguments = vec!["sh".into(), checked.project.reference()];
-            Ok::<_, String>(environment::command(&checked, arguments))
+            Ok::<_, String>(crate::network_activity::launch(&checked, arguments, "guest-terminal"))
         })
         .await
         .map_err(|_| "Could not prepare the guest shell.")??;
@@ -189,7 +189,7 @@ pub async fn start_agent_session(
             resume::require(&checked, session.as_ref().unwrap())?;
         }
         crate::conversations::observe(&prepare_app, &checked)?;
-        let command = environment::command(&checked, arguments);
+        let command = crate::network_activity::launch(&checked, arguments, "claude-code");
         Ok::<_, String>((
             Launch::Prepared {
                 command,

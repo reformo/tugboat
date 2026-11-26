@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use state::{ChangeKind, MarkerState, MovePhase};
 use std::fs::{self, File};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -29,11 +30,45 @@ const RECORDS: &[&str] = &[
 ];
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(try_from = "PendingLocationRecord", into = "PendingLocationRecord")]
 struct PendingLocation {
     directory: PathBuf,
-    #[serde(rename = "locate")]
     kind: ChangeKind,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PendingLocationRecord {
+    directory: PathBuf,
+    locate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    existing_directory_id: Option<String>,
+}
+
+impl TryFrom<PendingLocationRecord> for PendingLocation {
+    type Error = &'static str;
+
+    fn try_from(record: PendingLocationRecord) -> Result<Self, Self::Error> {
+        Ok(Self {
+            directory: record.directory,
+            kind: ChangeKind::for_selection(record.locate, record.existing_directory_id)?,
+        })
+    }
+}
+
+impl From<PendingLocation> for PendingLocationRecord {
+    fn from(pending: PendingLocation) -> Self {
+        let locate = pending.kind == ChangeKind::Locate;
+        let existing_directory_id = match pending.kind {
+            ChangeKind::UseExisting(id) => Some(id),
+            _ => None,
+        };
+        Self {
+            directory: pending.directory,
+            locate,
+            existing_directory_id,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -78,6 +113,7 @@ pub struct LocationStatus {
 enum LocationNotice {
     Failure(String),
     ReconnectionVerified,
+    ExistingRecordsVerified,
     ProjectReset(ProjectReset),
 }
 
@@ -101,6 +137,15 @@ struct SavedLocation {
     location: Option<Location>,
     notice: Option<LocationNotice>,
     reconnected: Option<RecordsDirectory>,
+    records_lease: Option<File>,
+}
+
+impl SavedLocation {
+    fn has_lease(&self, directory: &Path) -> bool {
+        self.records_lease
+            .as_ref()
+            .is_some_and(|lease| lease_matches_directory(lease, directory))
+    }
 }
 
 pub struct DataLocation {
@@ -193,6 +238,10 @@ impl RecordsDirectory {
     }
 }
 
+fn valid_directory_id(id: &str) -> bool {
+    id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn marker(directory: &Path) -> Result<DirectoryMarker, String> {
     if !directory
         .join(MARKER)
@@ -207,10 +256,7 @@ fn marker(directory: &Path) -> Result<DirectoryMarker, String> {
         .ok_or("The records folder is unavailable. Connect its drive or locate it in Settings.")?;
     let marker: DirectoryMarker = serde_json::from_slice(&bytes)
         .map_err(|_| "The records folder marker could not be read.".to_owned())?;
-    if !matches!(marker.schema_version, 1 | 2)
-        || marker.id.len() != 32
-        || !marker.id.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
+    if !matches!(marker.schema_version, 1 | 2) || !valid_directory_id(&marker.id) {
         return Err("The records folder marker is invalid.".into());
     }
     Ok(marker)
@@ -283,6 +329,35 @@ fn private_bootstrap_directory(directory: &Path) -> Result<(), String> {
 
 fn private_records_directory(directory: &Path, id: &str) -> Result<(), String> {
     private_directory(directory, || require_directory(directory, id))
+}
+
+fn lock_records_directory(directory: &Path) -> Result<File, String> {
+    let folder = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+        .open(directory)
+        .map_err(|error| error.to_string())?;
+    if unsafe { libc::flock(folder.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        let error = std::io::Error::last_os_error();
+        if error.kind() == std::io::ErrorKind::WouldBlock {
+            return Err(
+                "Another Tugboat instance is using this records folder. Close it and try again."
+                    .into(),
+            );
+        }
+        return Err(format!("Could not lock the records folder. {error}"));
+    }
+    if !lease_matches_directory(&folder, directory) {
+        return Err("The records folder changed while locking it.".into());
+    }
+    Ok(folder)
+}
+
+fn lease_matches_directory(lease: &File, directory: &Path) -> bool {
+    lease.metadata().is_ok_and(|opened| {
+        fs::symlink_metadata(directory)
+            .is_ok_and(|current| (opened.dev(), opened.ino()) == (current.dev(), current.ino()))
+    })
 }
 
 fn private_directory(
@@ -525,17 +600,90 @@ fn remove_copied_record(source: &Path, target: &Path) -> Result<(), String> {
     fs::remove_file(source).map_err(|error| error.to_string())
 }
 
-fn finish_move(
+fn commit_location(
+    location: &mut Location,
+    pointer: &Path,
+    committed: Location,
+) -> Result<(), String> {
+    let result = storage::write(pointer, &committed);
+    if result.is_ok() || storage::read::<Location>(pointer)?.as_ref() == Some(&committed) {
+        *location = committed;
+    }
+    result
+}
+
+fn use_existing_records(
+    location: &mut Location,
+    pointer: &Path,
+    records_lease: &mut Option<File>,
+    target: &Path,
+    id: &str,
+) -> Result<(), String> {
+    validate_separate_directory(&location.directory, target)?;
+    #[cfg(target_os = "macos")]
+    require_move_volume_permissions(target)?;
+    let lease = lock_records_directory(target)?;
+    private_records_directory(target, id)?;
+    let records = RecordsDirectory {
+        directory: target.to_owned(),
+        id: id.to_owned(),
+    };
+    let registry = crate::projects::Registry::load(&target.join("projects.json"))?;
+    require_private_records(target, &registry)?;
+    if require_directory(&location.directory, &location.directory_id).is_ok() {
+        let current_registry =
+            crate::projects::Registry::load(&location.directory.join("projects.json"))?;
+        require_private_records(target, &current_registry)?;
+    }
+    crate::usage_store::move_support::recover(&records)?;
+    records.verify()?;
+    if !lease_matches_directory(&lease, target) {
+        return Err("The selected records folder changed during verification.".into());
+    }
+    let mut committed = location.clone();
+    committed.directory = records.directory;
+    committed.directory_id = records.id;
+    committed.pending = None;
+    let result = commit_location(location, pointer, committed);
+    if location.directory == target {
+        *records_lease = Some(lease);
+    }
+    result
+}
+
+fn finish_change(
     location: &mut Location,
     pointer: &Path,
     default_directory: &Path,
+    records_lease: &mut Option<File>,
 ) -> Result<Option<ChangeKind>, String> {
+    if let MovePhase::Pending(PendingLocation {
+        directory,
+        kind: ChangeKind::UseExisting(id),
+    }) = location.phase()
+    {
+        if location.previous_directory.is_some() {
+            return Err(
+                "Finish cleanup of the previous records folder before changing records.".into(),
+            );
+        }
+        let target = directory.clone();
+        let id = id.clone();
+        use_existing_records(location, pointer, records_lease, &target, &id)?;
+        return Ok(Some(ChangeKind::UseExisting(id)));
+    }
     // A located dataset can be available while the original drive is offline.
     let active = match location.phase() {
         MovePhase::Pending(pending) if pending.kind == ChangeKind::Locate => &pending.directory,
         _ => &location.directory,
     };
+    let active_lease = lock_records_directory(active)?;
     private_records_directory(active, &location.directory_id)?;
+    let mut target_lease = Some(active_lease);
+    if active == &location.directory {
+        *records_lease = target_lease.take();
+    }
+    let mut source_lease = None;
     let mut completed_change = None;
     if let MovePhase::Pending(pending) = location.phase() {
         let pending = pending.clone();
@@ -583,6 +731,7 @@ fn finish_move(
             validate_separate_directory(&source_directory, &target)?;
             #[cfg(target_os = "macos")]
             require_move_volume_permissions(&target)?;
+            target_lease = Some(lock_records_directory(&target)?);
             let source_records = RecordsDirectory {
                 directory: source_directory.clone(),
                 id: location.directory_id.clone(),
@@ -655,11 +804,9 @@ fn finish_move(
         }
         committed.directory = target;
         committed.pending = None;
-        let committed_result = storage::write(pointer, &committed);
-        if committed_result.is_ok()
-            || storage::read::<Location>(pointer)?.as_ref() == Some(&committed)
-        {
-            *location = committed;
+        let committed_result = commit_location(location, pointer, committed);
+        if location.pending.is_none() && target_lease.is_some() {
+            source_lease = std::mem::replace(records_lease, target_lease);
         }
         committed_result?;
         completed_change = Some(pending.kind);
@@ -690,6 +837,10 @@ fn finish_move(
             storage::write(pointer, location)?;
             return Ok(completed_change);
         }
+        let _source_lease = match source_lease {
+            Some(lease) => lease,
+            None => lock_records_directory(&previous)?,
+        };
         upgrade_known_marker(&previous, &location.directory_id, MarkerState::Incomplete)?;
         if marker(&previous)?.id != location.directory_id {
             return Err(
@@ -741,6 +892,7 @@ impl DataLocation {
             location: None,
             notice: None,
             reconnected: None,
+            records_lease: None,
         };
         if let Err(error) = &lease {
             saved.notice = Some(LocationNotice::Failure(error.clone()));
@@ -750,11 +902,7 @@ impl DataLocation {
                 if let Some(location) = storage::read::<Location>(&pointer)? {
                     if location.schema_version != 1
                         || !location.directory.is_absolute()
-                        || location.directory_id.len() != 32
-                        || !location
-                            .directory_id
-                            .bytes()
-                            .all(|byte| byte.is_ascii_hexdigit())
+                        || !valid_directory_id(&location.directory_id)
                         || location
                             .pending
                             .as_ref()
@@ -816,26 +964,53 @@ impl DataLocation {
             };
             match initialize() {
                 Ok(mut location) => {
-                    let restored = upgrade_known_marker(
-                        &location.directory,
-                        &location.directory_id,
-                        MarkerState::Complete,
-                    )
-                    .and_then(|_| {
+                    let using_existing = matches!(location.phase(), MovePhase::Pending(pending) if matches!(&pending.kind, ChangeKind::UseExisting(_)));
+                    let restored = (|| -> Result<Option<LocationNotice>, String> {
+                        if !using_existing {
+                            upgrade_known_marker(
+                                &location.directory,
+                                &location.directory_id,
+                                MarkerState::Complete,
+                            )?;
+                        }
                         if matches!(location.phase(), MovePhase::Pending(pending) if pending.kind == ChangeKind::Move)
                             && crate::projects::Registry::requires_reset(&location.directory.join("projects.json"))?
                         {
                             return Ok(Some(LocationNotice::ProjectReset(ProjectReset::CancelMove)));
                         }
-                        let change = finish_move(&mut location, &pointer, &default_directory)?;
-                        Ok((change == Some(ChangeKind::Locate)).then_some(LocationNotice::ReconnectionVerified))
-                    });
+                        let change = finish_change(
+                            &mut location,
+                            &pointer,
+                            &default_directory,
+                            &mut saved.records_lease,
+                        )?;
+                        Ok(match change {
+                            Some(ChangeKind::Locate) => Some(LocationNotice::ReconnectionVerified),
+                            Some(ChangeKind::UseExisting(_)) => {
+                                Some(LocationNotice::ExistingRecordsVerified)
+                            }
+                            _ => None,
+                        })
+                    })();
                     saved.notice = match restored {
                         Ok(notice) => notice,
-                        Err(error) => Some(LocationNotice::Failure(format!(
-                            "Could not finish moving records. {error}"
-                        ))),
+                        Err(error) => Some(LocationNotice::Failure(if using_existing {
+                            format!("Could not use the existing records folder. {error}")
+                        } else {
+                            format!("Could not finish moving records. {error}")
+                        })),
                     };
+                    if saved.records_lease.is_none()
+                        && require_directory(&location.directory, &location.directory_id).is_ok()
+                    {
+                        match lock_records_directory(&location.directory).and_then(|lease| {
+                            private_records_directory(&location.directory, &location.directory_id)?;
+                            Ok(lease)
+                        }) {
+                            Ok(lease) => saved.records_lease = Some(lease),
+                            Err(error) => saved.notice = Some(LocationNotice::Failure(error)),
+                        }
+                    }
                     saved.location = Some(location);
                 }
                 Err(error) => saved.notice = Some(LocationNotice::Failure(error)),
@@ -851,32 +1026,29 @@ impl DataLocation {
 
     fn status(&self) -> Result<LocationStatus, String> {
         let saved = self.saved.lock().map_err(|error| error.to_string())?;
-        let available = saved.reconnected.as_ref().map_or_else(
-            || {
-                saved.location.as_ref().is_some_and(|location| {
-                    require_directory(&location.directory, &location.directory_id).is_ok()
-                })
-            },
-            |records| records.verify().is_ok(),
-        );
+        let active = saved
+            .reconnected
+            .as_ref()
+            .map(|records| (records.path(), records.id()))
+            .or_else(|| {
+                saved
+                    .location
+                    .as_ref()
+                    .map(|location| (location.directory.as_path(), location.directory_id.as_str()))
+            });
+        let available = active.is_some_and(|(directory, id)| {
+            saved.has_lease(directory) && require_directory(directory, id).is_ok()
+        });
         let message = match &saved.notice {
             Some(LocationNotice::ProjectReset(reset)) => Some(reset.message().into()),
             Some(LocationNotice::Failure(error)) => Some(error.clone()),
             _ if !available => Some("The records folder is unavailable. Connect its drive and restart Tugboat, or locate the folder below.".into()),
             Some(LocationNotice::ReconnectionVerified) => Some("Records folder reconnected. Tugboat verified your original records.".into()),
+            Some(LocationNotice::ExistingRecordsVerified) => Some("Tugboat verified and opened the existing records in this folder.".into()),
             None => None,
         };
         Ok(LocationStatus {
-            directory: saved
-                .reconnected
-                .as_ref()
-                .map(|records| records.path().to_owned())
-                .or_else(|| {
-                    saved
-                        .location
-                        .as_ref()
-                        .map(|location| location.directory.clone())
-                }),
+            directory: active.map(|(directory, _)| directory.to_owned()),
             default_directory: self.default_directory.clone(),
             pending_directory: saved.location.as_ref().and_then(|location| {
                 location
@@ -961,7 +1133,11 @@ impl DataLocation {
         Ok(Some(records))
     }
 
-    fn use_reconnected(&self, records: &RecordsDirectory) -> Result<(), String> {
+    fn use_reconnected(
+        &self,
+        records: &RecordsDirectory,
+        lease: Option<File>,
+    ) -> Result<(), String> {
         records.verify()?;
         let mut saved = self.saved.lock().map_err(|error| error.to_string())?;
         let location = saved
@@ -976,12 +1152,23 @@ impl DataLocation {
         if location.directory_id != records.id() || pending.directory != records.path() {
             return Err("The records reconnection belongs to a different dataset.".into());
         }
+        if let Some(lease) = lease {
+            saved.records_lease = Some(lease);
+        }
         saved.reconnected = Some(records.clone());
         Ok(())
     }
 
-    fn schedule(&self, folder: &Path, locate: bool) -> Result<(), String> {
-        let kind = ChangeKind::from(locate);
+    fn lock_reconnect(&self, directory: &Path) -> Result<Option<File>, String> {
+        let saved = self.saved.lock().map_err(|error| error.to_string())?;
+        if saved.has_lease(directory) {
+            return Ok(None);
+        }
+        lock_records_directory(directory).map(Some)
+    }
+
+    fn schedule(&self, folder: &Path, kind: impl Into<ChangeKind>) -> Result<(), String> {
+        let kind = kind.into();
         if self._lease.is_none() {
             return Err("Another Tugboat instance is using these records. Close it before changing the folder.".into());
         }
@@ -990,7 +1177,10 @@ impl DataLocation {
         if saved.reconnected.is_some() {
             return Err("Restart Tugboat to finish reconnecting records before changing their location again.".into());
         }
-        if kind == ChangeKind::Move
+        if let Some(LocationNotice::ProjectReset(reset)) = saved.notice {
+            return Err(reset.message().into());
+        }
+        if kind != ChangeKind::Locate
             && saved
                 .location
                 .as_ref()
@@ -1015,6 +1205,11 @@ impl DataLocation {
                     return Err("This folder contains different Tugboat records. Choose the original records folder.".into());
                 }
             }
+            let _lease = if saved.has_lease(&target) {
+                None
+            } else {
+                Some(lock_records_directory(&target)?)
+            };
             private_records_directory(&target, &marker.id)?;
             crate::usage_store::move_support::recover(&RecordsDirectory {
                 directory: target.clone(),
@@ -1042,20 +1237,40 @@ impl DataLocation {
             .as_ref()
             .ok_or("Locate the existing records folder first.")?;
         require_directory(&location.directory, &location.directory_id)?;
-        crate::usage_store::move_support::require_file(&RecordsDirectory {
-            directory: location.directory.clone(),
-            id: location.directory_id.clone(),
-        })?;
+        verify_records_lease(&saved, &location.directory)?;
         validate_separate_directory(&location.directory, &target)?;
         if target != location.directory {
-            is_empty_destination(&target, &self.default_directory)?;
             #[cfg(target_os = "macos")]
             require_move_volume_permissions(&target)?;
+        }
+        match &kind {
+            ChangeKind::UseExisting(id) => {
+                if target == location.directory {
+                    return Err("This is already the active records folder.".into());
+                }
+                let _lease = lock_records_directory(&target)?;
+                require_directory(&target, id)?;
+                crate::usage_store::move_support::require_file(&RecordsDirectory {
+                    directory: target.clone(),
+                    id: id.clone(),
+                })?;
+                let registry = crate::projects::Registry::load(&target.join("projects.json"))?;
+                require_private_records(&target, &registry)?;
+            }
+            _ => {
+                crate::usage_store::move_support::require_file(&RecordsDirectory {
+                    directory: location.directory.clone(),
+                    id: location.directory_id.clone(),
+                })?;
+                if target != location.directory {
+                    is_empty_destination(&target, &self.default_directory)?;
+                }
+            }
         }
         let mut next = location.clone();
         next.pending = (target != location.directory).then_some(PendingLocation {
             directory: target,
-            kind: ChangeKind::Move,
+            kind,
         });
         storage::write(&self.pointer, &next)?;
         saved.location = Some(next);
@@ -1084,6 +1299,7 @@ pub fn records_directory<R: tauri::Runtime>(
     let saved = state.saved.lock().map_err(|error| error.to_string())?;
     if let Some(records) = &saved.reconnected {
         records.verify()?;
+        verify_records_lease(&saved, records.path())?;
         return Ok(records.clone());
     }
     let location = saved
@@ -1091,10 +1307,18 @@ pub fn records_directory<R: tauri::Runtime>(
         .as_ref()
         .ok_or("Locate the records folder in Settings before using Tugboat.")?;
     require_directory(&location.directory, &location.directory_id)?;
+    verify_records_lease(&saved, &location.directory)?;
     Ok(RecordsDirectory {
         directory: location.directory.clone(),
         id: location.directory_id.clone(),
     })
+}
+
+fn verify_records_lease(saved: &SavedLocation, directory: &Path) -> Result<(), String> {
+    if saved.has_lease(directory) {
+        return Ok(());
+    }
+    Err("Tugboat does not hold the records folder lock. Close any other Tugboat instance and restart.".into())
 }
 
 pub(crate) fn reconnect_for_shutdown(app: &AppHandle) -> Result<(), String> {
@@ -1102,6 +1326,7 @@ pub(crate) fn reconnect_for_shutdown(app: &AppHandle) -> Result<(), String> {
     let Some(records) = location.pending_reconnect()? else {
         return Ok(());
     };
+    let lease = location.lock_reconnect(records.path())?;
     let writer = app
         .state::<crate::usage_store::Runtime>()
         .existing_store()?;
@@ -1111,7 +1336,7 @@ pub(crate) fn reconnect_for_shutdown(app: &AppHandle) -> Result<(), String> {
     if writer.is_none() && records.schema_version()? == 2 {
         crate::usage_store::move_support::recover(&records)?;
     }
-    location.use_reconnected(&records)?;
+    location.use_reconnected(&records, lease)?;
     crate::providers::shared_chatgpt::reconnect_records(app, &records)?;
     crate::providers::shared_claude::reconnect_records(app, &records)
 }
@@ -1241,12 +1466,47 @@ pub async fn choose_storage_folder(window: WebviewWindow) -> Result<Option<Strin
 }
 
 #[tauri::command]
+pub async fn inspect_storage_folder(
+    app: AppHandle,
+    folder: Option<String>,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<DataLocation>();
+        let target = folder
+            .map(PathBuf::from)
+            .unwrap_or_else(|| state.default_directory.clone());
+        let target = crate::projects::check_folder(&target)?;
+        let saved = state.saved.lock().map_err(|error| error.to_string())?;
+        if saved
+            .location
+            .as_ref()
+            .is_some_and(|location| location.directory == target)
+        {
+            return Ok(None);
+        }
+        drop(saved);
+        match target.join(MARKER).symlink_metadata() {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+            Ok(_) => {
+                let marker = marker(&target)?;
+                Ok((marker.state == MarkerState::Complete).then_some(marker.id))
+            }
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn change_storage_location(
     app: AppHandle,
     folder: Option<String>,
     locate: bool,
+    existing_directory_id: Option<String>,
 ) -> Result<LocationStatus, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let kind = ChangeKind::for_selection(locate, existing_directory_id)?;
         let state = app.state::<DataLocation>();
         let target = folder
             .map(PathBuf::from)
@@ -1257,12 +1517,12 @@ pub async fn change_storage_location(
             .unwrap_or_else(|_| target.join("projects.json"));
         let registry = crate::projects::Registry::load(&registry_file)?;
         require_private_records(&target, &registry)?;
-        if !locate {
+        if kind == ChangeKind::Move {
             app.state::<crate::usage_store::Runtime>()
                 .wait()?
                 .with(|store| store.verify())?;
         }
-        state.schedule(&target, locate)?;
+        state.schedule(&target, kind)?;
         state.status()
     })
     .await

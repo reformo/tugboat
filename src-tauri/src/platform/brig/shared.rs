@@ -1,6 +1,7 @@
 use super::{Brig, PlanPaths, COMMAND_TIMEOUT};
 use crate::{desktop::settings::Settings, platform::command, projects::Project};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -17,13 +18,14 @@ impl Brig {
     }
 
     pub(crate) fn state_directory(&self) -> Result<PathBuf, String> {
-        let state = self
-            .environment
-            .get("BRIG_STATE_DIR")
+        Self::state_directory_for(&self.environment)
+    }
+
+    pub(crate) fn state_directory_for(environment: &BTreeMap<String, String>) -> Result<PathBuf, String> {
+        let state = environment.get("BRIG_STATE_DIR")
             .map(PathBuf::from)
             .or_else(|| {
-                self.environment
-                    .get("HOME")
+                environment.get("HOME")
                     .map(|home| Path::new(home).join(".brig"))
             })
             .ok_or("The Brig state directory is unavailable.")?;

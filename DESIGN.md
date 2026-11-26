@@ -3,7 +3,7 @@ name: "Tugboat"
 description: "Conventional macOS utility for Codex and Claude Code in Brig environments."
 colors:
   background: "#f1f1f1"
-  workspace-dot: "#a8c7ff"
+  focus-on-dark: "#a8c7ff"
   control-background: "#ffffff"
   settings-group: "#ffffff"
   settings-divider: "#f9f9f9"
@@ -13,6 +13,9 @@ colors:
   sidebar-line: "#333333"
   sidebar-text: "#eeeeee"
   sidebar-hover: "#202020"
+  sidebar-row-hover: "#2b2b2b"
+  sidebar-muted: "#a6a6a6"
+  sidebar-current: "#2c3f62"
   sidebar-selection: "#4d8dff"
   sidebar-selected-text: "#f1f1f1"
   line: "#dedede"
@@ -56,8 +59,8 @@ colors:
   settings-dialog-text: "#ececec"
   settings-dialog-secondary: "#a6a6a6"
   settings-dialog-selection: "#34476b"
-  settings-dialog-accent: "#3b78e7"
-  settings-dialog-accent-hover: "#346bd0"
+  settings-dialog-accent: "#346bd0"
+  settings-dialog-accent-hover: "#2d60be"
   settings-dialog-on-accent: "#ffffff"
   settings-dialog-focus: "#6ea2ff"
   settings-dialog-error: "#ff7b70"
@@ -98,25 +101,22 @@ typography:
   session-date:
     fontSize: "11px"
   session-tab:
-    fontSize: "13px"
-    fontWeight: 500
+    fontSize: "12px"
+    fontWeight: 550
   usage-value:
-    fontSize: "19px"
+    fontSize: "16px"
     fontWeight: 550
     lineHeight: "24px"
   usage-percentage:
     fontSize: "12px"
     fontWeight: 400
   usage-session-title:
-    fontSize: "14px"
-    fontWeight: 550
-    lineHeight: 1.5
+    fontSize: "20px"
+    fontWeight: 650
+    lineHeight: 1.35
   request-usage:
     fontSize: "12px"
     lineHeight: 1.5
-  setup-action:
-    fontSize: "13px"
-    fontWeight: 550
   description:
     fontSize: "14px"
     lineHeight: 1.5
@@ -154,7 +154,6 @@ rounded:
   navigation: "6px"
   button: "7px"
   group: "9px"
-  setup: "8px"
   field: "5px"
   dialog: "12px"
 spacing:
@@ -218,7 +217,7 @@ components:
     backgroundColor: "{colors.sidebar}"
     textColor: "{colors.sidebar-text}"
     typography: "{typography.body}"
-    padding: "23px 12px 14px"
+    padding: "16px 12px 10px"
     width: "280px"
   sidebar-resizer:
     width: "8px"
@@ -227,10 +226,10 @@ components:
     textColor: "{colors.sidebar-text}"
     typography: "{typography.body}"
     rounded: "{rounded.navigation}"
-    padding: "8px 12px"
+    padding: "7px 10px"
     width: "100%"
   navigation-item-current:
-    backgroundColor: "{colors.sidebar-selection}"
+    backgroundColor: "{colors.sidebar-current}"
     textColor: "{colors.sidebar-selected-text}"
     typography: "{typography.label}"
   sidebar-project:
@@ -238,27 +237,26 @@ components:
     textColor: "{colors.sidebar-text}"
     typography: "{typography.body}"
     rounded: "{rounded.navigation}"
-    padding: "10px 8px"
+    padding: "7px 10px"
     width: "100%"
   sidebar-project-current:
-    backgroundColor: "{colors.sidebar-selection}"
+    backgroundColor: "{colors.sidebar-current}"
     textColor: "{colors.sidebar-selected-text}"
   sidebar-session:
     backgroundColor: "transparent"
     textColor: "{colors.sidebar-text}"
     typography: "{typography.body}"
     rounded: "{rounded.navigation}"
-    padding: "9px 10px"
+    padding: "7px 10px"
     width: "100%"
   sidebar-session-current:
-    backgroundColor: "{colors.sidebar-selection}"
+    backgroundColor: "{colors.sidebar-current}"
     textColor: "{colors.sidebar-selected-text}"
-  sidebar-text-button:
+  sidebar-refresh:
     backgroundColor: "transparent"
-    textColor: "{colors.sidebar-text}"
-    typography: "{typography.hint}"
-    rounded: "{rounded.field}"
-    padding: "5px 6px"
+    textColor: "{colors.sidebar-muted}"
+    rounded: "{rounded.navigation}"
+    size: "28px"
   project-monogram:
     backgroundColor: "{colors.sidebar-hover}"
     textColor: "{colors.sidebar-text}"
@@ -277,8 +275,8 @@ components:
     backgroundColor: "{colors.background}"
     textColor: "{colors.text}"
     typography: "{typography.project-title}"
-    padding: "24px 32px"
-    height: "100px"
+    padding: "14px 32px"
+    height: "80px"
     width: "100%"
   table-surface:
     backgroundColor: "{colors.control-background}"
@@ -296,34 +294,33 @@ components:
     backgroundColor: "transparent"
     textColor: "{colors.secondary}"
     typography: "{typography.session-tab}"
-    rounded: "{rounded.navigation}"
-    padding: "8px 12px"
+    rounded: "{rounded.field}"
+    padding: "6px 9px"
   session-tab-current:
     backgroundColor: "{colors.control-background}"
     textColor: "{colors.text}"
   usage-summary:
     textColor: "{colors.text}"
     typography: "{typography.usage-value}"
-    padding: "0 0 24px"
     width: "100%"
-  setup-action:
+  project-notice:
     backgroundColor: "transparent"
-    textColor: "{colors.text}"
-    typography: "{typography.setup-action}"
-    rounded: "{rounded.setup}"
-    padding: "20px"
+    textColor: "{colors.secondary}"
+    typography: "{typography.body}"
+    rounded: "{rounded.group}"
+    padding: "8px 12px"
   project-settings-dialog:
-    backgroundColor: "{colors.control-background}"
-    textColor: "{colors.text}"
+    backgroundColor: "{colors.settings-dialog-background}"
+    textColor: "{colors.settings-dialog-text}"
     rounded: "{rounded.dialog}"
     padding: "0"
-    width: "min(900px, calc(100vw - 64px))"
+    width: "min(760px, calc(100vw - 40px))"
   session-usage-dialog:
     backgroundColor: "{colors.control-background}"
     textColor: "{colors.text}"
     rounded: "{rounded.dialog}"
     padding: "0"
-    width: "min(900px, calc(100vw - 64px))"
+    width: "min(820px, calc(100vw - 48px))"
   settings-group:
     backgroundColor: "{colors.settings-group}"
     textColor: "{colors.text}"
@@ -391,17 +388,17 @@ components:
 
 Tugboat is a compact utility for Apple silicon Macs with macOS 15 or later. Its subtitle is “Agent Sandbox”. Preserve the visible dark native titlebar, window buttons, application menus, and folder panel. English labels and locally bundled Inter support direct project work. Native macOS shell affordances retain system typography.
 
-The system covers the implemented project library, project dashboard, settings, policy, boundary-check, session-management, usage, and terminal surfaces. The application uses one fixed composition: a dark native window header, a solid dark sidebar, and a pale workspace with white controls, independent of operating-system appearance. Only the Projects library uses the dot grid. Selected projects and Settings use plain canvases. The terminal has a separate, fixed dark theme and a native AppKit renderer. Density serves the current task: project and session tables, a fixed project identity, wide scoped settings, and maximum terminal space.
+The system covers the implemented project library, project dashboard, settings, policy, boundary-check, session-management, usage, and terminal surfaces. The application uses a dark native window header, a solid dark sidebar, and a plain pale workspace with white controls, independent of operating-system appearance. The terminal has a separate, fixed dark theme and a native AppKit renderer. Density serves the current task: project and session tables, a fixed project identity, wide scoped settings, and maximum terminal space.
 
 **Key Characteristics:**
 - Real macOS shell affordances and keyboard commands.
 - Inter UI type, a dark native window header, a solid dark sidebar, pale project canvases, dark Settings and Project settings dialogs, white controls, and blue actions with light text.
-- A dot grid only in the Projects library, plain selected-project canvases, and rounded white information groups.
-- A sidebar that starts with Projects, uses Lucide navigation icons, and places Help above Settings and the application version in its footer.
+- Plain pale Projects and selected-project canvases with rounded white information groups.
+- A sidebar that starts with Projects, uses Lucide navigation icons, and places Help, Settings, and the application version on one footer row.
 - A project table in last-opened order, path tooltips, and a selected-project sidebar with active sessions.
-- A fixed name-and-branch header with the folder path below it and a Brig reference below the scoped settings action on the right.
-- Saved project data remains visible during background environment checks. Unresolved configuration offers a centered Review project settings action.
-- Editable settings, prompt-level usage, a conditional bottom status bar, an API-equivalent information popover, and explicit archive, Trash, restore, and removal controls.
+- A fixed project name above the folder path and branch, with the Brig reference below the settings action on the right.
+- Saved project data remains visible during background environment checks. Unresolved configuration shows an inline notice with an Open project settings action.
+- Editable settings, prompt-level usage, a bottom status bar, an API-equivalent pricing note, and explicit archive, Trash, restore, and removal controls.
 - A native terminal with preferred Consolas, bundled JetBrains Mono fallback, and a separate dark toolbar.
 
 **The Native Shell Rule.** Keep the native titlebar, window buttons, application menus, folder panel, and parented lifecycle dialogs. Do not simulate them in the WebView.
@@ -414,25 +411,25 @@ Earlier config-only and AppKit attempts still appeared light in the user's runni
 
 ## Colors
 
-The fixed composition pairs a dark native window header and solid dark sidebar with a pale workspace and white controls. Only the Projects library has a dot grid. Blue identifies primary actions, sidebar selection, focused field borders, and checkbox accents. Button keyboard focus uses text underlines or pale surfaces. Frontmatter is normative. Shell color names map to CSS custom properties in `src/style.css`.
+The fixed composition pairs a dark native window header and solid dark sidebar with a pale workspace and white controls. Blue identifies primary actions, sidebar selection, focused field borders, and checkbox accents. Button keyboard focus uses text underlines or pale surfaces. Frontmatter is normative. Shell color names map to CSS custom properties in `src/style.css`.
 
-The user-confirmed palette comes from the ChatGPT conversation “Renk paleti oluşturma” (`6af337ab-0d84-83ed-a038-1e86c441b113`). It establishes the yellow, dark, and blue values represented by `terminal-foreground`, `sidebar`, and `accent`. The current interface uses a pale neutral workspace, light blue library dots, blue workspace buttons, and light text on blue fills. Yellow remains in the application icon and the pinned terminal theme. Other neutrals, hover colors, borders, and text-selection tints are retained or derived support colors from the implementation. Their exact values are not attributed to that conversation.
+The user-confirmed palette comes from the ChatGPT conversation “Renk paleti oluşturma” (`6af337ab-0d84-83ed-a038-1e86c441b113`). It establishes the yellow, dark, and blue values represented by `terminal-foreground`, `sidebar`, and `accent`. The current interface uses a pale neutral workspace, blue workspace buttons, and light text on blue fills. Yellow remains in the application icon and the pinned terminal theme. Other neutrals, hover colors, borders, and text-selection tints are retained or derived support colors from the implementation. Their exact values are not attributed to that conversation.
 
 ### Primary
 
 - **Action Blue** (`accent`) identifies the current primary workspace action. `accent-hover` provides the implemented hover state.
-- **Interaction Blue** (`sidebar-selection`, `focus`) marks the current sidebar destination, focused field borders, and native checkbox accents. Sidebar keyboard focus underlines text in its inherited color.
+- **Interaction Blue** (`sidebar-selection`, `focus`) provides the blue for the sidebar selection tint, focused field borders, and native checkbox accents. Sidebar keyboard focus underlines text in its inherited color.
 
 ### Neutral
 
 - **Pale Workspace** (`background`) defines the main canvas and compact project header.
-- **Workspace Dot** (`workspace-dot`) defines the explicitly requested dot grid only in the Projects library. Selected projects and Settings use the plain base canvas.
+- **Focus on Dark** (`focus-on-dark`) marks keyboard focus in the app update dialog.
 - **White Control Surface** (`control-background`) defines fields, secondary buttons, the removal dialog, and destructive-button text.
-- **Settings Information Surface** (`settings-group`) fills the rounded General and host-tool information groups.
+- **Settings Information Surface** (`settings-group`) fills rounded host-tool information groups.
 - **Settings Section Divider** (`settings-divider`) separates General information, Records folder, and Brig settings within the General tab.
 - **Field Border** (`field-border`) defines the resting border of editable text, number, select, and multiline fields.
 - **Support Surface** and **Workspace Divider** (`surface`, `line`) define project monograms, secondary controls inside dialogs, removal-preview backgrounds, table edges, and divided rows.
-- **Dark Sidebar**, **Sidebar Divider**, **Sidebar Text**, and **Sidebar Hover** (`sidebar`, `sidebar-line`, `sidebar-text`, `sidebar-hover`) define the persistent navigation region. The terminal toolbar uses the terminal background with Sidebar Divider, Sidebar Text, and Sidebar Hover.
+- **Dark Sidebar**, **Sidebar Divider**, and **Sidebar Text** define the navigation region. Use `sidebar-row-hover` for hovered rows and `sidebar-muted` for group headings and status. The current row mixes (30%) Interaction Blue with Dark Sidebar. The terminal toolbar retains `sidebar-hover` for hover.
 - **Primary Text** and **Secondary Text** (`text`, `secondary`) distinguish labels from paths, explanations, values, and status text. Icon actions become Primary Text on hover, press, and keyboard focus.
 - **Workspace Text Selection** (`selection`) uses the implemented pale blue tint for text selection and secondary or icon button feedback. Sidebar text selection uses Interaction Blue with `sidebar-selected-text`.
 - **On Accent** and **Selected Sidebar Text** (`on-accent`, `sidebar-selected-text`) use the user's explicit light text choice on blue primary buttons, their hover state, current navigation, and sidebar text selection.
@@ -442,9 +439,9 @@ The user-confirmed palette comes from the ChatGPT conversation “Renk paleti ol
 - **Terminal Divider** (`terminal-divider`) records the normal dark toolbar bottom line, which uses the sidebar divider role. The application has no terminal split.
 - The sixteen indexed `terminal-ansi-0` through `terminal-ansi-15` colors retain the exact order from `TerminalTheme.h`. They are terminal protocol colors, not additional application action accents.
 
-**The Fixed Composition Rule.** Keep the native window header and sidebar dark, the workspace pale, and controls white, independent of operating-system appearance. The Project settings and application Settings dialogs are the exceptions: they always use the dark `settings-dialog-` palette. Keep the requested dot grid only in the Projects library. Selected-project views keep the pale base canvas. Keep the terminal view and its separate toolbar dark. Tauri's Dark theme and the explicit per-window AppKit Dark Aqua appearance own classic native chrome, with WebView content below the titlebar. Keep the document root/meta and body color scheme light for the pale workspace and white controls. Settings describes the composition as “Dark sidebar and settings · Light workspace”.
+**The Fixed Composition Rule.** Keep the native window header and sidebar dark, the workspace pale, and controls white, independent of operating-system appearance. The Project settings and application Settings dialogs are the exceptions: they always use the dark `settings-dialog-` palette. Keep the terminal view and its separate toolbar dark. Tauri's Dark theme and the explicit per-window AppKit Dark Aqua appearance own classic native chrome, with WebView content below the titlebar. Keep the document root/meta and body color scheme light for the pale workspace and white controls.
 
-**The Accent Text Rule.** Use On Accent light text on blue primary buttons in normal and hover states. Use Selected Sidebar Text light text on blue navigation and sidebar text selection. Preserve this explicit user choice; do not present this pairing as an AA contrast pass.
+**The Accent Text Rule.** Use On Accent light text on blue primary buttons in normal and hover states. Use Selected Sidebar Text on the navigation tint and on sidebar text selection.
 
 **The Terminal Palette Rule.** Preserve the pinned foreground, background, cursor, selection colors, and all sixteen ANSI entries. Do not derive them from shell colors.
 
@@ -463,9 +460,9 @@ Native macOS titlebars, menus, folder panels, and lifecycle dialogs retain syste
 - **Section Label** separates Settings sections below its unchanged Title heading. **Label** serves action labels, field labels, and disclosure summaries.
 - **Field** serves text and number inputs, native selects, and multiline entry. **Field Hint** gives field-label explanations and network help a consistent readable rhythm. **Settings Term** gives information-row labels a medium weight below section headings.
 - **Hint** serves supporting details and the compact terminal header path. Supporting paragraphs use a line height of (1.5).
-- **Project Row Name** serves the library name column. **Project Meta** serves Git branches, the fixed folder path and right-aligned Brig reference, and sidebar feedback. **Project Monogram** serves initials at the same size in library and sidebar rows. Sidebar project names use body size with label weight; saved session names use body size.
-- **Table** and **Table Heading** serve project and session data, with tabular numbers. **Session Title** and **Session Date** distinguish each session name from its timestamp. **Session Tab** serves the Sessions, Archived, and Trash controls.
-- **Usage Value** serves project totals. **Usage Percentage** keeps the cached-input percentage smaller and lighter than the project count. **Usage Session Title** carries the full conversation title inside the usage dialog. **Request Usage** serves exact per-request counts, model, rates, and missing-data notes. **Setup Action** serves the centered environment entry.
+- **Project Row Name** serves the library name column. **Project Meta** serves Git branches, the fixed folder path and right-aligned Brig reference, and sidebar feedback. **Project Monogram** serves initials in the library. Sidebar rows use body size. The fixed project name uses Section Label.
+- **Table** and **Table Heading** serve project and session data, with tabular numbers. **Session Title** and **Session Date** distinguish each session name from its timestamp. **Session Tab** serves the Active, Archived, and Trash controls.
+- **Usage Value** serves project totals. **Usage Percentage** keeps the cached-input percentage smaller and lighter than the project count. **Usage Session Title** carries the full conversation title inside the usage dialog. **Request Usage** serves exact per-request counts, model, rates, and missing-data notes.
 - **Document** serves policy JSON and removal previews in Inter at the frontmatter size. Preserve whitespace wrapping and allow long content to break.
 - **Terminal** prefers installed Consolas at the pinned point size. When Consolas is unavailable, use the bundled Google Fonts JetBrains Mono asset at `resources/fonts/JetBrainsMono-Variable.ttf`. Both paths use (14pt). CoreText registers the bundled fallback for this process only; it does not install the font for the user. Consolas itself is not bundled. Terminal creation fails if neither font can load.
 
@@ -481,41 +478,41 @@ Terminal cell height is based on font metrics, not CSS line height: `ceil((ascen
 
 The full-height shell uses `components.sidebar` and a flexible workspace with a zero minimum track width. The workspace has a scrolling main pane above an automatic-height status-bar row. Its content minimum height is (400px). The native window has an initial size of (1020 × 700px), opens maximized, and has a minimum of (760 × 500px).
 
-Only the visible Projects library receives the dot grid over Pale Workspace. A radial gradient draws Workspace Dot circles with a (1px) radius on a repeating (20 × 20px) grid. Selecting a project or showing Settings removes the pattern. Keep the sidebar solid, controls white, and the native terminal on its pinned canvas.
+The Projects library uses the same plain Pale Workspace canvas as the selected-project dashboard.
 
 The sidebar starts with Projects and has no application icon, wordmark, or subtitle row. Each navigation destination pairs a Lucide icon (16 × 16px) with its label and an (8px) gap. The right-edge resize target is (8px) wide and uses the `col-resize` cursor. The sidebar has a minimum width of (280px), and resizing retains at least (480px) for the workspace.
 
 On launch, the main window maximizes to the screen's usable area, including its native titlebar. Menu bar and Dock space follow macOS screen settings.
 
-The project area fills the sidebar's remaining space and scrolls vertically. Its minimum height is zero, top margin is (12px), and inner padding is (3px). Horizontal overflow stays hidden. Navigation destinations and the footer do not shrink. The footer places Settings beside the application version below the scrolling area. There is no sidebar add-project control.
+The project and activity lists fill the remaining space and scroll vertically. The Projects control and selected project name stay above the scroll area. The footer places Help, Settings, and the version on one row below a divider.
 
-The Projects header stays at the top of the scrolling workspace. Its right-aligned Add new project button has a leading plus icon. The library explanation and table sit in a full-width content region capped at (1300px), with `24px 32px 40px` padding. The table columns are Project (48%), Branch (32%), and Last opened (20%). An empty library shows a centered explanation with `120px 12px` padding and a first-chat folder action. Add new project remains in the header.
+The Projects header stays at the top of the scrolling workspace. Its right-aligned Add new project button has a leading plus icon. The table and its footnotes sit in a full-width content region capped at (1300px), with `24px 32px 40px` padding. The columns are Project, Last opened, and Total cost. The first-run panel uses a folder icon, a short explanation, and a single folder action.
 
-The selected-project header uses `components.workspace-header`: sticky at the top, a minimum height of (100px), and a bottom divider. Its first line pairs the one-line project name with a small branch label, separated by (16px). The branch takes at most (40%) of the row. Its second line contains only the folder path, with an (18px) line height and ellipsis overflow. The settings icon stays on the right. The Brig session reference is right-aligned directly below the icon. The selected project uses the same full-width content region as the library. A new project shows the agent, host and account status, and the button to open the first chat. Unresolved configuration for existing projects can show a centered Review project settings action in an area at least (400px) tall. Background plan checks retain the dashboard and saved sessions.
+The selected-project header stays at the top with an (80px) minimum height and a bottom divider. The project name uses the full first line of the identity area. The folder path and Git branch share the second line and retain their tooltips. The settings icon stays on the right, above the Brig session reference. First-chat setup has a bordered white panel for agent selection, host and account status, and the action that opens the first chat. Setup notices stay above the dashboard with their reason and recovery actions. Background plan checks retain the dashboard and saved sessions.
 
-Project dashboards show five totals in a grid: total tokens, input, cached input, output, and estimated API equivalent. Four equal tracks precede a slightly wider cost track; the gap is (16px). The final value aligns right. A small information control beside Estimated API equivalent opens the explanatory note in a popover. The session toolbar wraps with a (16px) gap and `32px 0 18px` margins. Session views stay left; the native agent select and New Chat stay right. Existing chats and terminal outputs reopen from the sidebar. The session table has a minimum width of (650px), with local horizontal scrolling when needed.
+The project dashboard has two bordered white sections. Project usage shows total tokens, input, cached input, output, and estimated API equivalent. Total tokens and estimated cost use (20px) type. View usage breakdown appears in the section header. Sessions groups the status filters in the toolbar beside the account status, agent selector, and New Chat. Primary actions in project details use the settings blue with white text. The account disclosure opens below the toolbar and contains the full provider message and the settings action when needed. Existing chats and terminal outputs also open from the sidebar.
 
-Project settings and application Settings use named dialog sections in the workspace with the same layout. Their controller confines focus and makes the background inert. Session usage uses a native HTML dialog. Both are bounded to `min(900px, calc(100vw - 64px))` and a maximum height of `calc(100vh - 64px)`. Each open dialog is a vertical flex column. Its header does not shrink, has `20px 28px` padding, and keeps the close action visible. Session usage's body scrolls vertically with `12px 28px 28px` padding. Project settings has a fixed height of `min(720px, calc(100vh - 64px))`. Its body is a two-column grid: a (200px) left menu on Support Surface with a right divider, and one scrolling section with `24px 32px 32px` padding. Menu items use the session-tab shape; the current item uses White Control Surface, Primary Text, and label weight. Each section starts with a Section Label title. The Agents and Network sections group options in rounded White Control Surface boxes with one-pixel row dividers, as in the reference image `reports/network.png`. Each row puts its label and hint on the left and a (40 × 24px) switch or value button on the right. A checked switch uses Action Blue. Refresh uses a pill button on Support Surface. The dialog always uses the dark `settings-dialog-` palette, as in the reference image, at the user's request. It declares `color-scheme: dark` and redefines the shared tokens inside `.settings-dialog`, so its fields, buttons, switches, and native controls follow the dark values. The rest of the workspace keeps the light palette. Select fields use an inline copy of the Lucide chevron with a light stroke. A higher-contrast system setting raises the dialog line, field border, and secondary text values. CPU and memory share two flexible columns; image verification and network share another pair. Each pair uses a (16px) gap. At the compact breakpoint the menu is (168px) wide and the section padding is `20px 24px 28px`.
+Project settings and application Settings use a fixed header and navigation with a single scrolling content pane. Their controller confines focus and makes the background inert. Project settings is bounded to `min(760px, calc(100vw - 40px))` wide and `min(580px, calc(100vh - 40px))` high. Show the selected project name below the title. Use the dark settings palette, blue primary actions, flat option rows, and native selects. The pane uses (24px) vertical and (28px) horizontal padding. Session usage uses a native HTML dialog with width `min(820px, calc(100vw - 48px))` and a maximum height of `calc(100vh - 48px)`.
 
-Showing the terminal keeps the project identity and settings icon, then places the independent dark toolbar and native terminal below it. The header contracts to a minimum height of (86px) with `16px 24px` padding. The ordinary project content is hidden except for errors. The terminal panel fills remaining height with a minimum of (160px); its surface has a minimum of (100px). Toolbar actions wrap separately from terminal text. AppKit sizing subtracts the pinned inset on every side before deriving grid dimensions. Resize the real terminal and pseudo-terminal together.
+Showing the terminal keeps the project identity and settings icon, then places the independent dark toolbar and native terminal below it. The header has a minimum height of (86px) with `16px 24px` padding. The ordinary project content is hidden except for errors. The terminal panel fills remaining height with a minimum of (160px); its surface has a minimum of (100px). Toolbar actions wrap separately from terminal text. AppKit sizing subtracts the pinned inset on every side before deriving grid dimensions. Resize the real terminal and pseudo-terminal together.
 
-Global Settings uses a centered container capped at (670px), with `36px 40px` padding. General, Agent Profile, Providers, and System Checks use a wrapping tab row. Section headings use `32px 0 12px` margins. Two pale section rules separate General information, Records folder, and Brig settings in the General tab. These rules use a (1px) top border and `20px 0` margins. A directly following heading has no top margin. The first direct field label inside each Settings fieldset has no top margin. Network help follows its select with an (8px) top margin. Action rows wrap with (8px) gaps. Policy documents have a scrollable maximum height of (260px). Removal previews stay inside a scrollable dialog bounded by the viewport.
+Application Settings is centered and bounded to `min(720px, calc(100vw - 40px))` wide and `min(520px, calc(100vh - 40px))` high. Its header and footer use the dark navigation surface. Only the content pane scrolls. Give the pane (24px) vertical and (28px) horizontal padding. Keep the close action and navigation visible. Use blue #346BD0 for primary actions and #2D60BE on hover.
 
-At the compact desktop breakpoint (900px and below), the resizable sidebar retains its (280px) minimum. Header padding becomes `22px 24px`; ordinary project content padding becomes (24px). The totals become three columns with a (22px) row gap, and cost aligns left. The API-equivalent popover aligns to the left of its cost group. Settings padding becomes `32px 28px`. The terminal header retains its compact geometry. Main content and sidebar lists scroll independently. This is a macOS window layout; no mobile layout is implemented.
+At the compact desktop breakpoint (900px and below), the resizable sidebar retains its (280px) minimum. Project content and the header use (24px) horizontal padding. When the dashboard has (680px) or less, total tokens and estimated cost move to the first row of the usage grid. Input, cached input, and output share the second row. The session toolbar wraps, and the table keeps the session, total, estimated cost, and row actions in view. The session usage dialog provides the remaining measurements. Main content and sidebar lists scroll independently.
 
-**The Project Scope Rule.** Keep project setup, policy, diagnostics, and environment controls in the scoped settings dialog. Keep account controls under Providers in application Settings. Keep Add new project in the Projects library header.
+**The Project Scope Rule.** Keep project setup, policy, diagnostics, and environment controls in the scoped settings dialog. Keep account controls under Accounts in application Settings. Keep Add new project in the Projects library header.
 
 ## Elevation & Depth
 
 Tonal surfaces and one-pixel dividers provide normal hierarchy. Buttons have no shadow. Modal dialogs use the `dialog-modal` shadow and a dim backdrop; exact values live in the sidecar. Tables, settings groups, and ordinary project content remain flat. Native titlebars, folder panels, and close or quit dialogs retain system rendering.
 
-No CSS transition duration or pressed movement is declared. Buttons change fill or text treatment without adding borders. The native cursor follows terminal focus and cursor style; its blink is suppressed when the system requests reduced motion.
+Session filters transition fill and text color over (120ms). Reduced motion shows these states immediately. The native cursor follows terminal focus and cursor style; its blink is suppressed when the system requests reduced motion.
 
 **The Quiet Depth Rule.** Use shadow only for the implemented modal dialogs. Keep controls, tables, settings groups, and disclosures flat.
 
 ## Shapes
 
-Use the frontmatter radii for navigation, icon and secondary buttons, primary buttons, tables, settings groups, setup actions, fields, and dialogs. Inputs and removal-preview backgrounds share the field radius. One-pixel borders define fields, table edges, settings groups, removal-dialog edges, and toolbar separation. Wide settings and usage dialogs have no edge border. Buttons have no resting, focus, or pressed border. Native window geometry remains owned by macOS.
+Use the frontmatter radii for navigation, icon and secondary buttons, primary buttons, tables, settings groups, project notices, fields, and dialogs. Inputs and removal-preview backgrounds share the field radius. One-pixel borders define fields, table edges, settings groups, project notices, removal-dialog edges, and toolbar separation. Wide settings and usage dialogs have no edge border. Buttons have no resting, focus, or pressed border. Native window geometry remains owned by macOS.
 
 ## Components
 
@@ -529,56 +526,56 @@ Add new project uses a leading plus and opens the native folder picker. It appea
 
 ### Sidebar and native menus
 
-Projects and Settings use the existing compact navigation buttons. Their inline SVG icons are Lucide Folder and Settings from (1.72.0). They use `currentColor`, a (1.5px) stroke, rounded stroke caps and joins, `aria-hidden="true"`, and `focusable="false"`. Add new project uses an inline plus with the same size and stroke. Current page navigation uses Interaction Blue, Selected Sidebar Text light text, and `aria-current="page"`; the Projects and Settings buttons also use label weight. Hover uses Sidebar Hover. Sidebar text selection uses the same blue and light-text pair. Opening Settings moves focus to its heading. Returning to a visible terminal restores native first-responder focus.
+Projects shows a folder icon in the library and a back arrow while a project is open. The navigation icons use `currentColor`, a (1.5px) stroke, rounded caps and joins, `aria-hidden="true"`, and `focusable="false"`. Project, chat, and terminal rows share a (32px) minimum height. Use the blue tint on the current view and Selected Sidebar Text for its label. Opening Settings moves focus to its heading. Returning to a visible terminal restores native first-responder focus.
 
-Projects opens the library and lists registered projects in the scrollable sidebar. Selecting a project hides the other sidebar projects. The selected project remains above Sessions and Refresh; Projects always returns to the library. Sidebar project rows use a monogram, a one-line name, and the branch when available. Paths appear only in full name-and-path tooltips. The session list contains only active sessions. The Terminals section opens retained operation outputs. Initial placeholders, empty states, and failure feedback stay inside the relevant list; loading messages use the bottom status bar.
+Projects opens the library and lists registered projects in the scrollable sidebar. Selecting a project hides the other sidebar projects. Select Projects to return to the library. Select the fixed project name to return to its dashboard. Sidebar project rows show the name on one line. The tooltips include the full name, path, and branch when available. Chats lists active chats. The Terminals section opens retained operation outputs. Initial placeholders, empty states, and failure feedback stay inside the relevant list; loading messages use the bottom status bar.
 
-Saved session rows use `components.sidebar-session`. Their one-line title has an ellipsis, a full `title` tooltip, and the complete `aria-label`. Codex and Claude Code chats appear together. Each title begins with its agent's (16 × 16px) filled brand mark instead of a visible agent name. Both marks use `currentColor`, including the selected row, with `aria-hidden="true"` and `focusable="false"`. Accessible names include the agent name. These user-requested brand marks are an exception to the Lucide (1.5px) stroke rule. A current saved session uses `aria-current="true"` and the shared blue selection treatment. Refresh uses `components.sidebar-text-button`. Keep the Sessions heading compact, with a (24px) top margin and its Refresh action aligned beside it. The list and status text do not displace Settings.
+Saved session rows use `components.sidebar-session`. Their one-line title has an ellipsis, a full `title` tooltip, and the complete `aria-label`. Codex and Claude Code chats appear together. Each title begins with its agent's (16 × 16px) filled brand mark instead of a visible agent name. Both marks use `currentColor`, including the selected row, with `aria-hidden="true"` and `focusable="false"`. Accessible names include the agent name. These user-requested brand marks are an exception to the Lucide (1.5px) stroke rule. The working indicator sits at the trailing edge of a chat row. Use the blue tint on the selected row while its terminal is visible. Refresh chats uses the (28px) icon control beside Chats. Give it a visible hover and keyboard focus surface.
 
 Keep native menu commands for Add new project (⌘O), Settings (⌘,), Return to project (⌘1), Return to terminal (⌘2), and Quit (⌘Q). Add new project belongs to the library context; the folder picker uses the same label. Return to terminal is enabled when a project terminal exists. Folder selection, project navigation, and session selection are disabled while the relevant setup action is busy. The real Edit and Window menus retain their platform actions.
 
 ### Settings groups and fields
 
-Settings opens as a dark dialog above the current view. Its left menu has General, Providers, Brig, and System Checks, then a New projects group label with Resources, Network, and Agents. The menu uses the Project settings menu shape and marks the current item with `aria-current`. General contains application information, update checks, and Records folder controls. Brig contains the CLI path and telemetry. Resources, Network, and Agents contain the values that a new project starts with; Network and Agents use the same option rows and switches as Project settings. Brig, Resources, Network, and Agents share one save form, and its Save settings row shows only in those sections. System Checks contains Check this Mac, cancellation, host-tool information, and Brig doctor results.
+Settings has four sections across the top. General shows the records folder and application version with their actions. Accounts shows ChatGPT and Claude Code. New projects opens Resources and offers Network and Agents. System opens Checks and offers Brig. Use a blue underline for the current main section and a neutral filled button for the current subsection. Mark each with `aria-current`. Brig, Resources, Network, and Agents share one form. Show Save settings and its result in a fixed footer on those panels. Checks contains Check this Mac, cancellation, host-tool information, and Brig doctor results.
 
-Keep shared accounts in the Providers tab. Show both accounts before any project exists. Project settings contain no account controls. Use the existing information surface, support text, full-width select, and wrapping action rows. Both agents provide browser sign-in, sign-out, and Cancel sign-in while authorization is pending. ChatGPT also offers saved project sign-ins and Retry connection when needed. Claude Code offers Check connection. Show the readonly ChatGPT device code only while the browser is waiting. Claude returns through the native callback. Both sections remain available when another agent is selected or an environment is stopped. Show preparation, browser waiting, verification, saving, failure, and account states with text. Background updates retain navigation and focus. Late results must match the current provider attempt or account generation. Project account errors open Settings and focus the corresponding account heading. Access tokens and refresh tokens never enter the interface.
+Show both shared accounts in Accounts before any project exists. Put the account name and status above the action row. Use one divider between the accounts. Both agents provide browser sign-in, sign-out, and Cancel sign-in while authorization is pending. ChatGPT also offers saved project sign-ins and Retry connection when needed. Claude Code offers Check connection. Show the readonly ChatGPT device code only while the browser is waiting. Claude returns through the native callback. Both sections remain available when another agent is selected or an environment is stopped. Show preparation, browser waiting, verification, saving, failure, and account states with text. Background updates retain navigation and focus. Late results must match the current provider attempt or account generation. Project account errors open Settings and focus the corresponding account heading. Access tokens and refresh tokens never enter the interface.
 
 
-General and host-tool information use divided, rounded definition lists with Settings Information Surface fills and a line height of (1.5). Labels use Settings Term weight and do not shrink. Secondary values align right, allow a zero minimum width, and wrap long paths anywhere. Rows align on their text baselines. Appearance reads “Dark sidebar · Light workspace”. Settings retains its Title heading and uses Section Label for the section hierarchy.
+Use one divider between Records folder and Tugboat in General. Align each action with its label and value. Allow paths, account names, and status text to wrap. Use divided definition lists for host-tool information.
 
 Brig settings use editable, labeled text, number, select, checkbox, and multiline fields. Shared fields use White Control Surface, Field typography, their frontmatter padding, full width, a zero minimum width, a minimum height of (36px), and a (1px) Field Border. Enabled, unfocused hover mixes Field Border with (20%) Secondary Text in sRGB. On focus, the existing border becomes Interaction Blue and the outer outline is removed without a size change. Placeholders use Secondary Text at full opacity. Disabled fields use Secondary Text, Support Surface, and the divider border. User-invalid fields use Error Text for their border when unfocused. Increased contrast uses Higher Contrast Divider for the resting field border.
 
 Native HTML selects retain native popup menus and keyboard behavior. Only the closed field removes platform appearance. Its right padding reserves room for the official Lucide Chevron Down from (1.72.0), displayed at (16 × 16px) and positioned (10px) from the right, vertically centered. The source asset is `src/assets/icons/chevron-down.svg`. Do not replace the native select with a custom popup. Checkboxes use Interaction Blue as their accent. Multiline fields resize vertically and have a minimum height of (90px).
 
-Keep the implemented validation and hints: profile length, CPU and memory limits, image verification, network preference, one allowed host per line, and telemetry status. Fields remain disabled if settings cannot load. Saving disables the save action, shows progress in the bottom status bar, and reports the final result beside the form. External settings changes update untouched fields while preserving unsaved edits. Host checks and doctor details remain in System Checks.
+Keep the implemented validation and hints: profile length, CPU and memory limits, image verification, network preference, one allowed host per line, and telemetry status. Fields remain disabled if settings cannot load. Saving disables the save action, shows progress in the bottom status bar, and reports the final result beside the form. External settings changes update untouched fields while preserving unsaved edits. Host checks and doctor details are in System → Checks.
 
 ### Project library and identity
 
-Library rows live in a semantic table with scoped column headings. Each name button uses `components.recent-project`, a flat monogram, a one-line name, and a (12px) gap. The branch occupies its own column; unavailable branches and dates show an em dash. Paths are absent from the visible table and retained in row and name-button tooltips. Branch labels use a (14 × 14px) icon, a (6px) gap, one-line truncation, and a full tooltip. Table rows use divider lines and a pale hover fill.
+Library rows live in a semantic table with scoped column headings. Each name button uses `components.recent-project`, a flat monogram, a one-line name, and a (12px) gap. The Git branch appears below the name when available. Branch labels use a (14 × 14px) icon, a (6px) gap, one-line truncation, and a full tooltip. Row and name-button tooltips show the project path. Dates and costs align right. An unavailable date shows an em dash. An asterisk beside a cost points to the footnote about missing requests or prices. Table rows use divider lines and a pale hover fill.
 
-Order every registered project by dedicated `lastOpenedAt`, independent of setup's `updatedAt`. Legacy records use `updatedAt × 1000` until the last-opened value is available. Do not reorder the library for setup changes alone. Use a native agent select in first-chat setup and beside New Chat in a ready project's ordinary dashboard. Selecting a project hides the library table and shows its fixed identity, settings icon, and dashboard. The project name and folder path retain exact tooltips. The second header line contains only the path. The selected environment's Brig reference is right-aligned below the settings icon.
+Order every registered project by dedicated `lastOpenedAt`, independent of setup's `updatedAt`. Legacy records use `updatedAt × 1000` until the last-opened value is available. Do not reorder the library for setup changes alone. Use a native agent select in first-chat setup and beside New Chat in a ready project's ordinary dashboard. Selecting a project opens its dashboard and shows the project identity and settings action in the header. The project name, path, branch, and Brig reference retain exact tooltips.
 
 ### Scoped project settings
 
-The header settings icon and Review project settings open the same wide project dialog. Normal project opening displays saved data immediately, then checks the execution plan and starts the selected environment in the background. A new or changed plan shows progress in the bottom status bar. A previously used plan can also show its startup progress card. A chat requested during startup opens after verification. Running verified environments and starts already in progress are reused. The dialog has a static Project settings heading and an accessible close icon. Its Project access section names the agent, shared folder, Brig reference, guest destinations, and signature requirement. Put Prepare environment before the full plan and advanced controls. The resource disclosure includes project name, CPU, memory, image verification, and network. Saved preferences override app defaults for the selected environment. Stop that environment before changing resource options. Saving reports its result inside the dialog. External preference changes preserve unsaved fields and update untouched fields.
+The header settings icon and Open project settings open the same dialog. Normal project opening displays saved data immediately, then checks the execution plan and starts the selected environment in the background. A new or changed plan shows progress in the bottom status bar. A previously used plan can also show its startup progress card. A chat requested during startup opens after verification. Running verified environments and starts already in progress are reused. The dialog has four main sections. Overview shows project access. Configuration opens General and offers Agents. Connections opens Network and offers GitHub and Web preview. Environment opens Operations and offers Guest image. The GitHub and Web preview guides are collapsed below their controls. Its Project access section names the agent, shared folder, Brig reference, guest destinations, and signature requirement. Put Prepare environment before the full plan and advanced controls. The resource disclosure includes project name, CPU, memory, image verification, and network. Saved preferences override app defaults for the selected environment. Stop that environment before changing resource options. Saving reports its result inside the dialog. External preference changes preserve unsaved fields and update untouched fields.
 
 Preparation, guest terminal, sharing plan, network policy, boundaries, diagnostics, tests, stop, and Brig-session removal stay inside this scope. These actions target the selected environment. First-chat setup and application Settings share one sign-in controller per provider. Hide the Codex sandbox option for Claude, which uses the Brig boundary and manual permission requests. Sharing plans use compact divided definition rows. Advanced tools use native disclosure summaries with label weight and divided sections. Status text stays near its action. Policy JSON uses Document type. Externally managed policy content stays read-only when editing is disabled. Boundary results name the outcome and show target, expected behavior, and observed behavior; color alone does not carry the outcome.
 
 ### Session table and usage
 
-Project dashboards show the semantic session table with Session, Input, Cached, Output, Total, Estimated API equivalent, and Actions columns. The active view is labeled Sessions; the other views are Archived and Trash. These controls use `aria-pressed` in a named group. A native agent select appears beside the labeled New Chat primary action in the ordinary dashboard. It selects the agent without ending another agent's chat. New Chat uses a (16px) Lucide Square Pen compose icon with `currentColor` and a (1.5) stroke. The table retains both agents' saved sessions. Session titles stay on one line, with full tooltips and accessible names. Below each title, the agent name uses a small neutral pill before the timestamp. The pill inherits the (11px) metadata type and Secondary Text, with White Control Surface, a (1px) Divider border, (1px 6px) padding, and fully rounded ends. Its local (999px) radius is a user-requested exception to the shared radius scale. Row action accessible names include the agent. Numeric columns align right and use tabular figures. Wide tables scroll horizontally at the (760px) desktop minimum.
+The semantic session table has Session, Input, Cached input, Output, Total, Est. cost, and Actions columns at full width. The accessible name for Est. cost is Estimated API equivalent. The session filters are Active, Archived, and Trash. These buttons use `aria-pressed` in a named group. A native agent select appears beside New Chat. The action uses a (16px) Lucide Square Pen icon with `currentColor` and a (1.5) stroke. The table retains both agents' saved sessions. Session titles stay on one line with full tooltips and accessible names. The agent name appears in a neutral pill before the timestamp. Row action accessible names include the agent. Numeric columns align right and use tabular figures.
 
 Usage appears first as project totals, then per session, then per recorded request in the usage dialog. The project summary always includes archived and deleted history. Cache reads are a subset of input. Display cached input as `count (cached / input percentage)` in all three places; use at most one decimal place and (0%) for zero input. At project totals, the parenthesized percentage uses the smaller, lighter Usage Percentage role. Standard-width wrapping of the count and percentage is accepted. Rows abbreviate counts of (10,000) or more with compact notation. Exact input, cached count and percentage, output, total, and API equivalent remain in numeric-cell tooltips.
 
 Usage, Archive, Delete, and Restore are compact icon actions with explicit tooltips and accessible names. Active rows offer Usage, Archive, and Delete. Archived rows offer Usage, Restore, and Delete. Trash offers Usage and Restore. Both agents offer Usage details for saved records. Archive hides a chat from active views. Delete moves it to Trash. Restore returns it to the active view. These actions target one environment's chat and preserve source rollout files, Claude transcripts, and historical totals. Unavailable session files retain recorded usage and a visible status; their resume action stays disabled. End that chat's relevant terminal processes before archiving or deleting.
 
-The wide usage dialog has the static accessible heading Session usage. Its body displays the full session title, which can wrap, then one table per prompt or agent turn with recorded requests. The table heading includes its number and status. Each request occupies a row with the model, exact input, cached count and percentage, cache writes, output, and API equivalent. Show the recorded tier under the model and the rate date and any pricing explanation under the request cost. The footer gives the total API equivalent for that prompt or agent turn. Use native HTML dialog behavior through `showModal()` and `close()`; do not replace it with a custom overlay role. The native terminal is hidden behind an open dialog and restored when it closes.
+Session usage has a fixed header and a scrolling body. The full session title wraps above a flat row with total tokens on the left and estimated API equivalent on the right. Token breakdown starts open and shows input, cached input, cache writes, and output. Usage by agent expands to compare the selected agent, its descendants, and their combined usage. Prompt and agent turn rows show status, the number of measured requests, and the estimated API equivalent for those requests. Expand a row for the request table, including the model, exact counts, saved rates and corrections, and source links when available. Subagent rows expand to show their own turns. Recording and billing notes explain coverage and billing. The native terminal hides while the dialog is open and becomes visible again when the dialog closes.
 
-Show Subscription billing is separate beside Estimated API equivalent. Keep the detailed pricing explanation in the information popover. A (14px) Lucide Info icon sits in a (16 × 16px) native `details` summary. Clicking it opens the white, bordered popover below the cost label. Its width is capped at (360px) and the available workspace width; its height is capped at the smaller of (360px) and (60vh). Long text scrolls inside. Outside clicks and Escape close it; Escape restores focus to the summary. Data updates preserve an open popover. The detailed note does not occupy a page row when closed.
+Show Subscription billing is separate below the usage grid. A (14px) Lucide Info icon sits in a (16 × 16px) native `details` summary beside Estimated API equivalent. The summary opens a bordered popover below the estimate. Outside clicks and Escape close it. Escape restores focus to the summary. Usage updates preserve the open popover.
 
-The popover identifies USD amounts as token API equivalents and states that subscription charges are separate. The OpenAI catalogue was checked on (2026-11-10); Anthropic was checked on (2026-11-13). Each request retains its dated tariff. Keep assumed tiers, missing cache information, and unpriced requests explicit. Unknown cached counts show Unknown or a known subtotal plus unknown; do not calculate a percentage from incomplete coverage. Fully unpriced sessions show Unavailable; partial totals show an asterisk (`*`) marker after the amount. The marker tooltip and screen-reader text give the number of excluded unpriced requests, and the popover note repeats it as the legend. Do not treat missing data as zero or update stored request prices when the catalogue changes.
+The pricing note identifies USD amounts as token API equivalents and states that subscription charges are separate. The OpenAI catalogue was checked on (2026-11-10); Anthropic was checked on (2026-11-13). Each request retains its dated tariff. Keep assumed tiers, missing cache information, and unpriced requests explicit. Unknown cached counts show Unknown or a known subtotal plus unknown; do not calculate a percentage from incomplete coverage. Fully unpriced sessions show Unavailable; partial totals show an asterisk (`*`) marker after the amount. The marker tooltip and screen-reader text give the number of excluded unpriced requests, and the note repeats it as the legend. Do not treat missing data as zero or update stored request prices when the catalogue changes.
 
-Claude token cells show recorded main-session and linked subagent usage. Root rows include linked descendants, and details expose each agent’s own usage. Input adds ordinary input, cache reads, and cache creation; cached input remains a subset of that total. Claude details label responses as agent turns and keep user prompt count unknown. Mixed-project totals include recorded usage from both agents. Claude coverage remains partial because missing transcripts, unverified relationships, and unrecorded work limit coverage; show this limit in the API-equivalent popover and usage details. Supported Anthropic token API equivalents show saved dates and a pricing source. Request notes expose speed, geography, separate 5-minute/1-hour writes, and assumptions. Missing metadata produces a labelled estimate; malformed or unsupported metadata remains unpriced. Subscription charges, account discounts, server-tool charges, and taxes are separate. Missing or invalid counts show Unknown or a known subtotal plus unknown, without an exact cache percentage. Saved usage and tariffs remain visible when a transcript is unavailable.
+Claude token cells show recorded main-session and linked subagent usage. Root rows include linked descendants, and details expose each agent’s own usage. Input adds ordinary input, cache reads, and cache creation; cached input remains a subset of that total. Claude details label responses as agent turns and keep user prompt count unknown. Mixed-project totals include recorded usage from both agents. Claude coverage remains partial because missing transcripts, unverified relationships, and unrecorded work limit coverage; show this limit in the API-equivalent note and usage details. Supported Anthropic token API equivalents show saved dates and a pricing source. Request notes expose speed, geography, separate 5-minute/1-hour writes, and assumptions. Missing metadata produces a labelled estimate; malformed or unsupported metadata remains unpriced. Subscription charges, account discounts, server-tool charges, and taxes are separate. Missing or invalid counts show Unknown or a known subtotal plus unknown, without an exact cache percentage. Saved usage and tariffs remain visible when a transcript is unavailable.
 
 Saved Codex sessions come from each environment's guest index and rollout metadata. Claude sessions come from its persistent guest transcripts. Include guest working directories inside the project and its subdirectories. Reading history does not start a virtual machine. Each chat retains its project, environment, and native session identity. Equal native IDs in different environments remain separate. Show sessions by most recently updated first, including while automatic environment startup is in progress. Disabled, unverified session names in the table and sidebar use the existing 1.6-second opacity pulse while plan, setup, or session checks run. Stop the pulse when checks finish or fail; reduced motion uses static dimmed text. Initial placeholders, empty states, and failures remain in the relevant list. Loading messages use the bottom status bar. Retry environment restarts a failed background check; an explicitly stopped environment offers Start environment. New Chat and resume wait for verified readiness and the relevant account. Launch-time environment, account, and policy checks remain required after background plan validation. Each project can run multiple chats across its environments. Selecting an open chat restores its own terminal and scrollback. New Chat starts another process. Claude resume uses the saved native UUID without creating a fork. Close terminal affects the selected terminal. End that session's terminal before archiving or deleting it.
 
@@ -596,11 +593,11 @@ The original records location was restored exactly. All 18 normal record files r
 
 ### Workspace status bar
 
-The status bar stays at the bottom of the workspace, below the scrolling main pane. It appears only when the visible page has a message. Project-folder, plan, session, account, settings-save, and Mac-check progress use this shared area. Keep these loading messages out of page rows that would move controls. Initial placeholders and action-specific results retain their existing locations.
+The status bar stays at the bottom of the workspace, below the scrolling main pane. It stays visible while a project is open. Elsewhere it appears for a message on the visible page. Use one message line. Project-folder, plan, session, account, settings-save, and Mac-check messages take priority over the latest network event. Keep these messages out of rows that move controls.
 
-The bar uses Support Surface, a (1px) top divider, Secondary Text, (12px) type, a (17px) line height, and `5px 24px` padding. Its minimum height is (28px). A (12px) indicator rotates beside progress text. Reduced motion stops the rotation. Long messages truncate on one line and retain the full text in a tooltip. The bar uses `role="status"`, `aria-live="polite"`, and `aria-atomic="true"`.
+Use Support Surface, a (1px) top divider, Secondary Text and (12px) type in a (32px) bar. Keep Network activity as a text button on the right. The message truncates on one line and retains its details in a tooltip. The message uses a polite live status. In the network summary, show the direction and protocol or the connection failure, followed by the endpoint. Earlier events are available in the dialog.
 
-When a selected terminal's output is no longer retained, return to the project and show its existing message in Error Text. This status has no spinner. Dismiss it after (10 seconds) unless another message replaces it. Ongoing progress remains visible until its operation ends. Hide the bar when no message remains for the visible page.
+When terminal output is no longer available, return to the project and show the message in Error Text. Dismiss it after (10 seconds) unless another message replaces it. When workspace messages clear, show the latest network event for the selected project.
 
 ### Terminal header, toolbar, and surface
 
@@ -624,22 +621,22 @@ Project settings offer Preview environment removal for the selected agent and Pr
 
 - **Do** preserve real macOS windowing, menus, folder panels, and parented close or quit warnings.
 - **Do** keep English application labels, locally bundled Inter UI typography, native system typography, and the fixed dark-sidebar/pale-workspace composition.
-- **Do** preserve light text on blue fills, the library-only dot grid, plain selected-project canvases, white controls, and blue field borders on focus.
+- **Do** preserve light text on blue fills, white controls, and blue field borders on focus.
 - **Do** retain the classic dark native window header above WebView content while keeping the document root/meta and body color scheme light.
-- **Do** keep Settings information groups white and rounded, with pale section dividers, readable section headings, and wrapping values.
+- **Do** use flat rows, clear headings, and wrapping values in application Settings.
 - **Do** use the shared Field typography, spacing, and border states while retaining native select popup and keyboard behavior.
 - **Do** start the sidebar with Projects and keep Settings and the application version in its footer.
-- **Do** keep Add new project in the Projects header, project controls in the scoped settings dialog, and New Chat in the ready-project toolbar.
+- **Do** keep Add new project in the Projects header of a populated library, project controls in the scoped settings dialog, and New Chat in the ready-project toolbar.
 - **Do** keep every registered project in last-opened order and show only the selected project's saved sessions in its sidebar context.
 - **Do** preserve full session titles in tooltips and accessible names while keeping list rows on one line.
 - **Do** keep Settings below the scrollable project area and terminal controls visible beside a bounded caption.
 - **Do** use `stroke-width="1.5"` for all Lucide icons, including Folder and Settings beside their navigation labels.
 - **Do** preserve the fixed dark terminal palette, Consolas preference, bundled JetBrains Mono fallback at 14pt, native cell metrics, and equal terminal insets.
-- **Do** retain underline or surface keyboard focus, current-navigation semantics, the conditional bottom status bar, compact selectable paths, and full identity tooltips.
+- **Do** retain underline or surface keyboard focus, current-navigation semantics, the bottom status bar, compact selectable paths, and full identity tooltips.
 - **Do** keep policy, boundary, and session details grouped and preserve their actual enabled, disabled, and read-only states.
 - **Do** preserve project totals through archive, Trash, and restore, with input, cached input, output, total, and API equivalent visible.
 - **Do** show cached-input percentages in parentheses at totals, rows, and prompt requests; keep exact row counts in tooltips.
-- **Do** keep the dated API-equivalent note in the Estimated API equivalent information popover and make assumed, unknown, and unpriced information explicit.
+- **Do** keep the dated API-equivalent note in the Estimated API equivalent disclosure and make assumed, unknown, and unpriced information explicit.
 - **Do** show retained Zustand data immediately, update it after persisted changes, and preserve unsaved form fields during refreshes.
 - **Do** keep plan checks in the background and verify environment, account, and policy safety when starting or resuming a chat.
 - **Do** retain standard HTML dialog behavior, static accessible headings, and the full session title in the usage body.
@@ -649,7 +646,6 @@ Project settings offer Preview environment removal for the selected agent and Pr
 - **Don't** recreate native shell affordances as web chrome.
 - **Don't** import the independent implementation report's styling or Turkish copy into the English application.
 - **Don't** switch the sidebar or workspace colors with operating-system appearance.
-- **Don't** apply the library dot grid to selected projects, Settings, or dialog examples.
 - **Don't** add sidebar or selected-project Add new project controls, or a demo-creation flow.
 - **Don't** add button focus rings, pressed borders, shadows, or movement.
 - **Don't** apply Inter to terminal glyphs, bypass the Consolas/JetBrains Mono preference, recolor the terminal, or change its pinned geometry.

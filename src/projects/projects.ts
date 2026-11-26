@@ -82,9 +82,14 @@ function preserveListFocus(list: HTMLElement, key: 'sessionId' | 'terminalId' | 
       ?? (terminal === undefined ? undefined : candidates.find(button => button.dataset.terminalId === terminal && !button.disabled))
       ?? candidates.slice(index).find(button => !button.disabled)
       ?? candidates.slice(0, index).reverse().find(button => !button.disabled)
-      ?? document.getElementById(key === 'projectId' ? 'choose-folder' : 'refresh-sessions');
+      ?? (key === 'projectId' ? projectLibraryAction() : document.getElementById('refresh-sessions'));
     replacement?.focus({ preventScroll: true });
   };
+}
+
+export function projectLibraryAction(): HTMLElement {
+  const empty = document.getElementById('empty-projects')!;
+  return document.getElementById(empty.hidden ? 'choose-folder' : 'choose-first-chat')!;
 }
 
 export function renderTerminals(terminals: TerminalStatus[], selected: number | null, open: (identifier: number) => Promise<void>): void {
@@ -114,19 +119,20 @@ function initials(name: string): string {
   return name.split(/[-_\s]+/).filter(Boolean).slice(0, 2).map(part => Array.from(part)[0]).join('').toLocaleUpperCase();
 }
 
-function projectIdentity(project: Project): HTMLElement[] {
+function projectMonogram(name: string): HTMLElement {
   const monogram = document.createElement('span');
   monogram.className = 'project-monogram';
-  monogram.textContent = initials(project.name);
+  monogram.textContent = initials(name);
   monogram.setAttribute('aria-hidden', 'true');
-  const identity = document.createElement('span');
-  identity.className = 'project-row-identity';
-  const name = document.createElement('strong');
+  return monogram;
+}
+
+function renderProjectName(button: HTMLButtonElement, project: Project): void {
+  const name = document.createElement('span');
   name.className = 'project-row-name';
   name.textContent = project.name;
-  identity.append(name);
-  if (project.gitBranch) identity.append(branchLabel(project.gitBranch));
-  return [monogram, identity];
+  button.title = [project.name, project.path, project.gitBranch].filter(Boolean).join('\n');
+  button.replaceChildren(name);
 }
 
 function branchLabel(branch: string): HTMLElement {
@@ -155,8 +161,7 @@ function projectButton(project: Project, className: string, select: (project: Pr
   button.dataset.projectId = project.id;
   button.dataset.available = String(project.available !== false);
   button.disabled = project.available === false;
-  button.title = project.name + '\n' + project.path;
-  button.append(...projectIdentity(project));
+  renderProjectName(button, project);
   button.addEventListener('click', () => { void select(project); });
   return button;
 }
@@ -172,7 +177,14 @@ export function renderProjects(projects: Project[], selected: Project | null, se
     const sidebarRow = document.createElement('li'); sidebarRow.append(projectButton(project, 'sidebar-project', select)); sidebar.append(sidebarRow);
     const row = document.createElement('tr'); row.title = project.path;
     const name = document.createElement('td');
-    const button = projectButton({ ...project, gitBranch: null }, 'recent-project', select); name.append(button);
+    const button = projectButton(project, 'recent-project', select);
+    button.title = project.name + '\n' + project.path;
+    const identity = document.createElement('span');
+    identity.className = 'project-entry-identity';
+    identity.append(...button.childNodes);
+    if (project.gitBranch) identity.append(branchLabel(project.gitBranch));
+    button.append(projectMonogram(project.name), identity);
+    name.append(button);
     if (project.available === false) {
       const actions = document.createElement('div'); actions.className = 'project-record-actions';
       const unavailable = document.createElement('span'); unavailable.textContent = 'Folder unavailable';
@@ -181,30 +193,34 @@ export function renderProjects(projects: Project[], selected: Project | null, se
       remove.addEventListener('click', () => { forget(project); });
       actions.append(unavailable, remove); name.append(actions);
     }
-    const branch = document.createElement('td'); if (project.gitBranch) branch.append(branchLabel(project.gitBranch));
-    if (!project.gitBranch) branch.textContent = '—';
     const opened = document.createElement('td'); opened.className = 'project-opened';
     const timestamp = project.lastOpenedAt ?? (project.updatedAt ?? 0) * 1000;
-    opened.textContent = timestamp ? new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-    row.append(name, branch, opened); list.append(row);
+    const date = new Date(timestamp);
+    const hasDate = timestamp !== 0 && Number.isFinite(date.valueOf());
+    opened.textContent = hasDate ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+    if (hasDate) opened.title = date.toLocaleDateString('en-US', { dateStyle: 'long' });
+    const cost = document.createElement('td');
+    cost.className = 'project-total-cost';
+    cost.dataset.costProject = project.id;
+    cost.dataset.costEnvironment = project.environmentId;
+    row.append(name, opened, cost); list.append(row);
   }
-  sidebar.hidden = selected !== null;
-  document.getElementById('sidebar-project-context')!.hidden = selected === null;
+  const projectSelected = selected !== null;
+  const contextChanged = sidebar.hidden !== projectSelected;
+  sidebar.hidden = projectSelected;
+  document.getElementById('sidebar-project-context')!.hidden = !projectSelected;
   document.getElementById('recent-projects')!.hidden = selected !== null || projects.length === 0;
-  document.getElementById('project-navigation-label')!.textContent = 'Projects';
   document.getElementById('empty-projects')!.hidden = selected !== null || projects.length > 0;
-  const current = document.getElementById('sidebar-current-project')!;
-  current.replaceChildren();
-  if (selected) {
-    const summary = projects.find(project => project.id === selected.id) ?? selected;
-    current.title = summary.name + '\n' + summary.path;
-    current.append(...projectIdentity(summary));
-  }
+  const current = document.querySelector<HTMLButtonElement>('#sidebar-current-project')!;
+  current.hidden = !projectSelected;
+  const summary = selected && (projects.find(project => project.id === selected.id) ?? selected);
+  if (summary) renderProjectName(current, summary);
   const selectedBranch = document.getElementById('selected-branch')!;
-  const branch = projects.find(project => project.id === selected?.id)?.gitBranch ?? selected?.gitBranch;
+  const branch = summary?.gitBranch ?? selected?.gitBranch;
   selectedBranch.hidden = !selected || !branch;
   selectedBranch.replaceChildren();
   if (selected && branch) selectedBranch.append(branchLabel(branch));
+  if (contextChanged) document.getElementById('sidebar-projects')!.scrollTop = 0;
   restoreSidebarFocus();
   restoreLibraryFocus();
 }
@@ -221,7 +237,10 @@ export function renderConversations(conversations: Conversation[], selectedId: s
     button.dataset.available = String(conversation.available !== false);
     button.title = conversation.title + (conversation.subagentCount ? '\nIncludes ' + conversation.subagentCount + ' subagent' + (conversation.subagentCount === 1 ? '' : 's') : '');
     button.setAttribute('aria-label', conversation.title + ', ' + agentName(conversation.agentKind));
-    button.append(createAgentLogo(conversation.agentKind));
+    const title = document.createElement('span');
+    title.className = 'sidebar-session-title';
+    title.textContent = conversation.title;
+    button.append(createAgentLogo(conversation.agentKind), title);
     if (conversation.busy) {
       const activity = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       for (const [key, value] of Object.entries({ class: 'session-activity', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'aria-hidden': 'true' })) activity.setAttribute(key, value);
@@ -230,15 +249,11 @@ export function renderConversations(conversations: Conversation[], selectedId: s
       activity.append(path);
       button.append(activity);
       button.setAttribute('aria-label', conversation.title + ', ' + agentName(conversation.agentKind) + ', agent working');
-      button.title = conversation.title + '\nAgent working';
+      button.title += '\nAgent working';
     }
     if (conversationKey(conversation) === selectedId) button.setAttribute('aria-current', 'true');
     button.dataset.sessionId = conversationKey(conversation);
     if (conversation.terminalId !== undefined) button.dataset.terminalId = String(conversation.terminalId);
-    const title = document.createElement('span');
-    title.className = 'sidebar-session-title';
-    title.textContent = conversation.title;
-    button.append(title);
     button.addEventListener('click', () => { void resume(conversation); });
     row.append(button); list.append(row);
   }

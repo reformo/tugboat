@@ -29,20 +29,26 @@ function select(id: string): HTMLSelectElement { return document.getElementById(
 
 export type SettingsSection = 'general' | 'providers' | 'brig' | 'system-checks' | 'resources' | 'network' | 'agents';
 
-// The left menu shows one section. The save controls appear only for sections in the settings form.
 export function selectSettingsTab(name: SettingsSection): void {
-  for (const tab of document.querySelectorAll<HTMLButtonElement>('#settings-tabs button')) {
-    const selected = tab.id === 'settings-tab-' + name;
+  const view = document.getElementById('settings-view')!;
+  const panel = document.getElementById('settings-panel-' + name)!;
+  const activeTab = view.querySelector<HTMLButtonElement>('button[aria-controls="' + panel.id + '"]')!;
+  const group = activeTab.closest('.settings-subnav');
+  const changed = panel.hidden;
+  for (const tab of view.querySelectorAll<HTMLButtonElement>('[data-settings-section]')) {
+    const target = document.getElementById(tab.getAttribute('aria-controls')!)!;
+    const selected = target === panel || target === group;
     tab.setAttribute('aria-current', String(selected));
-    document.getElementById(tab.getAttribute('aria-controls')!)!.hidden = !selected;
+    target.hidden = !selected;
   }
-  document.getElementById('settings-form-footer')!.hidden = !document.getElementById('settings-panel-' + name)!.closest('form');
+  if (changed) view.querySelector('.settings-dialog-panes')!.scrollTop = 0;
+  document.getElementById('settings-form-footer')!.hidden = !panel.closest('form');
   renderWorkspaceStatus();
 }
 
 export function initializeSettingsTabs(): void {
-  for (const tab of document.querySelectorAll<HTMLButtonElement>('#settings-tabs button')) {
-    tab.addEventListener('click', () => { selectSettingsTab(tab.id.replace('settings-tab-', '') as SettingsSection); });
+  for (const tab of document.querySelectorAll<HTMLButtonElement>('#settings-view [data-settings-section]')) {
+    tab.addEventListener('click', () => { selectSettingsTab(tab.dataset.settingsSection as SettingsSection); });
   }
   initializeProjectDefaults();
 }
@@ -112,6 +118,7 @@ export async function initializeSettings(): Promise<void> {
       renderSettings(state.current()!, previous);
       updateNetworkHint();
       fields.disabled = false;
+      save.disabled = false;
       const telemetry = await invoke<TelemetryStatus>('telemetry_status');
       if (revision === settingsReadRevision) acceptTelemetry(telemetry);
     } catch (error) { if (revision === settingsReadRevision) setStatus(String(error)); }
@@ -180,4 +187,5 @@ export async function initializeSettings(): Promise<void> {
     }
   });
   fields.disabled = state.current() === null;
+  save.disabled = fields.disabled;
 }

@@ -311,3 +311,12 @@ pub(super) fn dashboard(
     target.annotate(&mut dashboard);
     Ok(dashboard)
 }
+
+pub(super) fn library_dashboard(
+    target: &environment_history::Target,
+    store: &SharedStore,
+) -> Result<Dashboard, String> {
+    let environment = target.usage_environment()?;
+    let (metadata, rollups) = store.with(|store| store.load_metadata(&environment))?;
+    sql_projection::dashboard(metadata, rollups, HashMap::new())
+}

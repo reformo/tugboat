@@ -205,6 +205,16 @@ fn verified_original_folder_rename_preserves_both_agents_and_usage() {
     let saved = environment_history::recorded_snapshot(&targets, &store).unwrap();
     assert_eq!(saved.usage, original_dashboard.usage);
     assert_eq!(saved.conversations.len(), 2);
+    let library = environment_history::combine(
+        targets
+            .iter()
+            .map(|target| sql_backend::library_dashboard(target, &store).unwrap()),
+    );
+    assert_eq!(library.usage, saved.usage);
+    assert_eq!(library.coverage, saved.coverage);
+    let other = environment_history::Target::for_project(&replacement);
+    let other = sql_backend::library_dashboard(&other, &store).unwrap();
+    assert_eq!(other.usage, usage::Summary::default());
     store.close().unwrap();
 }
 

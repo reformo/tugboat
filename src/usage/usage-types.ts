@@ -60,6 +60,7 @@ export interface AmountCorrection {
 }
 export interface RequestUsage {
   key: string; at: string; model: string | null;
+  effort?: string;
   tokens: Tokens; rates: RateSnapshot | null; costUsd: number | null;
   partial: boolean; unpricedReason: string | null;
   serviceTier: string | null; tierSource: string | null;

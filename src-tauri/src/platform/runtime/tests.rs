@@ -15,9 +15,14 @@ fn fixture(name: &str) -> PathBuf {
     fs::write(root.join("mke2fs.conf"), "runtime fixture").unwrap();
     fs::create_dir_all(root.join("registry")).unwrap();
     fs::write(root.join("registry/config.json"), "runtime fixture").unwrap();
+    fs::write(root.join("network-attribution"), "runtime fixture").unwrap();
     let manifest = json!({
         "schemaVersion":1,"brigVersion":crate::platform::host::SUPPORTED_BRIG_VERSION,"tools":tools,"libraries":[],
-        "configuration":{"mke2fs.conf":{"sha256":digest},"registry/config.json":{"sha256":digest}}
+        "configuration":{
+            "mke2fs.conf":{"sha256":digest},
+            "registry/config.json":{"sha256":digest},
+            "network-attribution":{"sha256":digest}
+        }
     });
     fs::write(root.join("build.json"), manifest.to_string()).unwrap();
     root
@@ -64,6 +69,11 @@ fn configuration_and_library_paths_are_checked_before_launch() {
         .unwrap_err()
         .contains("config.json"));
     fs::write(root.join("registry/config.json"), "runtime fixture").unwrap();
+    fs::write(root.join("network-attribution"), "damaged fixture").unwrap();
+    assert!(validate_at(&root.join("bin"))
+        .unwrap_err()
+        .contains("network-attribution SHA-256"));
+    fs::write(root.join("network-attribution"), "runtime fixture").unwrap();
     let mut manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(root.join("build.json")).unwrap()).unwrap();
     manifest["libraries"] = json!([{"name":"../outside.dylib","sha256":"a".repeat(64)}]);

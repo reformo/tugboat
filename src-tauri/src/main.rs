@@ -7,6 +7,7 @@ mod desktop;
 mod environment;
 mod hash;
 mod platform;
+mod network_activity;
 mod projects;
 mod providers;
 mod storage;
@@ -134,6 +135,7 @@ fn main() {
             choose_project_folder,
             data_location::storage_location,
             data_location::choose_storage_folder,
+            data_location::inspect_storage_folder,
             data_location::change_storage_location,
             data_location::cancel_storage_move,
             data_location::restart_for_storage_change,
@@ -152,9 +154,11 @@ fn main() {
             projects::project_image_update::project_image_update,
             conversations::saved_project_dashboard,
             conversations::recorded_project_dashboard,
+            conversations::project_library_costs,
             conversations::project_dashboard,
             conversations::change_conversation_state,
             conversations::conversation_usage,
+            conversations::project_usage_breakdown,
             preparation::prepare_project,
             project_policy::read_project_policy,
             project_policy::change_project_policy,
@@ -178,6 +182,7 @@ fn main() {
             boundaries::run_boundary_tests,
             boundaries::copy_inner_boundary_prompt,
             operations::start_project_operation,
+            network_activity::read_project_network_activity,
             operations::gateway_logs::read_project_gateway_logs,
             operations::gateway_logs::copy_project_gateway_logs,
             operations::stop_project,
@@ -234,6 +239,7 @@ fn main() {
                 .map_err(std::io::Error::other)?;
             unsafe { brig_window_set_dark_appearance(window.ns_window()?) };
             app.set_menu(menu::create(app.handle())?)?;
+            network_activity::monitor(app.handle().clone());
             conversations::monitor(app.handle().clone());
             shared_chatgpt::monitor(app.handle().clone());
             shared_claude::monitor(app.handle().clone());

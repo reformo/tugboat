@@ -2,6 +2,7 @@ interface WorkspaceStatus { message: string; scope: string }
 
 const entries = new Map<string, WorkspaceStatus>();
 let notice: WorkspaceStatus | null = null;
+let networkActivity: { message: string; title: string } | null = null;
 
 function visible(scope: string): boolean {
   const element = document.getElementById(scope);
@@ -29,14 +30,24 @@ export function showWorkspaceError(message: string, scope: string): void {
   }, 10000);
 }
 
+export function setWorkspaceNetworkActivity(activity: typeof networkActivity): void {
+  networkActivity = activity;
+  renderWorkspaceStatus();
+}
+
 export function renderWorkspaceStatus(): void {
   const error = notice && visible(notice.scope) ? notice : null;
   const status = error ?? [...entries.values()].reverse().find(entry => visible(entry.scope));
   const bar = document.getElementById('workspace-status-bar')!;
   const text = document.getElementById('workspace-status-text')!;
-  const message = status?.message ?? '';
+  const projectView = document.getElementById('project-view');
+  const projectOpen = Boolean(projectView?.classList.contains('has-project') && visible('project-view'));
+  const button = document.getElementById('open-network-activity')!;
+  const activity = projectOpen ? networkActivity : null;
+  const message = status?.message ?? activity?.message ?? '';
   if (text.textContent !== message) text.textContent = message;
-  text.title = message;
+  text.title = status?.message ?? activity?.title ?? '';
   bar.classList.toggle('is-error', error !== null);
-  bar.hidden = message === '';
+  button.hidden = !projectOpen;
+  bar.hidden = !projectOpen && message === '';
 }

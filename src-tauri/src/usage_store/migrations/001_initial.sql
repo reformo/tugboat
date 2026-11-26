@@ -1,7 +1,7 @@
 -- Create only in a new staging database. Configure the connection first.
 -- Publish only a verified database with its records directory identity.
 PRAGMA application_id = 0x54554755; -- TUGU
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 
 CREATE TABLE store_identity (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -102,6 +102,7 @@ CREATE TABLE usage_requests (
     origin_turn_id TEXT,
     root_turn_id TEXT,
     response_id TEXT,
+    effort TEXT,
     CHECK (cached_tokens <= input_tokens - cache_write_tokens),
     CHECK ((source_guest IS NULL AND model_provider IS NULL AND origin_thread_id IS NULL
             AND response_id IS NULL AND origin_turn_id IS NULL AND root_turn_id IS NULL)

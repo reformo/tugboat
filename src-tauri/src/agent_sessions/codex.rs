@@ -224,7 +224,7 @@ pub(super) async fn start_codex_session(
             }
         }
         let arguments = arguments(&checked, action, session_id.as_deref())?;
-        Ok::<_, String>((environment::command(&checked, arguments), runtime))
+        Ok::<_, String>((crate::network_activity::launch(&checked, arguments, "codex"), runtime))
     })
     .await
     .map_err(|error| error.to_string())??;

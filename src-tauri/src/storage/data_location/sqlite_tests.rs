@@ -62,6 +62,114 @@ impl Fixture {
 }
 
 #[test]
+fn using_existing_records_keeps_both_datasets_and_can_return_to_the_default_folder() {
+    let fixture = Fixture::new("use-existing");
+    let source = fixture.open();
+    let original = fixture.seed(&source);
+    let target = fixture.root.join("existing");
+    let other = DataLocation::open(target.clone(), None);
+    let records = fixture.seed(&other);
+    let use_existing = ChangeKind::UseExisting(records.id().to_owned());
+    fs::write(target.join("interface.json"), b"existing settings").unwrap();
+    assert!(source
+        .schedule(&target, use_existing.clone())
+        .unwrap_err()
+        .contains("Another Tugboat instance"));
+    drop(other);
+
+    source.schedule(&target, use_existing).unwrap();
+    assert_eq!(
+        source.status().unwrap().directory.as_deref(),
+        Some(original.path())
+    );
+    assert_eq!(
+        source.status().unwrap().pending_directory.as_ref(),
+        Some(&target)
+    );
+    drop(source);
+
+    let switched = fixture.open();
+    let status = switched.status().unwrap();
+    assert!(status.available);
+    assert_eq!(status.directory.as_ref(), Some(&target));
+    assert!(status.pending_directory.is_none());
+    assert_eq!(marker(&target).unwrap().id, records.id());
+    assert!(lock_records_directory(&target).is_err());
+    assert_eq!(
+        fs::read(target.join("interface.json")).unwrap(),
+        b"existing settings"
+    );
+    assert_eq!(
+        fs::read(original.path().join("interface.json")).unwrap(),
+        b"unrelated fixture settings\n"
+    );
+    Store::open(&records).unwrap().close().unwrap();
+    Store::open(&original).unwrap().close().unwrap();
+
+    switched
+        .schedule(
+            original.path(),
+            ChangeKind::UseExisting(original.id().to_owned()),
+        )
+        .unwrap();
+    drop(switched);
+    assert_eq!(
+        fixture.open().status().unwrap().directory.as_deref(),
+        Some(original.path())
+    );
+    records.verify().unwrap();
+}
+
+#[test]
+fn a_replaced_existing_records_folder_leaves_the_original_active() {
+    let fixture = Fixture::new("replaced-existing");
+    let source = fixture.open();
+    let original = fixture.seed(&source);
+    let target = fixture.root.join("existing");
+    let other = DataLocation::open(target.clone(), None);
+    let selected = fixture.seed(&other);
+    drop(other);
+    source
+        .schedule(&target, ChangeKind::UseExisting(selected.id().to_owned()))
+        .unwrap();
+    drop(source);
+    let saved_target = fixture.root.join("saved-existing");
+    fs::rename(&target, &saved_target).unwrap();
+    create_directory(&target).unwrap();
+    let replacement = RecordsDirectory::fixture_with_id(&target, &"b".repeat(32));
+
+    let reopened = fixture.open();
+    let status = reopened.status().unwrap();
+    assert!(status.available);
+    assert_eq!(status.directory.as_deref(), Some(original.path()));
+    assert_eq!(status.pending_directory.as_ref(), Some(&target));
+    assert!(status
+        .message
+        .unwrap()
+        .contains("different Tugboat records folder"));
+    assert_eq!(marker(&saved_target).unwrap().id, selected.id());
+    replacement.verify().unwrap();
+    drop(reopened);
+
+    fs::rename(&target, fixture.root.join("replacement")).unwrap();
+    fs::rename(&saved_target, &target).unwrap();
+    let database = target.join("usage.sqlite3");
+    let detached_database = fixture.root.join("detached.sqlite3");
+    fs::rename(&database, &detached_database).unwrap();
+    let missing_database = fixture.open();
+    let status = missing_database.status().unwrap();
+    assert!(status.available);
+    assert_eq!(status.directory.as_deref(), Some(original.path()));
+    assert!(!database.exists());
+    assert!(detached_database.exists());
+    assert!(missing_database
+        .cancel_move()
+        .unwrap()
+        .pending_directory
+        .is_none());
+}
+
+#[test]
 fn reopening_a_registered_custom_folder_repairs_permissions_before_usage_activation() {
     let fixture = Fixture::new("reopen-custom-permissions");
     let custom = fixture.root.join("user-records");
@@ -725,14 +833,16 @@ fn located_runtime_records_flush_the_final_native_request_before_pointer_commit(
     );
     assert_eq!(fs::read(&location.pointer).unwrap(), pointer);
     history.reconnect_records(&shared, &target).unwrap();
-    location.use_reconnected(&target).unwrap();
+    let lease = location.lock_reconnect(target.path()).unwrap();
+    location.use_reconnected(&target, lease).unwrap();
     shared.with(|store| store.connection.execute_batch("CREATE TEMP TRIGGER fail_final_cursor BEFORE UPDATE ON source_cursors BEGIN SELECT RAISE(ABORT,'injected final flush failure'); END;").map_err(crate::usage_store::error)).unwrap();
     assert!(history.flush().is_err());
     assert!(location.status().unwrap().message.is_none());
     assert_eq!(fs::read(&location.pointer).unwrap(), pointer);
     assert!(!records.path().exists());
     history.reconnect_records(&shared, &target).unwrap();
-    location.use_reconnected(&target).unwrap();
+    let lease = location.lock_reconnect(target.path()).unwrap();
+    location.use_reconnected(&target, lease).unwrap();
     shared
         .with(|store| {
             store

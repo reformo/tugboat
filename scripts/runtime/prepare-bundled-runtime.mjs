@@ -59,7 +59,10 @@ download(pins.cosign.url, 'cosign', pins.cosign.sha256);
 fs.chmodSync(path.join(downloads, 'cosign'), 0o755);
 extract('brig');
 const hull = extract('hull');
-run(process.execPath, [path.join(root, 'scripts/runtime/prepare-hull.mjs'), ...(noSign ? ['--no-sign'] : [])]);
+// Allow both archive downloads to retry before the Hull build.
+run(process.execPath, [path.join(root, 'scripts/runtime/prepare-hull.mjs'), ...(noSign ? ['--no-sign'] : [])], {
+  timeout:25 * 60_000,
+});
 run(process.execPath, [path.join(root, 'scripts/runtime/prepare-brig.mjs'), ...(noSign ? ['--no-sign'] : [])]);
 run(process.execPath, [path.join(root, 'scripts/runtime/prepare-disk-tools.mjs')]);
 const temporary = fs.mkdtempSync(path.join(root, '.build/brig-runtime-stage-'));
@@ -79,6 +82,7 @@ try {
     }
   }
   fs.copyFileSync(path.join(root, '.build/disk-tools/etc/mke2fs.conf'), path.join(temporary, 'mke2fs.conf'));
+  fs.copyFileSync(path.join(root, '.build/hull-compat/bin/network-attribution'), path.join(temporary, 'network-attribution'));
   fs.mkdirSync(path.join(temporary, 'registry'));
   fs.copyFileSync(path.join(root, 'resources/runtime/registry/config.json'), path.join(temporary, 'registry/config.json'));
   const manifest = {
@@ -87,7 +91,7 @@ try {
     brig:JSON.parse(fs.readFileSync(path.join(root, '.build/brig-compat/bin/build.json'), 'utf8')),
     diskTools:JSON.parse(fs.readFileSync(path.join(root, 'config/disk-tools.json'), 'utf8')),
     tools:Object.fromEntries(runtimeTools.map(name => [name, {sha256:hashFile(path.join(bin, name))}])),
-    libraries:[], configuration:Object.fromEntries(['mke2fs.conf', 'registry/config.json'].map(name => [name, {sha256:hashFile(path.join(temporary, name))}])),
+    libraries:[], configuration:Object.fromEntries(['mke2fs.conf', 'registry/config.json', 'network-attribution'].map(name => [name, {sha256:hashFile(path.join(temporary, name))}])),
   };
   fs.writeFileSync(path.join(temporary, 'build.json'), JSON.stringify(manifest, null, 2) + '\n');
   verifyRuntime(bin, temporary);

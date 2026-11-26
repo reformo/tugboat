@@ -1,7 +1,7 @@
 use super::{
     configure, error, open_existing, regular, require_same_directory,
-    schema::{check_references, has_legacy_imports, upgrade_identity, verified_version},
-    verified_directory, verify_journal,
+    schema::{check_references, has_legacy_imports, upgrade, verified_version},
+    verified_directory, verify_journal, SCHEMA_VERSION,
 };
 use crate::{
     agents::AgentKind,
@@ -88,8 +88,8 @@ fn retire_database(
         }
         return Ok(());
     }
-    if verified_version(&database, records)? == 1 {
-        upgrade_identity(&mut database, records)?;
+    if verified_version(&database, records)? < SCHEMA_VERSION {
+        upgrade(&mut database, records)?;
     }
     check_references(&database)?;
     verified_version(&database, records)?;

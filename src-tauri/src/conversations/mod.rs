@@ -1377,6 +1377,74 @@ pub struct RecordedDashboardUpdate {
     availability_verified: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectLibraryCost {
+    project_id: String,
+    environment_id: projects::EnvironmentId,
+    usage: Option<usage::Summary>,
+    coverage: usage::Coverage,
+}
+
+#[tauri::command]
+pub async fn project_library_costs(app: AppHandle) -> Result<Vec<ProjectLibraryCost>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let registry = projects::Registry::load(&projects::file(&app)?)?;
+        let store = app.state::<crate::usage_store::Runtime>().wait()?;
+        let mut costs = Vec::new();
+        for project in registry.project_views()? {
+            let agents = registry.agent_views(&project.id)?;
+            let dashboards = agents
+                .iter()
+                .map(|agent| {
+                    sql_backend::library_dashboard(
+                        &environment_history::Target::for_project(agent),
+                        &store,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>();
+            let (usage, coverage) = match dashboards {
+                Ok(dashboards) => {
+                    let dashboard = environment_history::combine(dashboards.into_iter());
+                    (Some(dashboard.usage), dashboard.coverage)
+                }
+                Err(_) => (None, usage::Coverage::Unknown),
+            };
+            costs.push(ProjectLibraryCost {
+                project_id: project.id,
+                environment_id: project.environment_id,
+                usage,
+                coverage,
+            });
+        }
+        Ok(costs)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn project_usage_breakdown(
+    app: AppHandle,
+    identifier: String,
+) -> Result<Vec<crate::usage_store::project_usage::BreakdownRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let registry = projects::Registry::load(&projects::file(&app)?)?;
+        let projects = registry.agent_views(&identifier)?;
+        let store = app.state::<crate::usage_store::Runtime>().wait()?;
+        store.with(|store| {
+            let mut rows = Vec::new();
+            for project in &projects {
+                let target = environment_history::Target::for_project(project);
+                rows.extend(store.usage_breakdown(&target.usage_environment()?)?);
+            }
+            Ok(rows)
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 #[tauri::command]
 pub async fn project_dashboard(
     app: AppHandle,

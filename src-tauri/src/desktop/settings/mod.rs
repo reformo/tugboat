@@ -120,13 +120,6 @@ pub fn valid_host(value: &str) -> bool {
 }
 
 impl Settings {
-    pub fn agent_defaults(&self, kind: crate::agents::AgentKind) -> &AgentDefaults {
-        match kind {
-            crate::agents::AgentKind::Codex => &self.codex,
-            crate::agents::AgentKind::ClaudeCode => &self.claude_code,
-        }
-    }
-
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_version != 2 {
             return Err("This settings file version is unsupported.".into());

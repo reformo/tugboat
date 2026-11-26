@@ -38,7 +38,7 @@ export function initializeUsageDetails(context: UsageDetailsContext) {
     const { fingerprint, environmentId, agentKind, details: previous } = request;
     setLoading(content, previous === null);
     setBusy(status, previous !== null);
-    if (previous) status.textContent = usageDetailsStatus(previous) + ' Updating recorded usage…';
+    if (previous) status.textContent = 'Updating recorded usage…';
     try {
       const details = await invoke<ConversationUsageDetails>('conversation_usage', { identifier: project.id, environmentId, agentKind, sessionId });
       if (!active(project, sessionId, revision) || !state.unchanged(fingerprint)) return;
@@ -48,7 +48,7 @@ export function initializeUsageDetails(context: UsageDetailsContext) {
     } catch (error) {
       if (!active(project, sessionId, revision) || !state.unchanged(fingerprint)) return;
       state.fail(request);
-      status.textContent = previous ? usageDetailsStatus(previous) + ' Could not refresh usage. Showing the last recorded data. Close and reopen usage to retry. ' + String(error) : String(error);
+      status.textContent = previous ? [usageDetailsStatus(previous), 'Could not refresh usage. Showing the last recorded data. Close and reopen usage to retry.', String(error)].filter(Boolean).join(' ') : String(error);
     } finally {
       finish(project, request);
     }

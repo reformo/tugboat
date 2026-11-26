@@ -32,6 +32,7 @@
         <li><a href="#terminal">Terminal input and output</a></li>
         <li><a href="#accounts">Accounts and access boundaries</a></li>
         <li><a href="#history">From transcript to usage</a></li>
+        <li><a href="#network-activity">From gateway to network activity</a></li>
         <li><a href="#storage">Durable records and recovery</a></li>
         <li><a href="#lifecycle">Stop, remove, and quit</a></li>
         <li><a href="#distribution">Build and distribution</a></li>
@@ -171,6 +172,19 @@
       <p class="source"><a href="../src-tauri/src/conversations/mod.rs">Monitor and dashboard commands</a> · <a href="../src-tauri/src/conversations/graph.rs">Conversation relationships</a> · <a href="../src-tauri/src/conversations/claude/subagents.rs">Claude parent verification</a> · <a href="../src-tauri/src/conversations/sql_scan.rs">Incremental scan</a> · <a href="../src-tauri/src/usage/mod.rs">Measurements and prices</a> · <a href="../src-tauri/src/usage_store/writes.rs">Transactional writes</a></p>
     </section>
 
+    <section id="network-activity">
+      <h2>From gateway to network activity</h2>
+      <ol class="flow" aria-label="Network activity data flow">
+        <li><strong>Record a flow</strong><span>The project’s isolated Hull gateway records direction, result, endpoint and byte counts.</span></li>
+        <li><strong>Match socket evidence</strong><span>A guest kernel probe supplies the process and launch control group for the exact socket tuple.</span></li>
+        <li><strong>Commit progress</strong><span>Tugboat saves the latest row and source position in one SQLite transaction.</span></li>
+        <li><strong>Read history</strong><span>Tugboat publishes new flow summaries to the workspace status bar. The dialog pages through records for the selected project and environment.</span></li>
+      </ol>
+      <p>The gateway publishes bounded queue files outside its volatile diagnostic log. Dataset, project and environment identifiers bind the queue to its owner. An importer acknowledges a sealed file after committing its last row. A newer record revision can update byte counts or attribution. A replay leaves one row for the same connection.</p>
+      <p>Guest launch control groups identify Codex, Claude Code, and the guest terminal. The kernel supplies the executable and process identifier during TCP connect or accept and UDP send or receive. Unmatched or ambiguous evidence leaves a project-level row. The gateway tracks IPv4 traffic across its forwarding paths, including published ports, and policy refusals at its DNS service. Guest loopback traffic and Mac traffic bypass this recorder.</p>
+      <p class="source"><a href="../resources/network-activity/activity.go">Gateway records</a> · <a href="../resources/network-activity/guest/probes.go">Guest socket probes</a> · <a href="../src-tauri/src/network_activity/store.rs">Scoped import and reads</a> · <a href="adr.html#adr-035">Recording decision</a></p>
+    </section>
+
     <section id="storage">
       <h2>Durable records and recovery</h2>
       <p>The installed app uses <code>~/Library/Application Support/Tugboat</code> by default. Development uses <code>~/Library/Application Support/Tugboat Dev</code>. Each default folder holds its own location pointer and lock. The directory marker identifies the dataset. The database records the same identity.</p>
@@ -180,13 +194,14 @@
           <thead><tr><th scope="col">Location</th><th scope="col">Contents</th><th scope="col">Recovery rule</th></tr></thead>
           <tbody>
             <tr><th scope="row">Active records folder</th><td>Project registry, settings, interface preferences, managed profiles, diagnostic records, and private provider files.</td><td>Use the verified records location. File publication checks ownership and syncs the temporary record before replacement.</td></tr>
-            <tr><th scope="row"><code>usage.sqlite3</code></th><td>One database holds both agents' usage across projects, chat state, request facts, source cursors, saved prices and derived summaries.</td><td>After activation, SQLite is authoritative. Tugboat upgrades its version 1 database on open and preserves session and usage keys. A missing or damaged active database blocks usage writes. Preserve the database and any rollback journal.</td></tr>
+            <tr><th scope="row"><code>usage.sqlite3</code></th><td>One database holds both agents' usage across projects, chat state, request facts, source cursors, saved prices and derived summaries.</td><td>After activation, SQLite is authoritative. Tugboat upgrades version 1 and 2 databases on open and preserves session and usage keys. A missing or damaged active database blocks usage writes. Preserve the database and any rollback journal.</td></tr>
             <tr><th scope="row">Former project registrations</th><td>The one-time reset keeps project identity, name, folder, and verified ownership evidence during recovery. It retires the verified former guest and chat storage.</td><td>Current projects use the shared profile and start with empty history after reset. External resources remain available to their owners.</td></tr>
             <tr><th scope="row">Guest homes and project folder</th><td>Agent-owned transcripts, persistent guest files, and the user's source tree.</td><td>A records move transfers Tugboat records. Brig continues to own its homes and the project keeps its original location.</td></tr>
           </tbody>
         </table>
       </div>
       <p>A records move begins as a pending operation. On a successful shutdown, writers stop, usage is flushed, and the database closes. Startup copies and verifies the dataset before committing the location pointer and cleaning the source. Locate can reconnect the same dataset at a different path. An incomplete copy cannot become the active dataset.</p>
+      <p>A records switch verifies the selected dataset and commits its identity to the location pointer on restart. Each Tugboat instance holds a lock on its active records folder. A switch keeps both datasets in their original folders.</p>
       <p>After an uncertain commit, the next access must reopen the verified database and establish its state before scanning again. A disconnected drive can look like an empty directory. Preserving the saved identity lets recovery distinguish those cases.</p>
       <p class="source"><a href="../src-tauri/src/storage/data_location/mod.rs">Location transaction</a> · <a href="../src-tauri/src/storage/publication.rs">File publication</a> · <a href="../src-tauri/src/projects/operations/retired_history.rs">One-time reset</a> · <a href="../src-tauri/src/usage_store/connection.rs">Connection checks</a> · <a href="../src-tauri/src/usage_store/migrations/001_initial.sql">SQL schema</a></p>
     </section>

@@ -122,6 +122,7 @@ pub(in crate::conversations) fn ingest(
             key: format!("anthropic:{id}"),
             at: value["timestamp"].as_str().unwrap_or_default().into(),
             model: identifier(&message["model"]).map(str::to_owned),
+            effort: None,
             tokens,
             rates: None,
             cost_usd: None,

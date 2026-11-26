@@ -50,8 +50,12 @@ impl Cursor {
         }
         if self.fork_origin.as_ref() != Some(id) {
             self.active_owner = None;
+            self.effort = None;
             self.ownership_problem = Some("Copied metadata has no verified fork owner".into());
             return false;
+        }
+        if self.active_owner.as_ref() != Some(id) {
+            self.effort = None;
         }
         self.active_owner = Some(id.clone());
         true
@@ -66,6 +70,9 @@ impl Cursor {
         {
             return;
         }
-        self.active_owner = Some(id.into());
+        if self.active_owner.as_deref() != Some(id) {
+            self.effort = None;
+            self.active_owner = Some(id.into());
+        }
     }
 }

@@ -41,7 +41,7 @@ export function verifyRuntime(bin, resources) {
     if (hashFile(file) !== manifest.tools[name].sha256) throw new Error('Runtime SHA-256 mismatch: ' + name);
     verifyNativeTool(file);
   }
-  for (const name of ['mke2fs.conf', 'registry/config.json']) {
+  for (const name of ['mke2fs.conf', 'registry/config.json', 'network-attribution']) {
     if (hashFile(path.join(resources, name)) !== manifest.configuration[name].sha256) throw new Error('Runtime SHA-256 mismatch: ' + name);
   }
   verifyRunner(path.join(bin, 'hvi'), 'com.apple.security.hypervisor');

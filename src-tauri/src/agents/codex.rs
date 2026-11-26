@@ -108,6 +108,7 @@ pub fn chat_command(
     settings: &ChatSettings,
 ) -> Result<GuestCommand, String> {
     let arguments = match command {
+        #[cfg(test)]
         AgentCommand::Version => vec!["--version".into()],
         AgentCommand::LoginStatus => vec![
             "-c".into(),

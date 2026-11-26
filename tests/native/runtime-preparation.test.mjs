@@ -36,6 +36,7 @@ function fixture(context, noSign) {
   write('config/disk-tools.json', '{}');
   write('resources/runtime/registry/config.json', '{}');
   write('.build/disk-tools/etc/mke2fs.conf', 'fixture configuration');
+  write('.build/hull-compat/bin/network-attribution', 'fixture guest executable');
   for (const tool of runtimeTools.filter(tool => tool !== 'cosign')) {
     let directory = 'brig-compat/bin';
     if (tool === 'hull') directory = 'hull-compat/bin';

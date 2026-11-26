@@ -131,38 +131,42 @@ pub(crate) fn read_record(
         .map_err(error)?
         .query_row([record_id], read_record_metadata)
         .map_err(error)?;
+    record.turns = read_turns(connection, record_id)?;
+    record.cursors = read_cursors(connection, record_id)?;
+    Ok(record)
+}
+
+pub(crate) fn read_turns(
+    connection: &Connection,
+    record_id: i64,
+) -> Result<BTreeMap<String, crate::usage::TurnUsage>, String> {
+    let mut turns = BTreeMap::new();
     let mut statement=connection.prepare_cached("SELECT t.bucket_key,t.native_turn_id,t.status,t.origin_thread_id AS turn_origin_thread_id,t.root_turn_id AS turn_root_turn_id,t.parent_turn_id,q.* FROM usage_turns t LEFT JOIN usage_requests q ON q.turn_key=t.turn_key WHERE t.record_id=?1 ORDER BY t.bucket_key,q.ordinal").map_err(error)?;
     let mut rows = statement.query([record_id]).map_err(error)?;
     while let Some(row) = rows.next().map_err(error)? {
         let bucket: String = row.get("bucket_key").map_err(error)?;
-        if !record.turns.contains_key(&bucket) {
-            record.turns.insert(
-                bucket.clone(),
-                crate::usage::TurnUsage {
+        let turn = match turns.entry(bucket) {
+            std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(crate::usage::TurnUsage {
                     id: row.get("native_turn_id").map_err(error)?,
                     status: row.get("status").map_err(error)?,
                     origin_thread_id: row.get("turn_origin_thread_id").map_err(error)?,
                     root_turn_id: row.get("turn_root_turn_id").map_err(error)?,
                     parent_turn_id: row.get("parent_turn_id").map_err(error)?,
                     requests: Vec::new(),
-                },
-            );
-        }
+                })
+            }
+        };
         if row
             .get::<_, Option<i64>>("ordinal")
             .map_err(error)?
             .is_some()
         {
-            record
-                .turns
-                .get_mut(&bucket)
-                .expect("stored turn bucket")
-                .requests
-                .push(super::read_request(row).map_err(error)?);
+            turn.requests.push(super::read_request(row).map_err(error)?);
         }
     }
-    record.cursors = read_cursors(connection, record_id)?;
-    Ok(record)
+    Ok(turns)
 }
 
 pub(crate) fn read_cursors(

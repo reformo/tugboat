@@ -1,0 +1,44 @@
+diff --git a/internal/runtime/gateway.go b/internal/runtime/gateway.go
+index 11795bd..14be82e 100644
+--- a/internal/runtime/gateway.go
++++ b/internal/runtime/gateway.go
+@@ -614,6 +614,15 @@ func startGateway(bin, sock, subnet, gatewayIP string, policy Egress, spec strin
+ 	// /forwards endpoint behind it, and unpublishable and linuxUnpublishable
+ 	// name that.
+ 	args = append(args, "--api", gatewayAPISocket(sock))
++	if spec != "" {
++		name := os.Getenv("TUGBOAT_NETWORK_SANDBOX")
++		directory := os.Getenv("TUGBOAT_NETWORK_ACTIVITY")
++		if name != "" && filepath.IsAbs(directory) {
++			if expected, err := isolatedSocket(name); err == nil && expected == sock {
++				args = append(args, "--activity-directory", directory)
++			}
++		}
++	}
+ 	args = append(args, policy.args()...)
+ 	// gatewayIP is one brig derived. Were it not an address, a divert of it
+ 	// would read "invalid IP", which the gateway refuses at start.
+diff --git a/internal/wrap/run.go b/internal/wrap/run.go
+index de37b4b..891886d 100644
+--- a/internal/wrap/run.go
++++ b/internal/wrap/run.go
+@@ -1011,6 +1011,19 @@ func (c *Config) nameStillHeld(removeErr error) error {
+ // the terminal handover and the --json child are the same exec asked for two
+ // ways rather than two specs that can disagree.
+ func (c *Config) execSpec(set creds.Set, argv []string, tty bool) runtime.ExecSpec {
++	// Tag only Tugboat's selected launches for the matching registered sandbox.
++	// The login shell and argument vector were already built by the usual path.
++	if tty && os.Getenv("TUGBOAT_NETWORK_SANDBOX") == c.VMName {
++		switch origin := os.Getenv("TUGBOAT_NETWORK_ORIGIN"); origin {
++		case "codex", "claude-code", "guest-terminal":
++			const script = `if [ -x /root/.tugboat-network-attribution ]; then
++    exec /root/.tugboat-network-attribution launch "$@"
++fi
++shift
++exec "$@"`
++			argv = append([]string{"/bin/sh", "-c", script, "tugboat-launch", origin}, argv...)
++		}
++	}
+ 	return runtime.ExecSpec{
+ 		Name:    c.VMName,
+ 		Cmd:     argv,

@@ -8,11 +8,12 @@ export function collectHullLicenses() {
   const source = path.join(work, 'hull-' + pin.commit);
   const goRoot = path.join(work, 'go');
   const format = '{{if and (not .Standard) .Module}}{{.Module.Path}}\t{{.Module.Version}}\t{{.Module.Dir}}{{end}}';
-  const output = execFileSync(path.join(goRoot, 'bin/go'), ['list', '-mod=readonly', '-deps', '-f', format, './cmd/hull'], {
+  const listModules = (target, program) => execFileSync(path.join(goRoot, 'bin/go'), ['list', '-mod=readonly', '-deps', '-f', format, program], {
     cwd: source, encoding: 'utf8', timeout: 180_000,
-    env: { ...process.env, GOTOOLCHAIN: 'local', GOCACHE: path.join(work, 'go-cache'), GOPATH: path.join(work, 'go-path'), CGO_ENABLED: '0', GOOS: 'darwin', GOARCH: 'arm64' },
+    env: { ...process.env, GOTOOLCHAIN: 'local', GOCACHE: path.join(work, 'go-cache'), GOPATH: path.join(work, 'go-path'), CGO_ENABLED: '0', GOOS: target, GOARCH: 'arm64' },
   });
-  const modules = new Set(output.trim().split('\n').filter(Boolean));
+  const output = listModules('darwin', './cmd/hull') + listModules('linux', './cmd/network-attribution');
+  const modules = new Set(output.split('\n').filter(Boolean));
   const components = [];
   for (const row of modules) {
     const [name, moduleVersion, directory] = row.split('\t');
@@ -23,7 +24,7 @@ export function collectHullLicenses() {
       notices.push({ name: 'ATTRIBUTION.txt', text: name + ' ' + version + '\nExact module source: https://proxy.golang.org/' + name + '/@v/' + moduleVersion + '.zip\nThe upstream module archive contains no license notice. No license is inferred.\n' });
     }
     if (name === 'github.com/brig-sh/hull') {
-      notices.push({ name: 'MODIFICATIONS.txt', text: 'Tugboat modifies hull ' + pin.version + ' (' + pin.commit + ') to support spaces in shared guest paths, quote those paths in legacy mount commands and locate bundled ext4 disk tools beside hull. It preserves argument boundaries when checking a guest process and can stop a verified process whose saved PID was lost. It can restore a reviewed writable HVI system disk for a pinned Tugboat project image.\nPatches: https://github.com/brig-sh/hull/tree/' + pin.commit + ' plus resources/runtime/hull-spaces.patch, resources/runtime/hull-disk-tools.patch, and resources/runtime/hull-rootfs-restore.patch in the Tugboat source.\nTugboat preserves the upstream signatures on the bundled hvi/Vz runners. Brig modifications are described in the bundled runtime source notices.\n' });
+      notices.push({ name: 'MODIFICATIONS.txt', text: 'Tugboat modifies hull ' + pin.version + ' (' + pin.commit + ') to support spaces in shared guest paths, quote those paths in legacy mount commands and locate bundled ext4 disk tools beside hull. It preserves argument boundaries when checking a guest process and can stop a verified process whose saved PID was lost. It can restore a reviewed writable HVI system disk and record network activity for a Tugboat project.\nPatches: https://github.com/brig-sh/hull/tree/' + pin.commit + ' plus resources/runtime/hull-spaces.patch, resources/runtime/hull-disk-tools.patch, resources/runtime/hull-rootfs-restore.patch, resources/runtime/hull-network-activity.patch, and the recorder and probe code in resources/network-activity in the Tugboat source.\nTugboat preserves the upstream signatures on the bundled hvi/Vz runners. Brig modifications are described in the bundled runtime source notices.\n' });
     }
     components.push({ name, version, source: local ? pin.source.url : 'https://' + name, notices });
   }

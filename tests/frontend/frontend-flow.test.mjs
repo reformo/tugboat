@@ -20,6 +20,39 @@ test('initial project reads show skeletons and then show records or a real empty
   }
 });
 
+test('library costs distinguish zero, unpriced, and missing usage and explain marked amounts in a footnote', async t => {
+  const projects = ['priced', 'zero', 'unpriced', 'empty', 'different-environment'].map(id => ({ ...project, id }));
+  const firstRead = deferred();
+  const entry = (projectId, usage, coverage = 'complete') => ({
+    projectId, environmentId: project.environmentId, usage: { ...emptyUsage, ...usage }, coverage,
+  });
+  const harness = await interfaceHarness({ recent_projects: () => projects, project_library_costs: () => firstRead.promise });
+  t.after(() => harness.dom.window.close());
+  await harness.ready;
+  const cell = id => harness.element('recent-project-list').querySelector(`[data-cost-project="${id}"]`);
+  assert.equal(cell('priced').textContent, '…');
+  firstRead.resolve([
+    entry('priced', { costUsd: 2.5, requests: 2, unpricedRequests: 1 }, 'partial'),
+    entry('zero', { requests: 1 }),
+    entry('unpriced', { requests: 1, unpricedRequests: 1 }),
+    entry('empty', {}),
+    { ...entry('different-environment', { costUsd: 42, requests: 1 }), environmentId: 'b'.repeat(32) },
+  ]);
+  await flush();
+  const note = harness.element('project-cost-coverage-note');
+  assert.equal(cell('priced').textContent, '$2.50*');
+  assert.equal(cell('priced').getAttribute('aria-describedby'), note.id);
+  assert.equal(note.hidden, false);
+  assert.equal(cell('zero').textContent, '$0.00');
+  assert.equal(cell('unpriced').textContent, 'Unpriced');
+  assert.equal(cell('empty').textContent, 'No usage');
+  assert.equal(cell('different-environment').textContent, 'Unavailable');
+  harness.handlers.project_library_costs = () => [entry('priced', { costUsd: 3, requests: 3 })];
+  await harness.listeners.get('records-changed')({ payload: ['usage'] });
+  assert.equal(cell('priced').textContent, '$3.00');
+  assert.equal(note.hidden, true);
+});
+
 const newChatProject = { ...project, stage: 'selected', policy: null, approvedPlan: undefined };
 const signedOutChatgpt = { ...sharedAccount, state: 'signed-out', email: null };
 const signedOutClaude = { ...sharedClaudeAccount, state: 'signed-out', email: null };
@@ -260,8 +293,8 @@ test('project folder loading uses the workspace status bar without shifting the 
   const bar = harness.element('workspace-status-bar');
   assert.equal(bar.hidden, false);
   assert.match(bar.textContent, /Checking project folders/);
-  assert.equal(bar.getAttribute('role'), 'status');
-  assert.equal(bar.getAttribute('aria-live'), 'polite');
+  assert.equal(harness.element('workspace-status-text').getAttribute('role'), 'status');
+  assert.equal(harness.element('workspace-status-text').getAttribute('aria-live'), 'polite');
   assert.equal(bar.parentElement.className, 'workspace');
   assert.equal(bar.previousElementSibling.tagName, 'MAIN');
   assert.equal(harness.element('workspace-status-text').title, harness.element('workspace-status-text').textContent);
@@ -271,7 +304,7 @@ test('project folder loading uses the workspace status bar without shifting the 
   harness.dom.window.close();
 });
 
-test('overlapping project loads use one fixed status bar and clear it after both finish', async () => {
+test('overlapping project loads clear their message and leave the project status bar visible', async () => {
   const planCheck = deferred(), saved = deferred(), current = deferred();
   const harness = await interfaceHarness({
     recent_projects: () => [project],
@@ -296,7 +329,8 @@ test('overlapping project loads use one fixed status bar and clear it after both
   assert.equal(bar.hidden, false);
   assert.match(bar.textContent, /sessions/i);
   current.resolve(sessionDashboard([{ id: 'saved-chat', title: 'Current chat', updatedAt: 2000 }])); await flush();
-  assert.equal(bar.hidden, true);
+  assert.equal(bar.hidden, false);
+  assert.equal(harness.element('workspace-status-text').textContent, '');
   harness.dom.window.close();
 });
 
@@ -311,7 +345,8 @@ test('status bar follows the visible view and keeps plan errors and retry action
   harness.element('sidebar-current-project').click(); await flush();
   assert.equal(bar.hidden, false);
   checking.reject(new Error('Plan check failed.')); await flush();
-  assert.equal(bar.hidden, true);
+  assert.equal(bar.hidden, false);
+  assert.equal(harness.element('workspace-status-text').textContent, '');
   assert.equal(harness.element('project-plan-feedback').hidden, false);
   assert.equal(harness.element('retry-project-plan').hidden, false);
   assert.match(harness.element('project-plan-status').textContent, /Plan check failed/);
@@ -336,7 +371,8 @@ test('a late plan result cannot clear the status for another project', async () 
   assert.match(bar.textContent, /execution plan/i);
   assert.equal(harness.element('start-codex').disabled, true);
   second.resolve({ project: other, plan, fingerprint: 'plan-b' }); await flush();
-  assert.equal(bar.hidden, true);
+  assert.equal(bar.hidden, false);
+  assert.equal(harness.element('workspace-status-text').textContent, '');
   harness.dom.window.close();
 });
 
@@ -348,7 +384,7 @@ test('settings progress uses the status bar only on the relevant settings page',
   assert.equal(bar.hidden, true);
   harness.element('settings-navigation').click(); await flush();
   assert.equal(bar.hidden, true);
-  harness.element('settings-tab-system-checks').click(); await flush();
+  harness.element('settings-tab-system').click(); await flush();
   assert.equal(bar.hidden, false);
   assert.match(bar.textContent, /Checking this Mac/);
   assert.equal(harness.element('host-status').hidden, true);
@@ -378,12 +414,18 @@ test('API-equivalent information opens beside the total and stays open when usag
   assert.equal(details.open, false);
   const control = details.querySelector('summary');
   assert.equal(control.getAttribute('aria-label'), 'About the estimated API equivalent');
+  const note = harness.element(control.getAttribute('aria-controls'));
+  assert.ok(note.contains(harness.element('usage-note')));
   assert.equal(details.closest('dt').textContent.includes('Estimated API equivalent'), true);
   assert.equal(harness.element('usage-billing-note').textContent, 'Subscription billing is separate.');
   assert.equal(harness.element('usage-billing-note').closest('details, [hidden]'), null);
-  assert.equal(harness.element('session-table').tHead.rows[0].cells[5].textContent, 'Estimated API equivalent');
+  const costColumn = harness.element('session-table').tHead.rows[0].cells[5];
+  assert.equal(costColumn.textContent, 'Est. cost');
+  assert.equal(costColumn.getAttribute('aria-label'), 'Estimated API equivalent');
   assert.match(harness.element('usage-note').textContent, /Estimated API equivalent in USD.*Includes archived and deleted sessions.*OpenAI catalogue checked 2026-11-10.*Each request retains its dated rates.*Cache writes 0.*ChatGPT subscription billing is separate/s);
   control.focus(); control.click();
+  assert.equal(details.open, true);
+  note.click();
   assert.equal(details.open, true);
   const partlyPriced = { ...emptyUsage, requests: 2, unpricedRequests: 1, costUsd: 0.5 };
   const updated = sessionDashboard([{ ...chat, usage: partlyPriced }], { usage: partlyPriced });
@@ -439,12 +481,14 @@ test('network defaults survive tab changes without an agent profile selector', a
   await harness.ready;
   harness.element('settings-navigation').click();
   assert.equal(harness.element('settings-tab-agent-profile'), null);
+  harness.element('settings-tab-new-projects').click();
   harness.element('settings-tab-network').click();
   harness.element('allowed-hosts').value = 'codex.example';
   harness.element('settings-tab-providers').click();
   assert.equal(harness.element('settings-tab-providers').getAttribute('aria-current'), 'true');
   assert.equal(harness.element('settings-panel-network').hidden, true);
   assert.equal(harness.element('settings-form-footer').hidden, true);
+  harness.element('settings-tab-new-projects').click();
   harness.element('settings-tab-network').click();
   assert.equal(harness.element('settings-form-footer').hidden, false);
   assert.equal(harness.element('allowed-hosts').value, 'codex.example');
@@ -764,6 +808,7 @@ test('General settings load and save each agent host list independently', async 
   harness.element('allowed-hosts').value = ' codex.example\n\ncodex.example\napi.openai.com ';
   harness.element('claude-code-allowed-hosts').value = ' claude.example\n\nclaude.example\napi.anthropic.com ';
   harness.element('settings-tab-providers').click();
+  harness.element('settings-tab-new-projects').click();
   harness.element('settings-tab-network').click();
   harness.element('save-settings').click(); await flush();
   const request = harness.calls.find(call => call.command === 'save_settings');
@@ -818,6 +863,7 @@ test('settings use skeletons for reads and a button loader for saves with error 
   harness.element('allowed-hosts').value = 'codex.example';
   harness.element('claude-code-allowed-hosts').value = 'claude.example';
   harness.element('settings-navigation').click();
+  harness.element('settings-tab-new-projects').click();
   harness.element('settings-tab-network').click();
   harness.element('save-settings').click(); await flush();
   assert.equal(harness.element('save-settings').getAttribute('aria-busy'), 'true');
@@ -986,16 +1032,29 @@ test('the project library sorts by last opening and selected projects replace th
   assert.match(rows[1].closest('tr').textContent, /feature\/older/);
   assert.doesNotMatch(rows[1].closest('tr').textContent, /fixture/);
   assert.equal(rows[1].title, older.name + '\n' + older.path);
-  assert.equal(harness.element('sidebar-project-list').hidden, false);
+  const sidebarList = harness.element('sidebar-project-list');
+  const sidebarScroll = harness.element('sidebar-projects');
+  const currentProject = harness.element('sidebar-current-project');
+  assert.equal(sidebarList.hidden, false);
+  assert.equal(currentProject.hidden, true);
+  const sidebarRows = [...sidebarList.querySelectorAll('button')];
+  assert.deepEqual(sidebarRows.map(row => row.textContent), [newer.name, older.name]);
+  assert.equal(sidebarRows[1].title, [older.name, older.path, older.gitBranch].join('\n'));
+  sidebarScroll.scrollTop = 32;
   rows[0].click(); await flush();
-  assert.equal(harness.element('sidebar-project-list').hidden, true);
+  assert.equal(sidebarList.hidden, true);
+  assert.equal(sidebarScroll.scrollTop, 0);
   assert.equal(harness.element('sidebar-project-context').hidden, false);
-  assert.match(harness.element('sidebar-current-project').textContent, /Newer project/);
+  assert.equal(currentProject.hidden, false);
+  assert.equal(currentProject.textContent, newer.name);
+  assert.equal(sidebarScroll.contains(currentProject), false);
+  assert.equal(harness.element('refresh-sessions').getAttribute('aria-label'), 'Refresh chats');
   assert.doesNotMatch(harness.element('sidebar-project-context').textContent, /Older project/);
   assert.equal(harness.element('recent-projects').hidden, true);
   harness.element('project-navigation').click(); await flush();
   assert.equal(harness.element('sidebar-project-list').hidden, false);
   assert.equal(harness.element('sidebar-project-context').hidden, true);
+  assert.equal(currentProject.hidden, true);
   assert.equal(harness.element('recent-projects').hidden, false);
   harness.dom.window.close();
 });
@@ -1171,6 +1230,63 @@ test('a cancelled or rejected records folder preserves the current location and 
   assert.equal(choose.disabled, false);
   assert.equal(harness.element('restart-for-records').hidden, true);
   harness.dom.window.close();
+});
+
+test('an existing records folder asks before scheduling a switch', async t => {
+  const folder = '/fixture/existing-records';
+  const existingDirectoryId = 'a'.repeat(32);
+  const harness = await interfaceHarness({
+    choose_storage_folder: () => folder,
+    inspect_storage_folder: args => { assert.equal(args.folder, folder); return existingDirectoryId; },
+    change_storage_location: args => {
+      assert.deepEqual({ ...args }, { folder, locate: false, existingDirectoryId });
+      return { ...recordsLocation, pendingDirectory: folder };
+    },
+  });
+  t.after(() => harness.dom.window.close());
+  await harness.ready;
+  harness.element('settings-navigation').click(); await flush();
+  const choose = harness.element('change-records-folder');
+  const dialog = harness.element('existing-records-dialog');
+  choose.click(); await flush();
+  assert.equal(dialog.open, true);
+  assert.equal(harness.element('existing-records-path').textContent, folder);
+  assert.equal(harness.calls.some(call => call.command === 'change_storage_location'), false);
+  dialog.dispatchEvent(new harness.dom.window.Event('cancel', { cancelable: true })); await flush();
+  assert.equal(dialog.open, false);
+  assert.equal(choose.disabled, false);
+  assert.equal(harness.calls.some(call => call.command === 'change_storage_location'), false);
+  choose.click(); await flush();
+  harness.element('use-existing-records').click(); await flush();
+  assert.equal(dialog.open, false);
+  assert.equal(harness.element('records-folder').textContent, recordsLocation.directory);
+  assert.match(harness.element('records-folder-status').textContent, /Restart Tugboat/);
+  assert.equal(harness.calls.filter(call => call.command === 'change_storage_location').length, 1);
+  assert.equal(harness.calls.some(call => call.command === 'restart_for_storage_change'), false);
+});
+
+test('declining existing records lets the user pick an empty folder for a normal move', async t => {
+  const existing = '/fixture/existing-records';
+  const empty = '/fixture/empty-folder';
+  const choices = [existing, null, existing, empty];
+  const harness = await interfaceHarness({
+    choose_storage_folder: () => choices.shift(),
+    inspect_storage_folder: () => 'a'.repeat(32),
+    change_storage_location: args => {
+      assert.deepEqual({ ...args }, { folder: empty, locate: false });
+      return { ...recordsLocation, pendingDirectory: empty };
+    },
+  });
+  t.after(() => harness.dom.window.close());
+  await harness.ready;
+  const choose = harness.element('change-records-folder');
+  choose.click(); await flush();
+  harness.element('move-current-records').click(); await flush();
+  assert.equal(harness.calls.some(call => call.command === 'change_storage_location'), false);
+  choose.click(); await flush();
+  harness.element('move-current-records').click(); await flush();
+  assert.equal(harness.calls.filter(call => call.command === 'change_storage_location').length, 1);
+  assert.match(harness.element('records-folder-status').textContent, /\/fixture\/empty-folder/);
 });
 
 test('a former pending move offers Cancel, then Restart for the project reset', async t => {
@@ -1963,7 +2079,7 @@ test('usage notifications update cumulative totals and prompt details retain unp
   assert.deepEqual([...known.cells].map(cell => cell.firstChild.textContent), ['gpt-6.1-sol', '12,000', '3,000 (25%)', '200', '80', '$0.012345']);
   assert.equal(known.cells[0].querySelector('small').textContent, 'standard tier (assumed)');
   assert.equal(known.cells[5].querySelector('time').dateTime, '2026-11-10');
-  const partialTotal = first.tFoot.querySelector('td');
+  const partialTotal = first.closest('details').querySelector('.usage-turn-total');
   assert.equal(partialTotal.firstChild.textContent, '$0.0123');
   assert.doesNotMatch(partialTotal.textContent, /\+ unpriced/);
   const marker = partialTotal.querySelector('.unpriced-marker');
@@ -1971,7 +2087,7 @@ test('usage notifications update cumulative totals and prompt details retain unp
   assert.equal(marker.title, 'Excludes 1 unpriced request');
   assert.equal(marker.querySelector('.visually-hidden').textContent, ' (excludes 1 unpriced request)');
   assert.equal(last.tBodies[0].rows[0].cells[2].textContent, 'Unknown');
-  assert.equal(last.tFoot.querySelector('td').textContent, 'Unavailable');
+  assert.equal(last.closest('details').querySelector('.usage-turn-total').textContent, 'Unavailable');
 
   harness.element('close-session-usage').click();
   harness.handlers.conversation_usage = ({ sessionId }) => sessionDetails(sessionId, []);
@@ -2030,10 +2146,18 @@ test('a failed initial plan disables New Chat and offers a visible retry using t
   assert.equal(harness.element('project-plan-feedback').hidden, false);
   assert.match(harness.element('project-plan-status').textContent, /could not be read/);
   assert.equal(harness.element('start-codex').disabled, true);
+  assert.equal(harness.element('project-setup').hidden, false);
+  assert.ok(harness.element('project-plan-feedback').contains(harness.element('setup-project')));
+  assert.equal(harness.element('project-overview').hidden, false);
+  harness.element('setup-project').click(); await flush();
+  assert.equal(harness.element('project-settings-dialog').hidden, false);
+  harness.element('close-project-settings').click(); await flush();
+  assert.equal(harness.dom.window.document.activeElement, harness.element('setup-project'));
   harness.element('start-codex').click(); await flush();
   assert.equal(harness.calls.filter(call => call.command === 'start_agent_session').length, 0);
   harness.element('retry-project-plan').click(); await flush();
   assert.equal(harness.element('project-plan-feedback').hidden, true);
+  assert.equal(harness.element('project-setup').hidden, true);
   assert.equal(harness.element('start-codex').disabled, false);
   harness.element('start-codex').click(); harness.element('start-codex').click(); await flush();
   const starts = harness.calls.filter(call => call.command === 'start_agent_session');
@@ -2273,13 +2397,15 @@ test('a new project connects the shared account without another login', async ()
   harness.element('choose-folder').click(); await flush();
   assert.equal(harness.element('start-codex').disabled, false);
   assert.equal(harness.calls.filter(call => call.command === 'sync_project_chatgpt').length, 1);
+  assert.equal(harness.element('project-account-label').textContent, 'ChatGPT connected');
+  assert.equal(harness.element('project-account-status').textContent, sharedAccount.message);
   assert.equal(harness.element('project-account-feedback').hidden, true);
   assert.equal(harness.calls.filter(call => call.command === 'start_agent_session').length, 0);
   harness.element('settings-navigation').click(); await flush();
   assert.equal(harness.element('project-settings-dialog').hidden, true);
   assert.equal(harness.element('settings-view').hidden, false);
   assert.equal(harness.element('shared-chatgpt-email').textContent, sharedAccount.email);
-  assert.equal(harness.element('shared-chatgpt-heading').textContent, 'ChatGPT');
+  assert.equal(harness.element('shared-chatgpt-heading').textContent, 'ChatGPT for Codex');
   harness.dom.window.close();
 });
 
@@ -2299,21 +2425,39 @@ test('provider details and account controls belong only to application settings'
   harness.element('settings-navigation').click(); await flush();
   assert.equal(harness.element('project-settings-dialog').hidden, true);
   assert.equal(harness.element('settings-view').contains(harness.element('shared-chatgpt-section')), true);
-  assert.equal(harness.element('shared-chatgpt-heading').textContent, 'ChatGPT');
+  assert.equal(harness.element('shared-chatgpt-heading').textContent, 'ChatGPT for Codex');
   assert.equal(harness.element('shared-chatgpt-sign-in').hidden, false);
   assert.equal(harness.calls.filter(call => call.command === 'login_status').length, 0);
   harness.dom.window.close();
 });
 
-test('the project account warning opens the provider section in application settings', async () => {
-  const account = { ...sharedAccount, state: 'signed-out', email: null };
+test('the account status before New Chat opens the selected provider settings', async () => {
+  const account = { ...sharedAccount, state: 'signed-out', email: null, message: 'Sign in once to use your ChatGPT account in every project.' };
   const harness = await interfaceHarness({ shared_chatgpt_status: () => account, sync_project_chatgpt: () => account });
   await harness.ready; harness.element('choose-folder').click(); await flush();
   chooseAgent(harness, 'codex'); await flush();
+  const notice = harness.element('project-account-notice');
+  const summary = harness.element('project-account-summary');
+  assert.ok(notice.nextElementSibling.contains(harness.element('agent-choice')));
+  assert.equal(harness.element('project-account-label').textContent, 'Sign in to ChatGPT');
+  assert.equal(notice.open, false);
   assert.equal(harness.element('project-account-feedback').hidden, false);
+  assert.equal(harness.element('project-account-status').textContent, 'Sign in to ChatGPT to start a chat.');
+  await harness.listeners.get('shared-chatgpt-changed')({ payload: { ...account, generation: 2, state: 'needs-sign-in' } });
+  assert.equal(harness.element('project-account-status').textContent, 'Sign in to ChatGPT again to start a chat.');
+  assert.equal(harness.element('project-overview').hidden, false);
+  summary.click();
+  assert.equal(notice.open, true);
+  harness.dom.window.document.dispatchEvent(new harness.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(notice.open, false);
+  assert.equal(harness.dom.window.document.activeElement, summary);
+  summary.click();
   harness.element('project-provider-settings').click(); await flush();
+  assert.equal(notice.open, false);
   assert.equal(harness.element('settings-view').hidden, false);
   assert.equal(harness.dom.window.document.activeElement, harness.element('shared-chatgpt-heading'));
+  harness.element('close-settings').click(); await flush();
+  assert.equal(harness.dom.window.document.activeElement, summary);
   assert.equal(harness.calls.filter(call => call.command === 'start_agent_session').length, 0);
   harness.dom.window.close();
 });
@@ -2423,10 +2567,13 @@ test('a failed project connection blocks new chat until shared renewal and recon
     sync_project_chatgpt: () => { if (failed) throw new Error('Connect the guest home and retry.'); return account; },
     retry_shared_chatgpt: () => { failed = false; account = { ...sharedAccount, generation: 2 }; return account; } });
   await harness.ready; harness.element('choose-folder').click(); await flush(); assert.equal(harness.element('start-codex').disabled, true);
+  assert.equal(harness.element('project-account-feedback').hidden, false);
+  assert.match(harness.element('project-account-status').textContent, /Connect the guest home and retry/);
   harness.element('settings-navigation').click(); await flush();
   assert.match(harness.element('shared-chatgpt-status').textContent, /Connect the guest home and retry/);
   assert.equal(harness.element('shared-chatgpt-retry').hidden, false);
   harness.element('shared-chatgpt-retry').click(); await flush(); assert.equal(harness.element('start-codex').disabled, false);
+  assert.equal(harness.element('project-account-feedback').hidden, true);
   assert.equal(harness.calls.filter(call => call.command === 'sync_project_chatgpt').length, 2); harness.dom.window.close();
 });
 
@@ -2681,9 +2828,12 @@ test('incomplete removal preserves its saved operation without showing account c
   assert.match(harness.element('project-plan-status').textContent, /Removal is incomplete/);
   harness.element('resume-removal').click(); await flush();
   assert.equal(harness.element('removal-dialog').open, true);
+  assert.equal(harness.element('project-environment').open, true);
   assert.match(harness.element('removal-description').textContent, /policy cleanup pending/);
   assert.equal(harness.element('logout-on-removal'), null);
   assert.equal(harness.calls.filter(call => ['remove_project', 'start_agent_session', 'prepare_environment'].includes(call.command)).length, 0);
+  harness.element('cancel-removal').click(); await flush();
+  assert.equal(harness.dom.window.document.activeElement, harness.element('preview-removal'));
   harness.dom.window.close();
 });
 
@@ -2967,9 +3117,10 @@ test('family detail scopes and prompt source links retain each agent request exa
   const scopes = [...details.querySelector('.usage-scope-table').tBodies[0].rows];
   assert.deepEqual(scopes.map(row => [row.cells[0].textContent, row.cells[5].textContent]), [['Main agent', '11,000'], ['Subagents', '13,200'], ['Combined', '24,200']]);
   assert.equal(scopes[2].cells[2].textContent, '14,000 (63.6%)');
-  assert.match(harness.element('session-usage-status').textContent, /2 user prompt\(s\).*6 agent turn\(s\)/);
+  assert.match(harness.element('session-usage-notes').textContent, /2 user prompts.*6 agent turns/);
   const own = [...details.querySelectorAll('section[data-agent-turn="' + family.details.sessionId + '"]')];
-  assert.deepEqual(own.map(section => section.querySelector('h3').textContent), ['Prompt 1 · complete', 'Prompt 2 · complete']);
+  assert.deepEqual(own.map(section => section.querySelector('.usage-turn-heading').textContent), ['Prompt 1 · complete', 'Prompt 2 · complete']);
+  assert.ok(own.every(section => !section.querySelector('details').open));
   assert.match(own[0].textContent, /Subagents: 11,000 tokens.*Combined: 16,500 tokens/s);
   assert.match(own[1].textContent, /Subagents: 2,200 tokens.*Combined: 7,700 tokens/s);
   const requests = [...details.querySelectorAll('.request-usage tbody tr')];
@@ -2982,8 +3133,7 @@ test('family detail scopes and prompt source links retain each agent request exa
   assert.ok(!model.textContent.includes(request.source.originTurnId));
   assert.ok(!model.textContent.includes(request.source.responseId));
   assert.equal(details.querySelectorAll('details.usage-agent').length, 3);
-  assert.equal(details.querySelectorAll('.usage-agent h3').length, 0);
-  assert.ok([...details.querySelectorAll('.usage-agent h4')].every(heading => heading.textContent.startsWith('Agent turn ')));
+  assert.ok([...details.querySelectorAll('.usage-agent .usage-turn-heading')].every(heading => heading.textContent.startsWith('Agent turn ')));
   const refs = [...details.querySelectorAll('.usage-source-list a')];
   assert.equal(refs.length, 6);
   for (const link of refs) assert.ok(harness.element(decodeURIComponent(new URL(link.href).hash.slice(1))));
@@ -2993,10 +3143,11 @@ test('family detail scopes and prompt source links retain each agent request exa
   childLink.click(); await flush();
   const target = harness.element(decodeURIComponent(new URL(childLink.href).hash.slice(1)));
   assert.equal(target.closest('details').open, true);
+  assert.equal(target.closest('.usage-agent').open, true);
   assert.equal(harness.dom.window.document.activeElement, target);
   const summary = target.closest('details').querySelector('summary');
   summary.click(); await flush(); assert.equal(target.closest('details').open, false);
-  assert.match(harness.element('session-usage-status').textContent, /API equivalent.*subscription billing is separate/);
+  assert.match(harness.element('session-usage-notes').textContent, /API equivalent.*subscription billing is separate/);
   harness.dom.window.close();
 });
 
@@ -3020,7 +3171,7 @@ test('orphan details preserve unknown user prompt count and explicitly unassigne
   const harness = await interfaceHarness({ project_dashboard: () => sessionDashboard(orphan.conversations), conversation_usage: () => orphan.details });
   await harness.ready; harness.element('choose-folder').click(); await flush();
   harness.element('unlinked-subagent-body').querySelector('button').click(); await flush();
-  assert.match(harness.element('session-usage-status').textContent, /User prompt count unknown.*1 agent turn\(s\).*main session could not be established/s);
+  assert.match(harness.element('session-usage-notes').textContent, /User prompt count unknown.*1 agent turn.*main session could not be established/s);
   const content = harness.element('session-usage-details');
   assert.match(content.textContent, /Agent turn 1 · complete/);
   assert.doesNotMatch(content.textContent, /Prompt 1 ·/);
@@ -3096,7 +3247,7 @@ test('request rows retain mixed models, independent cache knownness and both dat
   assert.equal(rows[2].cells[2].textContent, 'Unknown'); assert.equal(rows[2].cells[3].textContent, '25');
   assert.match(rows[2].cells[0].textContent, /second-model.*priority tier/s);
   assert.equal(rows[2].cells[5].querySelector('time').dateTime, '2025-10-01');
-  assert.match(harness.element('session-usage-details').querySelector('tfoot').textContent, /unpriced/);
+  assert.match(harness.element('session-usage-details').querySelector('.usage-turn-total').textContent, /unpriced/);
   harness.dom.window.close();
 });
 
@@ -3112,7 +3263,7 @@ test('equal local turn IDs in different agents retain separate tables and source
   const content = harness.element('session-usage-details');
   const sections = [...content.querySelectorAll('section[data-agent-turn]')].filter(section => section.id.includes('shared-local-turn'));
   assert.equal(sections.length, 2); assert.notEqual(sections[0].id, sections[1].id);
-  assert.notEqual(sections[0].querySelector('h4').id, sections[1].querySelector('h4').id);
+  assert.notEqual(sections[0].querySelector('.usage-turn-heading').id, sections[1].querySelector('.usage-turn-heading').id);
   const sourceTargets = [...content.querySelectorAll('.usage-source-list a')].filter(link => link.title.startsWith('shared-local-turn')).map(link => harness.element(decodeURIComponent(new URL(link.href).hash.slice(1))));
   assert.equal(sourceTargets.length, 2); assert.notEqual(sourceTargets[0], sourceTargets[1]);
   assert.deepEqual(new Set(sourceTargets.map(row => row.closest('section').dataset.agentTurn)), new Set(children.map(agent => agent.sessionId)));
@@ -3196,6 +3347,11 @@ test('pending live refreshes coalesce, discard stale data and preserve disclosur
   Object.defineProperty(harness.dom.window.document, 'hasFocus', { value: () => true, configurable: true });
   const content = harness.element('session-usage-details'); const panel = content.closest('.dialog-content');
   const disclosure = content.querySelector('.usage-agent'); disclosure.open = true; disclosure.querySelector('summary').focus();
+  const tokenBreakdown = content.querySelector('.session-token-breakdown');
+  assert.equal(tokenBreakdown.open, true);
+  tokenBreakdown.querySelector('summary').click();
+  content.querySelector('.usage-turn').open = true;
+  disclosure.querySelector('.usage-turn').open = true;
   panel.scrollTop = 140;
   content.querySelector('section[data-agent-turn] .table-scroll').scrollLeft = 55;
   disclosure.querySelector('.table-scroll').scrollLeft = 31;
@@ -3211,6 +3367,9 @@ test('pending live refreshes coalesce, discard stale data and preserve disclosur
   assert.equal(harness.calls.filter(call => call.command === 'conversation_usage').length, 3);
   const restored = content.querySelector('.usage-agent');
   assert.equal(restored.open, true); assert.equal(harness.dom.window.document.activeElement, restored.querySelector('summary'));
+  assert.equal(content.querySelector('.session-token-breakdown').open, false);
+  assert.equal(content.querySelector('.usage-turn').open, true);
+  assert.equal(restored.querySelector('.usage-turn').open, true);
   assert.equal(panel.scrollTop, 140); assert.equal(content.querySelector('section[data-agent-turn] .table-scroll').scrollLeft, 55); assert.equal(restored.querySelector('.table-scroll').scrollLeft, 31);
   assert.match(restored.querySelector('summary').textContent, /Current child · Türkçe 日本語/);
   const lastGood = content.textContent;
@@ -3224,6 +3383,9 @@ test('pending live refreshes coalesce, discard stale data and preserve disclosur
   assert.equal(harness.dom.window.document.activeElement, harness.element('close-session-usage'));
   assert.doesNotMatch(harness.element('session-usage-status').textContent, /Could not refresh/);
   assert.equal(content.querySelector('.usage-agent').open, true);
+  harness.element('close-session-usage').click(); await flush();
+  await openUsage(harness, 'Primary R');
+  assert.equal(content.querySelector('.session-token-breakdown').open, true);
   harness.dom.window.close();
 });
 
@@ -3299,7 +3461,7 @@ test('a child provenance-only update changes prompt partition without duplicatin
   assert.match(content.querySelector('.usage-unassigned').textContent, /Unassigned to a user prompt.*2,200 tokens/s);
   assert.equal(content.querySelectorAll('.usage-source-list a').length, 6);
   assert.equal(content.querySelector('.usage-scope-table').tBodies[0].rows[2].cells[5].textContent, '24,200');
-  assert.match(harness.element('session-usage-status').textContent, /2 user prompt\(s\).*6 agent turn\(s\)/);
+  assert.match(harness.element('session-usage-notes').textContent, /2 user prompts.*6 agent turns/);
   harness.dom.window.close();
 });
 
@@ -3387,7 +3549,7 @@ test('a supported unknown-relation child refreshes its legacy parent detail whil
   assert.match(harness.element('session-usage-details').textContent, /Updated unknown-relation child model/);
   assert.equal(harness.element('session-usage-details').querySelector('.usage-scope-table').tBodies[0].rows[2].cells[5].textContent, '5,500');
   assert.equal(harness.element('session-usage-details').querySelectorAll('.request-usage tbody tr').length, 3);
-  assert.match(harness.element('session-usage-status').textContent, /User prompt count unknown.*3 agent turn\(s\)/);
+  assert.match(harness.element('session-usage-notes').textContent, /User prompt count unknown.*3 agent turns/);
   harness.dom.window.close();
 });
 
@@ -3757,7 +3919,8 @@ test('equal native session IDs keep distinct agent rows, resumes and archive tar
   assert.equal(harness.element('session-usage-dialog').open, true);
   assert.match(harness.element('session-usage-details').textContent, /Agent turn 1 · complete/);
   assert.doesNotMatch(harness.element('session-usage-details').textContent, /Prompt 1/);
-  assert.match(harness.element('session-usage-status').textContent, /User prompt count unknown.*Recorded source coverage: partial.*discovered subagent messages/s);
+  assert.match(harness.element('session-usage-notes').textContent, /User prompt count unknown.*Saved records may omit requests or turns/s);
+  assert.match(harness.element('session-usage-status').textContent, /discovered subagent messages/);
   assert.match(harness.element('session-usage-details').textContent, /\$0\.034285 \(estimate\).*Anthropic rates 2026-11-13.*5-minute cache writes assumed/s);
   assert.equal(harness.element('session-usage-details').querySelector('time a').href, 'https://platform.claude.com/docs/en/about-claude/pricing');
   assert.match(harness.element('usage-note').textContent, /labelled standard\/global estimates/);
@@ -3921,7 +4084,7 @@ test('Claude missing usage shows known subtotals plus unknown and keeps details 
   assert.equal(harness.element('project-usage').querySelectorAll('dd')[4].textContent, '$0.0557 + unknown');
   row.querySelector('[aria-label="Usage for Partial Claude chat, Claude Code"]').click(); await flush();
   assert.match(harness.element('session-usage-details').textContent, /Agent turn 6.*No request usage was recorded.*Token counts and the estimated API equivalent are unknown/s);
-  assert.match(harness.element('session-usage-status').textContent, /1 agent turn\(s\) have unknown token counts/);
+  assert.match(harness.element('session-usage-notes').textContent, /1 agent turn has unknown token counts/);
   harness.element('close-session-usage').click(); await flush();
   const unknown = { ...emptyUsage, unmeasuredTurns: 1 };
   await harness.listeners.get('project-usage-updated')({ payload: [project.id, sessionDashboard([{ ...claude, usage: unknown, familyUsage: unknown, usageRevision: 'unknown-only' }], { usage: unknown, usageAvailable: true, coverage: 'unknown' })] });
@@ -3951,7 +4114,7 @@ test('native priced Claude family exposes separate main and nested costs with sa
   assert.match(content.textContent, /\$0\.055060.*Recorded rates for prompts over 100,000 input tokens/s);
   assert.equal(content.querySelectorAll('time a[href="https://platform.claude.com/docs/en/about-claude/pricing"]').length, 4);
   assert.doesNotMatch(content.textContent, /\(estimate\)|cache writes assumed/);
-  assert.match(harness.element('session-usage-status').textContent, /Subscription charges, account discounts, and server-tool charges are separate/);
+  assert.match(harness.element('session-usage-notes').textContent, /Subscription charges, account discounts, and server-tool charges are separate/);
   harness.element('close-session-usage').click(); await flush();
   contract.details.agents[0].turns[0].requests[0].rates.source = 'javascript:alert("fixture")';
   harness.handlers.recorded_project_dashboard = () => structuredClone(contract.dashboard);
@@ -3981,7 +4144,7 @@ test('native Claude family output keeps one root row and refreshes nested usage 
   assert.equal(content.querySelectorAll('.usage-agent').length, 3);
   assert.match(content.textContent, /Agent turn 1/);
   assert.doesNotMatch(content.textContent, /Prompt 1/);
-  assert.match(harness.element('session-usage-status').textContent, /User prompt count unknown/);
+  assert.match(harness.element('session-usage-notes').textContent, /User prompt count unknown/);
   const nested = dashboard.conversations.find(conversation => conversation.lineage.agentPath === '/nested');
   const grow = usage => ({ ...usage, output: usage.output + 1, total: usage.total + 1 });
   nested.usageRevision += '-growth'; nested.usage = grow(nested.usage); nested.familyUsage = grow(nested.familyUsage);
@@ -4303,17 +4466,20 @@ test('recheck a cancelled removal confirmation cannot issue another command', as
 
 test('the guest terminal opens while agent checks run and a failed agent does not block its sibling', async t => {
   const pending = deferred();
-  const h = await interfaceHarness({ agent_update_status: () => pending.promise });
+  const account = { ...sharedAccount, message: 'Your shared ChatGPT account is available to all projects.' };
+  const h = await interfaceHarness({ agent_update_status: () => pending.promise, shared_chatgpt_status: () => account });
   t.after(() => h.dom.window.close());
   await h.ready; h.element('choose-folder').click(); await flush();
   assert.equal(h.element('guest-shell').disabled, false);
   assert.equal(h.element('start-codex').disabled, true);
+  assert.equal(h.element('project-account-feedback').hidden, true);
   h.element('guest-shell').click(); await flush();
   assert.deepEqual(h.calls.filter(call => call.command === 'start_agent_session').map(call => call.args.action), ['shell']);
   h.element('close-terminal').click(); await flush();
   pending.resolve({ codex: { selected: '1.0.0', result: 'Signature verification failed' }, 'claude-code': { active: '2.0.0', selected: '2.0.0', result: 'Current' } });
   await flush();
   assert.match(h.element('project-agent-update').textContent, /Signature verification failed/);
+  assert.equal(h.element('project-account-feedback').hidden, true);
   assert.equal(h.element('guest-shell').disabled, false);
   const select = h.element('agent-choice');
   select.value = 'claude-code'; select.dispatchEvent(new h.dom.window.Event('change')); await flush();

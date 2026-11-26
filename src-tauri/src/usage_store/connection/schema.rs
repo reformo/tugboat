@@ -2,6 +2,9 @@ use super::{error, RecordsDirectory, APPLICATION_ID, SCHEMA_VERSION};
 use rusqlite::{Connection, TransactionBehavior};
 
 const CHANGE_IDENTITY: &str = include_str!("../migrations/002_project_identity.sql");
+const ADD_REQUEST_EFFORT: &str = include_str!("../migrations/003_request_effort.sql");
+
+pub(super) const ADD_NETWORK_ACTIVITY: &str = include_str!("../migrations/004_network_activity.sql");
 
 pub(super) fn verified_version(
     connection: &Connection,
@@ -13,7 +16,7 @@ pub(super) fn verified_version(
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(error)?;
-    if application != APPLICATION_ID || !matches!(version, 1 | SCHEMA_VERSION) {
+    if application != APPLICATION_ID || !(1..=SCHEMA_VERSION).contains(&version) {
         return Err("This usage database belongs to another application or schema version.".into());
     }
     let identity: String = connection
@@ -53,18 +56,23 @@ pub(super) fn has_legacy_imports(database: &Connection) -> Result<bool, String> 
     database.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='legacy_imports')", [], |row| row.get(0)).map_err(error)
 }
 
-pub(super) fn upgrade_identity(
-    database: &mut Connection,
-    records: &RecordsDirectory,
-) -> Result<(), String> {
+pub(super) fn upgrade(database: &mut Connection, records: &RecordsDirectory) -> Result<(), String> {
     database
         .execute_batch("PRAGMA foreign_keys=OFF;")
         .map_err(error)?;
     let transaction = database
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(error)?;
-    if verified_version(&transaction, records)? == 1 {
+    let version = verified_version(&transaction, records)?;
+    if version == 1 {
         migrate_v1(&transaction)?;
+    }
+    if version < 3 {
+        transaction.execute_batch(ADD_REQUEST_EFFORT).map_err(error)?;
+    }
+    if version < SCHEMA_VERSION {
+        transaction.execute_batch(ADD_NETWORK_ACTIVITY).map_err(error)?;
+        check_references(&transaction)?;
     }
     transaction.commit().map_err(error)?;
     database
@@ -88,6 +96,5 @@ fn migrate_v1(transaction: &Connection) -> Result<(), String> {
                 .map_err(error)?;
         }
     }
-    check_references(transaction)?;
     Ok(())
 }

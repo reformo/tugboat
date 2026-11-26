@@ -1,0 +1,372 @@
+diff --git a/cmd/hull/gateway.go b/cmd/hull/gateway.go
+index 2572113..6360e2d 100644
+--- a/cmd/hull/gateway.go
++++ b/cmd/hull/gateway.go
+@@ -123,6 +123,7 @@ the ports a --divert names are served, and every other connection to it is
+ reset (TCP) or dropped (UDP).`),
+ 		Flags: []cli.Flag{
+ 			&cli.StringFlag{Name: "socket", Required: true, Usage: "control socket path (required)"},
++			&cli.StringFlag{Name: "activity-directory", Hidden: true},
+ 			&cli.StringFlag{Name: "api", Usage: "HTTP API socket path (probe, leases, /forwards, /diverts and /members)"},
+ 			&cli.StringFlag{Name: "qemu-socket", Usage: "unix socket for the QEMU stream netdev, used by both the QEMU and HVI backends (default: --socket plus .qemu)"},
+ 			&cli.StringFlag{Name: "subnet", Value: "10.87.0.0/24", Usage: "virtual subnet CIDR"},
+@@ -178,7 +179,7 @@ reset (TCP) or dropped (UDP).`),
+ 			if qemuSock == "" {
+ 				qemuSock = qemuGatewaySock(cmd.String("socket"))
+ 			}
+-			return runGateway(ctx, cmd.String("socket"), cmd.String("api"), qemuSock, cmd.String("subnet"), cmd.String("gateway-ip"), forwards, cmd.StringSlice("host"), policy, cmd.Duration("egress-refresh"), diverts, sup)
++			return runGateway(ctx, cmd.String("socket"), cmd.String("api"), qemuSock, cmd.String("subnet"), cmd.String("gateway-ip"), forwards, cmd.StringSlice("host"), policy, cmd.Duration("egress-refresh"), diverts, sup, cmd.String("activity-directory"))
+ 		},
+ 	}
+ }
+@@ -254,7 +255,7 @@ const gatewayShutdownGrace = 20 * time.Second
+ // handful of rules is not a source of DNS traffic worth noticing.
+ const egressRefreshDefault = 30 * time.Second
+ 
+-func runGateway(ctx context.Context, sockPath, apiPath, qemuSockPath, subnet, gatewayIP string, forwards []netgw.Forward, hosts []string, policy *netgw.Policy, egressRefresh time.Duration, diverts []netgw.Divert, sup *supervisor) error {
++func runGateway(ctx context.Context, sockPath, apiPath, qemuSockPath, subnet, gatewayIP string, forwards []netgw.Forward, hosts []string, policy *netgw.Policy, egressRefresh time.Duration, diverts []netgw.Divert, sup *supervisor, activityDirectory string) error {
+ 	// Serve service names from the gateway's DNS in addition to the
+ 	// /etc/hosts injection, so images that bypass /etc/hosts keep working.
+ 	// Non-matching queries fall through to the host resolver.
+@@ -282,7 +283,21 @@ func runGateway(ctx context.Context, sockPath, apiPath, qemuSockPath, subnet, ga
+ 		dns = append(dns, gvntypes.Zone{Name: ".", Records: records})
+ 	}
+ 
++	// Claim the socket before starting a writer. A competing gateway must not record.
++	l, err := claimUnixSocket(sockPath)
++	if err != nil {
++		return err
++	}
++	defer func() { _ = l.Close(); _ = os.Remove(sockPath) }()
++	activity, err := netgw.OpenActivity(activityDirectory)
++	if err != nil {
++		log.Warn("network activity recording is unavailable")
++	}
++	defer activity.Close()
++	go activity.Run(ctx)
++
+ 	vn, err := netgw.New(netgw.Config{
++		Activity:          activity,
+ 		MTU:               1500,
+ 		Subnet:            subnet,
+ 		GatewayIP:         gatewayIP,
+@@ -303,11 +318,6 @@ func runGateway(ctx context.Context, sockPath, apiPath, qemuSockPath, subnet, ga
+ 	defer stopNet()
+ 	vn.Start(netCtx)
+ 
+-	l, err := claimUnixSocket(sockPath)
+-	if err != nil {
+-		return err
+-	}
+-	defer func() { _ = l.Close(); _ = os.Remove(sockPath) }()
+ 	log.Infof("network-gateway on %s (subnet %s, gw %s, %d forwards, %d diverts, %s)", sockPath, subnet, gatewayIP, len(forwards), len(diverts), policy.Summary())
+ 
+ 	// Probe API: the gateway is the only process that can dial into the
+diff --git a/internal/netgw/divert.go b/internal/netgw/divert.go
+index 3d3feb6..acd0dd4 100644
+--- a/internal/netgw/divert.go
++++ b/internal/netgw/divert.go
+@@ -325,11 +325,12 @@ func (d *diverts) status() []DivertStatus {
+ 
+ // serve hands the guest connection behind r to the rule's socket. A socket
+ // that cannot be connected resets the guest connection.
+-func (rule *divertRule) serve(r *tcp.ForwarderRequest) {
++func (rule *divertRule) serve(r *tcp.ForwarderRequest, flow *activityFlow) {
+ 	id := r.ID()
+ 	dst, src := toNetip(id.LocalAddress), toNetip(id.RemoteAddress)
+ 	conn, err := dialDivert(rule.Socket, dst, id.LocalPort, src, id.RemotePort)
+ 	if err != nil {
++		flow.result("failed", true)
+ 		rule.failed.Add(1)
+ 		log.Warnf("divert: reset tcp from %s to %s: %v", src,
+ 			net.JoinHostPort(dst.String(), strconv.Itoa(int(id.LocalPort))), err)
+@@ -341,12 +342,14 @@ func (rule *divertRule) serve(r *tcp.ForwarderRequest) {
+ 	ep, tcpErr := r.CreateEndpoint(&wq)
+ 	r.Complete(false)
+ 	if tcpErr != nil {
++		flow.result("failed", true)
+ 		_ = conn.Close()
+ 		log.Debugf("divert: r.CreateEndpoint() = %v", tcpErr)
+ 		return
+ 	}
+ 	rule.diverted.Add(1)
+-	relay(gonet.NewTCPConn(&wq, ep), ep, conn)
++	flow.result("connected", true)
++	relay(gonet.NewTCPConn(&wq, ep), ep, conn, flow)
+ }
+ 
+ // dialDivert connects to the socket and writes the preamble.
+@@ -379,15 +382,15 @@ func dialDivert(socket string, dst netip.Addr, dstPort uint16, src netip.Addr, s
+ // the same EOF. Its pid does not tell them apart either: kill(pid, 0) still
+ // succeeds at that EOF, until the owner's parent reaps it. A protocol that
+ // must catch a cut reply has to frame its replies.
+-func relay(guest *gonet.TCPConn, ep tcpip.Endpoint, sock *net.UnixConn) {
++func relay(guest *gonet.TCPConn, ep tcpip.Endpoint, sock *net.UnixConn, flow *activityFlow) {
+ 	done := make(chan struct{})
+ 	go func() {
+ 		defer close(done)
+-		_, _ = io.Copy(sock, guest)
++		_, _ = io.Copy(sock, trackConnection(guest, flow))
+ 		_ = sock.CloseWrite()
+ 	}()
+ 
+-	n, err := io.Copy(guest, sock)
++	n, err := io.Copy(trackConnection(guest, flow), sock)
+ 	if n == 0 || err != nil {
+ 		ep.Abort()
+ 	} else {
+diff --git a/internal/netgw/dns.go b/internal/netgw/dns.go
+index 68f6cdd..65cd8d2 100644
+--- a/internal/netgw/dns.go
++++ b/internal/netgw/dns.go
+@@ -43,6 +43,7 @@ type resolver interface {
+ }
+ 
+ type dnsHandler struct {
++	activity *ActivityRecorder
+ 	zones    []gvntypes.Zone
+ 	upstream resolver
+ 	policy   *Policy
+@@ -55,6 +56,7 @@ func (h *dnsHandler) handle(w dns.ResponseWriter, r *dns.Msg, maxSize int) {
+ 	m.SetReply(r)
+ 	m.RecursionAvailable = true
+ 	h.addAnswers(m, guestAddr(w.RemoteAddr()))
++	h.activity.recordDNS(w.LocalAddr(), w.RemoteAddr(), m.Rcode == dns.RcodeRefused)
+ 	if edns0 := r.IsEdns0(); edns0 != nil {
+ 		maxSize = int(edns0.UDPSize())
+ 	}
+diff --git a/internal/netgw/forward.go b/internal/netgw/forward.go
+index 0c4f82a..18572b8 100644
+--- a/internal/netgw/forward.go
++++ b/internal/netgw/forward.go
+@@ -17,6 +17,7 @@ package netgw
+ import (
+ 	"errors"
+ 	"fmt"
++	"io"
+ 	"net"
+ 	"sort"
+ 	"strconv"
+@@ -226,7 +227,9 @@ func ParseForward(s string) (Forward, error) {
+ // through an HTTP handler of its own. Listing is what a caller asks for first,
+ // so the record lives beside the thing it describes.
+ type forwards struct {
+-	fw *forwarder.PortsForwarder
++	activity activityIncoming
++	recorded map[string]io.Closer
++	fw       *forwarder.PortsForwarder
+ 
+ 	mu  sync.Mutex
+ 	set map[string]Forward
+@@ -256,7 +259,7 @@ func (s *forwards) expose(f Forward) (Forward, error) {
+ 	// and refuses the pair for UDP, and Linux refuses both. So the bind
+ 	// decides, and the refusal it gives for a port already held is the same
+ 	// answer the set gives for one this gateway holds.
+-	if err := s.fw.Expose(protocolOf(f.Protocol), f.Local, f.Remote); err != nil {
++	if err := s.listen(f); err != nil {
+ 		if errors.Is(err, syscall.EADDRINUSE) {
+ 			// Which holder, read from the set rather than assumed. The keys
+ 			// differ here by definition -- an identical address was refused
+@@ -319,7 +322,7 @@ func (s *forwards) unexpose(protocol, local string) (Forward, error) {
+ 	// Dropped whatever upstream returned. It removes its own record before it
+ 	// closes the listener, so keeping ours on an error would leave a forward
+ 	// listed that nothing serves, refused as published, and undeletable.
+-	err = s.fw.Unexpose(protocolOf(have.Protocol), have.Local)
++	err = s.stopListening(have)
+ 	delete(s.set, have.key())
+ 	if err != nil {
+ 		return Forward{}, fmt.Errorf("cannot stop listening on %s: %w", have.Local, err)
+diff --git a/internal/netgw/forwarder.go b/internal/netgw/forwarder.go
+index ab3c1c7..821ca59 100644
+--- a/internal/netgw/forwarder.go
++++ b/internal/netgw/forwarder.go
+@@ -116,28 +116,33 @@ func (l *rejectLog) first(key string, now time.Time) bool {
+ // diverted port goes to its socket, and every other port is reset. brig
+ // answers brig.internal with this address and diverts its port 443, so
+ // nothing else answers on it.
+-func tcpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.Address, dial dialFunc, rejects *rejectLog) *tcp.Forwarder {
++func tcpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.Address, dial dialFunc, rejects *rejectLog, activity *ActivityRecorder) *tcp.Forwarder {
+ 	linkLocal := linkLocal()
+ 	return tcp.NewForwarder(s, 0, 10, func(r *tcp.ForwarderRequest) {
+ 		dst, port := r.ID().LocalAddress, r.ID().LocalPort
+ 		guest := r.ID().RemoteAddress
++		flow := activity.outgoing("tcp", r.ID())
++		defer flow.close()
+ 
+ 		// A divert is matched before the link-local reset: it names one
+ 		// address and port and is never dialed, so it cannot reach the
+ 		// metadata service the reset keeps the guest from.
+ 		if rule := divs.match(toNetip(dst), port); rule != nil {
+-			rule.serve(r)
++			rule.serve(r, flow)
+ 			return
+ 		}
+ 		if linkLocal.Contains(dst) {
++			flow.result("failed", true)
+ 			r.Complete(true)
+ 			return
+ 		}
+ 		if dst == gateway {
++			flow.result("failed", true)
+ 			r.Complete(true)
+ 			return
+ 		}
+ 		if !policy.AllowsConnection(toNetip(guest), toNetip(dst)) {
++			flow.result("blocked", true)
+ 			rejects.report("tcp", toNetip(guest), toNetip(dst), port)
+ 			r.Complete(true)
+ 			return
+@@ -145,6 +150,7 @@ func tcpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.A
+ 
+ 		outbound, err := dial("tcp", net.JoinHostPort(dst.String(), strconv.Itoa(int(port))))
+ 		if err != nil {
++			flow.result("failed", true)
+ 			log.Tracef("dial() = %v", err)
+ 			r.Complete(true)
+ 			return
+@@ -154,6 +160,7 @@ func tcpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.A
+ 		ep, tcpErr := r.CreateEndpoint(&wq)
+ 		r.Complete(false)
+ 		if tcpErr != nil {
++			flow.result("failed", true)
+ 			_ = outbound.Close()
+ 			if _, ok := tcpErr.(*tcpip.ErrConnectionRefused); ok {
+ 				log.Debugf("r.CreateEndpoint() = %v", tcpErr)
+@@ -163,10 +170,13 @@ func tcpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.A
+ 			return
+ 		}
+ 
++		flow.result("connected", true)
+ 		remote := tcpproxy.DialProxy{
+-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) { return outbound, nil },
++			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
++				return outbound, nil
++			},
+ 		}
+-		remote.HandleConn(gonet.NewTCPConn(&wq, ep))
++		remote.HandleConn(trackConnection(gonet.NewTCPConn(&wq, ep), flow))
+ 	})
+ }
+ 
+@@ -180,19 +190,24 @@ func tcpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.A
+ // UDP to the gateway's own address is dropped, for the reason tcpForwarder
+ // resets TCP to it. Its DNS port is an endpoint on the stack, which this
+ // never sees.
+-func udpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.Address, dial dialFunc, rejects *rejectLog) *udp.Forwarder {
++func udpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.Address, dial dialFunc, rejects *rejectLog, activity *ActivityRecorder) *udp.Forwarder {
+ 	linkLocal := linkLocal()
+ 	return udp.NewForwarder(s, func(r *udp.ForwarderRequest) {
+ 		dst, port := r.ID().LocalAddress, r.ID().LocalPort
+ 		guest := r.ID().RemoteAddress
+ 
+-		if linkLocal.Contains(dst) || dst == header.IPv4Broadcast {
++		if dst == header.IPv4Broadcast {
+ 			return
+ 		}
+-		if divs.match(toNetip(dst), port) != nil || dst == gateway {
++		flow := activity.outgoing("udp", r.ID())
++		if linkLocal.Contains(dst) || divs.match(toNetip(dst), port) != nil || dst == gateway {
++			flow.result("failed", true)
++			flow.close()
+ 			return
+ 		}
+ 		if !policy.AllowsConnection(toNetip(guest), toNetip(dst)) {
++			flow.result("blocked", true)
++			flow.close()
+ 			rejects.report("udp", toNetip(guest), toNetip(dst), port)
+ 			return
+ 		}
+@@ -200,6 +215,8 @@ func udpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.A
+ 		var wq waiter.Queue
+ 		ep, udpErr := r.CreateEndpoint(&wq)
+ 		if udpErr != nil {
++			flow.result("failed", true)
++			flow.close()
+ 			if _, ok := udpErr.(*tcpip.ErrConnectionRefused); ok {
+ 				log.Debugf("r.CreateEndpoint() = %v", udpErr)
+ 			} else {
+@@ -208,11 +225,20 @@ func udpForwarder(s *stack.Stack, policy *Policy, divs *diverts, gateway tcpip.A
+ 			return
+ 		}
+ 
+-		p, _ := forwarder.NewUDPProxy(&autoStoppingListener{underlying: gonet.NewUDPConn(&wq, ep)}, func() (net.Conn, error) {
+-			return dial("udp", net.JoinHostPort(dst.String(), strconv.Itoa(int(port))))
++		listener := &autoStoppingListener{underlying: gonet.NewUDPConn(&wq, ep)}
++		p, _ := forwarder.NewUDPProxy(activityDatagrams{listener, flow}, func() (net.Conn, error) {
++			conn, err := dial("udp", net.JoinHostPort(dst.String(), strconv.Itoa(int(port))))
++			if err != nil {
++				flow.result("failed", true)
++				return nil, err
++			}
++			flow.result("forwarded", true)
++			return conn, nil
+ 		})
+ 		go func() {
+ 			p.Run()
++			_ = p.Close()
++			flow.close()
+ 			// Datagrams sent to this flow are dropped from here until a new
+ 			// forwarder request arrives.
+ 			ep.Close()
+diff --git a/internal/netgw/network.go b/internal/netgw/network.go
+index b05d0f6..b71a8a9 100644
+--- a/internal/netgw/network.go
++++ b/internal/netgw/network.go
+@@ -28,6 +28,7 @@ import (
+ 	"context"
+ 	"errors"
+ 	"fmt"
++	"io"
+ 	"math"
+ 	"net"
+ 	"strconv"
+@@ -56,6 +57,7 @@ const nicID = 1
+ // hull sets: an upstream Configuration has more, and a field accepted but
+ // ignored is worse than one that does not exist.
+ type Config struct {
++	Activity *ActivityRecorder
+ 	// Debug prints every packet on stderr.
+ 	Debug bool
+ 	// MTU of the virtual link.
+@@ -313,9 +315,10 @@ func addServices(cfg Config, s *stack.Stack, ipPool *tap.IPPool, divs *diverts)
+ 	}
+ 	rejects := newRejectLog()
+ 	gateway := tcpip.AddrFrom4Slice(net.ParseIP(cfg.GatewayIP).To4())
+-	s.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder(s, cfg.Egress, divs, gateway, dial, rejects).HandlePacket)
+-	s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder(s, cfg.Egress, divs, gateway, dial, rejects).HandlePacket)
++	s.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder(s, cfg.Egress, divs, gateway, dial, rejects, cfg.Activity).HandlePacket)
++	s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder(s, cfg.Egress, divs, gateway, dial, rejects, cfg.Activity).HandlePacket)
+ 
++	cfg.Activity.listenForActors(s, gateway)
+ 	if err := dnsServer(cfg, s, divs, rejects); err != nil {
+ 		return nil, err
+ 	}
+@@ -336,7 +339,7 @@ func dnsServer(cfg Config, s *stack.Stack, divs *diverts, rejects *rejectLog) er
+ 		return err
+ 	}
+ 
+-	handler := &dnsHandler{zones: cfg.DNSZones, upstream: upstreamResolver(cfg), policy: cfg.Egress, diverts: divs, rejects: rejects}
++	handler := &dnsHandler{zones: cfg.DNSZones, upstream: upstreamResolver(cfg), policy: cfg.Egress, diverts: divs, rejects: rejects, activity: cfg.Activity}
+ 	serve := func(srv *dns.Server, maxSize int) {
+ 		mux := dns.NewServeMux()
+ 		mux.HandleFunc(".", func(w dns.ResponseWriter, r *dns.Msg) { handler.handle(w, r, maxSize) })
+@@ -348,7 +351,7 @@ func dnsServer(cfg Config, s *stack.Stack, divs *diverts, rejects *rejectLog) er
+ 		}()
+ 	}
+ 	serve(&dns.Server{PacketConn: udpConn}, dns.MinMsgSize)
+-	serve(&dns.Server{Listener: tcpLn}, dns.MaxMsgSize)
++	serve(&dns.Server{Listener: cfg.Activity.dnsListener(tcpLn)}, dns.MaxMsgSize)
+ 	return nil
+ }
+ 
+@@ -381,6 +384,10 @@ func dhcpServer(cfg Config, s *stack.Stack, ipPool *tap.IPPool) error {
+ // back the set so more can be installed while it runs.
+ func forwardHostVM(cfg Config, s *stack.Stack) (*forwards, error) {
+ 	set := newForwards(forwarder.NewPortsForwarder(s))
++	if cfg.Activity != nil {
++		set.activity = activityIncoming{s, cfg.Activity}
++		set.recorded = make(map[string]io.Closer)
++	}
+ 	for _, f := range cfg.Forwards {
+ 		if _, err := set.expose(f); err != nil {
+ 			return nil, err

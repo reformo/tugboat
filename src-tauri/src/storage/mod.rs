@@ -2,7 +2,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -255,19 +255,26 @@ pub fn write_bytes(file: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 pub(crate) fn write_bytes_existing(file: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_bytes_with_mode(file, bytes, 0o600)
+}
+
+pub(crate) fn write_bytes_with_mode(file: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     let temporary = file.with_extension(format!(
         "tmp-{}-{}",
         std::process::id(),
         NEXT_WRITE.fetch_add(1, Ordering::Relaxed)
     ));
-    write_staged_bytes(file, bytes, temporary)
+    write_staged_bytes(file, bytes, temporary, mode)
 }
 
-fn write_staged_bytes(file: &Path, bytes: &[u8], temporary: PathBuf) -> Result<(), String> {
+fn write_staged_bytes(file: &Path, bytes: &[u8], temporary: PathBuf, mode: u32) -> Result<(), String> {
     let directory = file.parent().ok_or("Invalid storage location.")?;
     let mut staged = TemporaryRecord::new(temporary);
     let mut output = staged.create()?;
     output.write_all(bytes).map_err(|error| error.to_string())?;
+    if mode != 0o600 {
+        output.set_permissions(fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())?;
+    }
     staged.sync_file(&output)?;
     staged.replace(file)?;
     File::open(directory)

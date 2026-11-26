@@ -25,6 +25,8 @@ struct Exact {
     cumulative: Tokens,
     at: String,
     model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    effort: Option<String>,
     tier: Option<String>,
     tier_source: String,
 }
@@ -54,6 +56,8 @@ pub struct Cursor {
     previous: Option<Tokens>,
     turn_id: Option<String>,
     model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    effort: Option<String>,
     tier: Option<String>,
     #[serde(default)]
     thread_tier: Option<String>,
@@ -259,6 +263,9 @@ fn attach(record: &mut RequestUsage, exact: &Exact) -> Result<(), String> {
             return Err("Conflicting turn attribution for the same physical response".into());
         }
     }
+    if record.effort.is_none() {
+        record.effort = exact.effort.clone();
+    }
     record.source.get_or_insert_with(|| exact.source.clone());
     super::correct_provider_price(record);
     if record.tokens != exact.usage || record.partial {
@@ -446,12 +453,16 @@ impl Cursor {
             response_id: response,
         };
         let (tier, tier_source) = self.current_tier(&Value::Null);
+        let context_matches = source.origin_turn_id.is_some()
+            && source.origin_turn_id == self.turn_id
+            && self.active_owner.as_ref() == Some(&source.origin_thread_id);
         let mut exact = Exact {
             model: if source.origin_turn_id == self.turn_id {
                 self.model.clone()
             } else {
                 None
             },
+            effort: self.effort.clone().filter(|_| context_matches),
             source,
             usage,
             cumulative,
@@ -532,6 +543,7 @@ impl Cursor {
             exact.usage.clone(),
             false,
         );
+        recorded.effort = exact.effort.clone();
         recorded.tier_source = Some(exact.tier_source.clone());
         if exact.source.model_provider != "openai" {
             recorded.rates = None;
@@ -652,6 +664,9 @@ impl Cursor {
                 .get(&key)
                 .and_then(|_| turn.requests.iter_mut().find(|request| request.key == key))
             {
+                if recorded.effort.is_none() && self.turn_id.is_some() {
+                    recorded.effort = self.effort.clone();
+                }
                 recorded.tokens.recover_cache_knowledge(&tokens);
                 if let Some(tier) = tier.as_deref() {
                     correct_legacy_tier(recorded, tier, &tier_source);
@@ -665,6 +680,9 @@ impl Cursor {
                     tokens,
                     partial,
                 );
+                if self.turn_id.is_some() {
+                    recorded.effort = self.effort.clone();
+                }
                 recorded.tier_source = Some(tier_source);
                 index.insert(&turn.id, turn.requests.len(), &recorded);
                 turn.requests.push(recorded);
@@ -700,8 +718,10 @@ impl Cursor {
         if document["type"] == "turn_context" {
             self.model = payload["model"].as_str().map(str::to_owned);
             self.tier = payload["service_tier"].as_str().map(str::to_owned);
+            self.effort = None;
             if let Some(id) = payload["turn_id"].as_str() {
                 self.turn_id = Some(id.into());
+                self.effort = text(&payload["effort"]).filter(|_| self.lifecycle_allowed());
                 self.touch_turn(id, payload, turns);
             }
             return Ok(());
@@ -733,6 +753,7 @@ impl Cursor {
         if kind == "task_started" {
             self.turn_id = payload["turn_id"].as_str().map(str::to_owned);
             self.model = None;
+            self.effort = None;
             self.tier = None;
             if let Some(id) = self.turn_id.as_deref() {
                 self.touch_turn(id, payload, turns);
@@ -920,6 +941,40 @@ mod tests {
             cursor.consume(document, &mut turns).unwrap();
         }
         (cursor, turns)
+    }
+
+    #[test]
+    fn recorded_effort_follows_requests_from_their_own_turn_context() {
+        for exact_first in [false, true] {
+            let (mut cursor, mut turns) = setup();
+            cursor.consume(json!({"type":"turn_context","payload":{"turn_id":TURN,"model":"gpt-6.1-sol","effort":"high"}}), &mut turns).unwrap();
+            let saved = serde_json::to_value(&cursor).unwrap();
+            cursor = serde_json::from_value(saved).unwrap();
+            let first = tokens(10, 1);
+            let mut records = [
+                counter("first", first.clone(), first.clone()),
+                exact("first", first.clone(), first),
+            ];
+            if exact_first {
+                records.reverse();
+            }
+            for record in records {
+                cursor.consume(record, &mut turns).unwrap();
+            }
+            cursor
+                .consume(
+                    json!({"type":"event_msg","payload":{"type":"task_started","turn_id":NEXT}}),
+                    &mut turns,
+                )
+                .unwrap();
+            cursor
+                .consume(counter("second", tokens(20, 2), tokens(30, 3)), &mut turns)
+                .unwrap();
+            let own = own_turns(&turns, OWNER);
+            assert_eq!(own[TURN].requests.len(), 1);
+            assert_eq!(own[TURN].requests[0].effort.as_deref(), Some("high"));
+            assert_eq!(own[NEXT].requests[0].effort, None);
+        }
     }
     fn assert_tokens(summary: &Summary, expected: &Value) {
         assert_eq!(
@@ -1273,6 +1328,7 @@ mod tests {
             cumulative: corrected.tokens.clone(),
             at: corrected.at.clone(),
             model: corrected.model.clone(),
+            effort: None,
             tier: Some("default".into()),
             tier_source: "thread-settings".into(),
         };

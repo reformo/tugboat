@@ -136,7 +136,7 @@ fn validate_at(directory: &Path) -> Result<(), String> {
         }
         verify(&file, &record.sha256)?;
     }
-    for name in ["mke2fs.conf", "registry/config.json"] {
+    for name in ["mke2fs.conf", "registry/config.json", "network-attribution"] {
         let configuration = manifest
             .configuration
             .get(name)

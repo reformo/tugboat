@@ -6,6 +6,7 @@ mod connection;
 mod exact_json;
 pub(crate) mod import_rollup;
 pub(crate) mod move_support;
+pub(crate) mod project_usage;
 mod queries;
 mod revision;
 pub(crate) mod runtime;
@@ -38,7 +39,7 @@ pub(crate) use connection::Store;
 use serde::{Deserialize, Serialize};
 
 pub(crate) const APPLICATION_ID: i64 = 0x54554755;
-pub(crate) const SCHEMA_VERSION: i64 = 2;
+pub(crate) const SCHEMA_VERSION: i64 = 4;
 pub(crate) const CLAUDE_PRICING_VERSION: i64 = 1;
 pub(crate) const SCHEMA: &str = include_str!("migrations/001_initial.sql");
 

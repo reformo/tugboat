@@ -261,6 +261,18 @@
     <section id="records" aria-labelledby="records-heading">
       <h2 id="records-heading">Records and recovery</h2>
 
+      <article id="adr-035">
+        <h3>ADR-035 · Keep network activity in the project records</h3>
+        <p>The isolated gateway is the source for recorded flows, policy decisions, and traffic counts. Guest kernel events can identify an executable and a launch control group. Tugboat saves the gateway’s structured revisions in the records database.</p>
+        <dl>
+          <dt>Recorded reason</dt>
+          <dd>Gateway diagnostics omit successful traffic and disappear at Stop. A destination or time alone cannot identify the process that sent traffic.</dd>
+          <dt>Consequence</dt>
+          <dd>Queue files remain available until Tugboat commits their revisions and offsets. The database scopes reads by project and environment. Missing process evidence leaves the gateway row available. The recorder persists connection metadata and excludes traffic content.</dd>
+        </dl>
+        <p class="source"><a href="architecture.html#network-activity">Network activity data flow</a> · <a href="../resources/runtime/brig-network-activity.patch">Brig gateway and launch binding</a> · <a href="../src-tauri/src/network_activity/store.rs">Import and page reads</a></p>
+      </article>
+
       <article id="adr-014">
         <h3>ADR-014 · Store usage facts for both agents in one database per records folder</h3>
         <p>The active <code>usage.sqlite3</code> holds environment keys, session records, turns, requests, historical corrections, and parser positions. It stores per-session summaries for dashboard reads. Configuration, account records, profiles, location metadata, and native transcripts retain their own formats and owners.</p>
@@ -293,6 +305,7 @@
           <dd>A removable disk can disappear at any stage. Settings, project identities, provider accounts, usage, and backups must continue to refer to the same dataset.</dd>
           <dt>Consequence</dt>
           <dd>An incomplete target cannot become active. A missing disk leaves recovery available. Locate checks the dataset ID. SQLite checks include integrity, foreign keys, and matching copy hashes. Private records must stay outside project shares and guest homes. Moving records leaves Brig guest homes and their transcripts in place.</dd>
+          <dd>An explicit switch to existing records pins the selected dataset ID. Startup verifies and locks that dataset before it commits the pointer. It keeps the former dataset in place.</dd>
         </dl>
         <p class="source">Source files · <a href="../README.md">Records location contract</a> · <a href="../src-tauri/src/storage/data_location/mod.rs">Move and locate transactions</a> · <a href="../src-tauri/src/storage/data_location/state.rs">Move states</a> · <a href="../src-tauri/src/usage_store/move_support.rs">Closed database verification</a> · <a href="../src-tauri/src/storage/publication.rs">Record publication</a></p>
       </article>
@@ -431,7 +444,7 @@
       </article>
       <article id="adr-033">
         <h3>ADR-033 · Set the agent and network values of a new project in application Settings</h3>
-        <p>Application Settings is a dark dialog with a left menu, like Project settings. Its <strong>New projects</strong> group sets the values that a new project starts with. <code>settings.json</code> has an optional <code>projectDefaults</code> record with the agent settings of <a href="#adr-032">ADR-032</a> and the network access of <a href="#adr-030">ADR-030</a>. Tugboat copies the agent settings into the project record when the user adds the project. Preparation writes the network access into the project policy when it creates that policy for the first time. The deny default stays the default value.</p>
+        <p>The <strong>New projects</strong> section of application Settings supplies the starting values for new projects. <code>settings.json</code> has an optional <code>projectDefaults</code> record with the agent settings of <a href="#adr-032">ADR-032</a> and the network access of <a href="#adr-030">ADR-030</a>. Tugboat copies the agent settings into the project record when the user adds the project. Preparation writes the network access into the project policy when it creates that policy for the first time. The deny default stays the default value.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>Users want to set their usual model, permissions, and network access once, instead of in each new project.</dd>

@@ -29,7 +29,8 @@ test('a missing terminal hides its native surface and shows a timed status error
   assert.match(bar.textContent, /This terminal output is no longer retained/);
   assert.equal(typeof expire, 'function');
   expire();
-  assert.equal(bar.hidden, true);
+  assert.equal(bar.hidden, false);
+  assert.equal(bar.classList.contains('is-error'), false);
   harness.dom.window.close();
 });
 
@@ -57,7 +58,8 @@ test('an expired terminal warning cannot hide a newer workspace status', async (
   assert.equal(bar.hidden, false);
   assert.match(bar.textContent, /Refreshing sessions/);
   refresh.resolve(sessionDashboard([])); await flush();
-  assert.equal(bar.hidden, true);
+  assert.equal(bar.hidden, false);
+  assert.equal(harness.element('workspace-status-text').textContent, '');
   harness.dom.window.close();
 });
 
@@ -98,7 +100,8 @@ test('an earlier warning timer cannot dismiss a newer terminal warning', async (
   assert.equal(harness.element('workspace-status-bar').hidden, false);
   assert.equal(harness.element('workspace-status-bar').classList.contains('is-error'), true);
   timers[1]();
-  assert.equal(harness.element('workspace-status-bar').hidden, true);
+  assert.equal(harness.element('workspace-status-bar').hidden, false);
+  assert.equal(harness.element('workspace-status-bar').classList.contains('is-error'), false);
   harness.dom.window.close();
 });
 
@@ -437,7 +440,8 @@ test('an already running chat stays reachable while the plan is checked', async 
   assert.equal(harness.element('workspace-status-bar').hidden, false);
   assert.equal(harness.calls.filter(call => call.command === 'terminal_layout').at(-1).args.layout.visible, true);
   checking.resolve({ project, plan, fingerprint: 'plan-a' }); await flush();
-  assert.equal(harness.element('workspace-status-bar').hidden, true);
+  assert.equal(harness.element('workspace-status-bar').hidden, false);
+  assert.equal(harness.element('workspace-status-text').textContent, '');
   assert.equal(harness.element('hide-terminal').closest('[hidden]'), null);
   assert.equal(harness.element('close-terminal').closest('[hidden]'), null);
   harness.element('hide-terminal').click(); await flush();
