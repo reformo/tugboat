@@ -99,11 +99,15 @@ test('publication checks the commit and complete draft assets, and verifies a pu
   let publishCount = 0;
   let uploadCount = 0;
   let conflict = true;
+  let candidateSha = 'b'.repeat(40);
   let omitAsset = true;
   const github = command => {
     if (command.includes('repos/reformo/tugboat/releases?per_page=100')) return JSON.stringify([draftCreated ? [oldRelease, release] : [oldRelease]]);
     if (command.includes('repos/reformo/tugboat/releases/18/assets?per_page=100')) return JSON.stringify([omitAsset ? assets.slice(0, 3) : assets]);
-    if (command.includes('repos/reformo/tugboat/commits/' + commit)) return JSON.stringify({ sha: commit });
+    if (command.includes('repos/reformo/tugboat/commits/' + commit)) {
+      assert.deepEqual(command.slice(2), ['--jq', '.sha']);
+      return candidateSha;
+    }
     if (command[1]?.includes('/git/matching-refs/')) return JSON.stringify(release.draft && !conflict ? [] : [
       { ref: 'refs/tags/' + fixtureTag, object: { type: 'commit', sha: conflict ? 'b'.repeat(40) : commit } },
     ]);
@@ -141,6 +145,9 @@ test('publication checks the commit and complete draft assets, and verifies a pu
   await assert.rejects(publishMacosRelease(args, github, verifyPackage), /does not identify commit/);
   assert.equal(uploadCount, 0);
   conflict = false;
+  await assert.rejects(publishMacosRelease(args, github, verifyPackage), /could not verify commit/);
+  assert.equal(draftCreated, false);
+  candidateSha = commit;
   await assert.rejects(publishMacosRelease(args, github, verifyPackage), /exactly four release assets/);
   assert.equal(publishCount, 0);
   omitAsset = false;

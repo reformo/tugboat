@@ -65,8 +65,8 @@ export async function publishMacosRelease(
 
   assertNewVersion(version, releases.filter(release => !release.draft && !release.prerelease).map(release => release.tag_name));
   verifyTagCommit(false);
-  const candidate = api(`${apiRoot}/commits/${commit}`);
-  if (candidate.sha !== commit) throw new Error(`GitHub could not verify commit ${commit}.`);
+  const candidateSha = github(['api', `${apiRoot}/commits/${commit}`, '--jq', '.sha']);
+  if (candidateSha !== commit) throw new Error(`GitHub could not verify commit ${commit}.`);
 
   const draft = existing ?? api('--method', 'POST', `${apiRoot}/releases`,
     '-f', `tag_name=${tag}`, '-f', `target_commitish=${commit}`,
