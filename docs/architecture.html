@@ -22,7 +22,7 @@
   </header>
   <main id="main" tabindex="-1">
     <h1>Tugboat architecture</h1>
-    <p class="lead">Tugboat connects a local project folder to Codex and Claude Code on an Apple silicon Mac. Each agent runs in its own Brig guest. Both can edit the same project files.</p>
+    <p class="lead">Tugboat connects a local project folder to Codex and Claude Code on an Apple silicon Mac. Both agents run in the project's shared Brig guest and can edit the same project files.</p>
     <nav class="contents" aria-label="On this page">
       <ul>
         <li><a href="#runtime">Runtime map</a></li>
@@ -94,7 +94,7 @@
           <thead><tr><th scope="col">Scope</th><th scope="col">Identity and contents</th><th scope="col">What survives</th></tr></thead>
           <tbody>
             <tr><th scope="row">Application</th><td>Settings, interface preferences, one shared ChatGPT account and one shared Claude account. A records directory ID ties these records to a dataset.</td><td>Accounts and settings remain available across projects and environment removals.</td></tr>
-            <tr><th scope="row">Project</th><td>The registry tracks project ID, folder identity, name, and opening order. CPU, memory, network mode, image pin, and the agent options belong to the project. The agent options are the Claude Code permission mode, the Claude Code attribution, and the Codex boundary.</td><td>Both agents can write to the selected folder. Stopping the guest keeps those edits on the Mac.</td></tr>
+            <tr><th scope="row">Project</th><td>The registry tracks project ID, folder identity, name, and opening order. CPU, memory, network mode, image pin, and agent options belong to the project. Agent options cover models, effort, Claude Code permissions, attribution and appended prompts, and the Codex boundary.</td><td>Both agents can write to the selected folder. Stopping the guest keeps those edits on the Mac.</td></tr>
             <tr><th scope="row">Environment</th><td>The project ID determines one environment ID and Brig reference. The environment owns its persistent guest home, policy binding, and preparation state.</td><td>Stopping the guest preserves its home and native chat history. Removal follows the reviewed scope.</td></tr>
             <tr><th scope="row">Chat</th><td>The identity contains a project ID, environment ID, agent kind, and native session ID. Verified parent links attach subagent work to a root conversation.</td><td>Saved usage can survive transcript loss. Resume also requires a usable source session.</td></tr>
             <tr><th scope="row">Terminal</th><td>A runtime identifier selects a process and its native view. Guest processes carry an environment target. A local shell has host scope.</td><td>A completed output view can survive process exit until eviction, manual close, or app exit.</td></tr>
@@ -108,6 +108,7 @@
     <section id="desktop">
       <h2>Desktop commands and events</h2>
       <p>Tauri 2 hosts a local web interface and a Rust process. Vite builds the TypeScript and page assets. The web interface uses the document object model and Zustand stores for the active project, account summaries, terminal lists and dashboard state.</p>
+      <p>Vite bundles the <a href="user-guide.html">user guide</a> as the source for Help. The interface builds a searchable topic index and displays one guide section at a time. The index, articles, and section links work offline.</p>
       <p>On startup, Rust resolves the records location and starts usage storage on a background thread. It creates a hidden window and starts monitors. The interface calls <code>frontend_ready</code> to show and focus the window. Controllers then load records, settings, account status and projects. A storage failure remains visible through the recovery controls.</p>
       <p>The web interface calls named Rust commands through Tauri interprocess communication (IPC). Rust owns process creation, the registry, account credentials and writes to disk. It validates inputs at the command boundary. The main window restricts navigation to the app origin, with a loopback development origin, and denies new windows. Browser authorization runs outside it.</p>
       <p>Commands return snapshots. Events can arrive before the command that requested an older snapshot finishes. The dashboard checks project ID, request revision and event sequence before applying a result. If a refresh fails, it can display saved data with an error. A project switch invalidates the old request.</p>
@@ -135,7 +136,8 @@
         <li><strong>Admit the chat.</strong> Session code checks the environment, online mode, provider account, and required guest capabilities. Resume also checks the saved session. A matching live chat can return its existing terminal identifier.</li>
         <li><strong>Run the command.</strong> The agent module builds an argument list. Rust starts the selected Brig executable through a PTY. Codex assigns its own new chat ID. Tugboat supplies a new UUID (universally unique identifier) for Claude Code. Resume uses the existing native ID.</li>
       </ol>
-      <p>Changing the next chat’s agent leaves the checked plan and boot attempt in place. Setup verifies both executables. Only a completed attempt for the same project and environment can mark the guest ready.</p>
+      <p>The first automatic startup needs a successful Mac check and a connected account for the agent selected in Sessions. A recorded startup failure can trigger up to three retries with the same plan. A pending New Chat request stays tied to its project and agent.</p>
+      <p>Changing the next chat’s agent leaves the shared plan and active startup attempt in place. Only a matching completed attempt can mark the guest ready. Each agent becomes available after its own executable and capability checks pass.</p>
       <p class="source"><a href="../src-tauri/src/environment/preparation/mod.rs">Shared environment preparation</a> · <a href="../src-tauri/src/environment/mod.rs">Plan checks and completion</a> · <a href="../src-tauri/src/projects/attempt.rs">Preparation attempts</a> · <a href="../src-tauri/src/agent_sessions/launch.rs">Launch admission</a> · <a href="../src-tauri/src/agents/mod.rs">Agent commands</a></p>
     </section>
 
@@ -144,7 +146,8 @@
       <p>The web interface reserves the terminal area and sends layout and focus requests. Rust attaches an AppKit view to the macOS window. The native view uses <code>libghostty-vt</code> to interpret terminal data. Keyboard input, text composition, selection and drawing use the native surface.</p>
       <p>Rust gives each child process a controlling PTY. Incoming keystrokes enter a bounded queue so native input callbacks can return promptly. A full queue raises a terminal input error. The reader forwards child output to the native surface. A resize updates the PTY size so the child can redraw.</p>
       <p>A local terminal starts a shell on the Mac in the project folder. Guest shells, agent chats, and guest Git or test operations go through Brig. Diagnostic actions such as Brig info and logs invoke the host CLI for the selected reference. A terminal view alone does not establish where a command ran.</p>
-      <p>The terminal registry admits up to 16 live processes and retains up to 32 finished views during one app session. Setup terminals close automatically after their process exits. Closing an output view releases scrollback. New Chat creates another conversation. Selecting a live chat restores its own surface and process.</p>
+      <p>The first startup shows progress in the project workspace. Opening the setup terminal moves the card to the terminal surface. The webview sends a rectangle that lets AppKit keep the card visible above the terminal output.</p>
+      <p>The terminal registry admits up to 16 live processes and retains up to 32 finished views during one app session. Successful setup terminals close after their process exits. Failed setup output stays available in a retained view. Closing an output view releases scrollback. Selecting a live chat restores its own surface and process.</p>
       <p class="source"><a href="../src/terminal/terminal-layout.ts">Terminal layout</a> · <a href="../src-tauri/src/terminal/mod.rs">Session registry and callbacks</a> · <a href="../src-tauri/src/terminal/pty.rs">PTY and shutdown</a> · <a href="../src-tauri/native/TerminalView.m">AppKit surface</a> · <a href="../src-tauri/src/projects/operations/mod.rs">Operation targets</a></p>
     </section>
 
@@ -194,7 +197,7 @@
           <thead><tr><th scope="col">Location</th><th scope="col">Contents</th><th scope="col">Recovery rule</th></tr></thead>
           <tbody>
             <tr><th scope="row">Active records folder</th><td>Project registry, settings, interface preferences, managed profiles, diagnostic records, and private provider files.</td><td>Use the verified records location. File publication checks ownership and syncs the temporary record before replacement.</td></tr>
-            <tr><th scope="row"><code>usage.sqlite3</code></th><td>One database holds both agents' usage across projects, chat state, request facts, source cursors, saved prices and derived summaries.</td><td>After activation, SQLite is authoritative. Tugboat upgrades version 1 and 2 databases on open and preserves session and usage keys. A missing or damaged active database blocks usage writes. Preserve the database and any rollback journal.</td></tr>
+            <tr><th scope="row"><code>usage.sqlite3</code></th><td>One database holds both agents' usage across projects, chat state, request facts, source cursors, saved prices, derived summaries, and network activity.</td><td>After activation, SQLite is authoritative. Tugboat upgrades versions 1 through 3 to schema version 4 on open and preserves session and usage keys. A missing or damaged active database blocks usage writes. Preserve the database and any rollback journal.</td></tr>
             <tr><th scope="row">Former project registrations</th><td>The one-time reset keeps project identity, name, folder, and verified ownership evidence during recovery. It retires the verified former guest and chat storage.</td><td>Current projects use the shared profile and start with empty history after reset. External resources remain available to their owners.</td></tr>
             <tr><th scope="row">Guest homes and project folder</th><td>Agent-owned transcripts, persistent guest files, and the user's source tree.</td><td>A records move transfers Tugboat records. Brig continues to own its homes and the project keeps its original location.</td></tr>
           </tbody>
@@ -218,7 +221,7 @@
     <section id="distribution">
       <h2>Build and distribution</h2>
       <p>The native target is Apple silicon with macOS 15 or later. Tauri bundles the web assets, native terminal code, fonts and host runtime. The build prepares pinned inputs for Ghostty, Brig, hull, the signed virtualization runners, verification tools and ext4 disk utilities. The bundled registry configuration supports public guest images.</p>
-      <p>An empty Brig CLI setting selects bundled Brig. An explicitly saved compatible path selects a custom Brig CLI. Runtime validation checks the supported version, required tools, configuration and hashes against the bundle manifest. A system report identifies the effective tool paths.</p>
+      <p>System checks use the Tugboat Brig runtime by default and can check a custom Brig path. Registered project environments use the Tugboat runtime. Runtime validation checks the supported version, required tools, configuration and hashes against the bundle manifest.</p>
       <p>Pull requests run web checks and select additional macOS tests for native changes. The trunk workflow builds and publishes only when the latest commit message in the push contains <code>new-release</code>. It calls the Developer ID release script to sign and notarize the app and disk image with Apple credentials. Publication requires package verification, including Apple tickets and Gatekeeper checks. Packaging success and end-user Gatekeeper acceptance require different evidence.</p>
       <p class="source"><a href="../src-tauri/tauri.conf.json">Tauri bundle map</a> · <a href="../src-tauri/src/platform/runtime/mod.rs">Runtime validation</a> · <a href="../config/brig-runtime.json">Pinned runtime inputs</a> · <a href="../.github/workflows/pull-request.yml">Pull request checks</a> · <a href="../.github/workflows/macos-release.yml">Trunk release</a> · <a href="../scripts/build-macos-release.sh">Developer ID release</a></p>
     </section>

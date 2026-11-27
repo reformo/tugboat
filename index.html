@@ -21,14 +21,17 @@
           <ul id="sidebar-project-list" class="sidebar-list" aria-label="Projects"></ul>
           <section id="sidebar-project-context" hidden aria-labelledby="sidebar-current-project">
             <div class="sidebar-list-heading">
-              <h2>Chats</h2>
-              <button id="refresh-sessions" class="sidebar-refresh" type="button" aria-label="Refresh chats" title="Refresh chats"><svg class="navigation-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 12a8 8 0 0 1 14-5l2 5M4 17v-5h5M20 12a8 8 0 0 1-14 5l-2-5"/></svg></button>
+              <h2>Chats <span id="sidebar-chat-count" hidden></span></h2>
+              <button id="refresh-sessions" class="sidebar-refresh" type="button" aria-label="Refresh chats" title="Refresh chats"><svg class="navigation-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
             </div>
-            <p id="session-list-status" class="sidebar-support" role="status"></p>
-            <ul id="sidebar-session-list" class="sidebar-list" aria-label="Active chats"></ul>
-            <div id="sidebar-terminals" hidden>
-              <div class="sidebar-list-heading"><h2>Terminals</h2></div>
-              <ul id="sidebar-terminal-list" class="sidebar-list" aria-label="Process terminals and results"></ul>
+            <div id="sidebar-project-activity">
+              <p id="session-list-status" class="sidebar-support" role="status"></p>
+              <ul id="sidebar-session-list" class="sidebar-list" aria-label="Active chats"></ul>
+              <button id="show-more-chats" class="sidebar-more" type="button" aria-controls="sidebar-session-list" hidden>Show more</button>
+              <div id="sidebar-terminals" hidden>
+                <div class="sidebar-list-heading"><h2>Terminals</h2></div>
+                <ul id="sidebar-terminal-list" class="sidebar-list" aria-label="Process terminals and results"></ul>
+              </div>
             </div>
           </section>
         </div>
@@ -331,14 +334,16 @@
               <span id="project-reference" hidden></span>
             </div>
           </header>
-          <div class="project-content">
+          <div id="project-content" class="project-content">
             <p id="folder-error" class="error-message" role="alert" hidden></p>
             <div id="project-plan-feedback" class="project-notice" hidden>
+              <p id="project-host-status" class="support-text" role="status" hidden></p>
               <div id="project-plan-copy" hidden>
                 <p id="project-plan-status" class="support-text" role="status"></p>
                 <p id="project-preparation-last-stage" class="support-text" hidden></p>
               </div>
               <div class="action-row">
+                <button id="project-system-checks" class="secondary-button" hidden>Open Mac checks</button>
                 <button id="retry-project-plan" class="secondary-button" hidden>Retry setup</button>
                 <button id="project-preparation-output" class="secondary-button" hidden>View preparation output</button>
                 <span id="project-setup" hidden><button type="button" class="secondary-button" id="setup-project" aria-haspopup="dialog" aria-controls="project-settings-dialog">Open project settings</button></span>
@@ -368,24 +373,6 @@
             </section>
             <section id="project-dashboard" hidden aria-label="Project overview">
               <p id="project-agent-update" class="support-text" role="status" hidden></p>
-              <section id="first-chat-setup" class="first-chat-setup" aria-labelledby="first-chat-heading" hidden>
-                <h2 id="first-chat-heading" tabindex="-1">Start your first chat</h2>
-                <p id="first-chat-host" class="support-text" role="status"></p>
-                <button id="first-chat-system-checks" class="secondary-button" hidden>Open Mac checks</button>
-                <label for="first-chat-agent" class="field-label">Agent</label>
-                <select id="first-chat-agent" class="text-field"><option value="">Choose an agent</option><option value="codex">Codex</option><option value="claude-code">Claude Code</option></select>
-                <p id="first-chat-account" class="support-text" role="status"></p>
-                <div id="first-chat-chatgpt" hidden>
-                  <div class="action-row"><button id="first-chat-chatgpt-sign-in" class="primary-button">Sign in with ChatGPT</button><button id="first-chat-chatgpt-cancel" class="secondary-button" hidden>Cancel sign-in</button></div>
-                  <div id="first-chat-chatgpt-device-code-field" hidden><label for="first-chat-chatgpt-device-code" class="field-label">ChatGPT device code</label><input id="first-chat-chatgpt-device-code" class="text-field" readonly></div>
-                  <p id="first-chat-chatgpt-status" class="support-text" role="status"></p>
-                </div>
-                <div id="first-chat-claude" hidden>
-                  <div class="action-row"><button id="first-chat-claude-sign-in" class="primary-button">Sign in with Claude</button><button id="first-chat-claude-cancel" class="secondary-button" hidden>Cancel sign-in</button></div>
-                  <p id="first-chat-claude-status" class="support-text" role="status"></p>
-                </div>
-                <button id="first-chat-open" class="primary-button" hidden>Start first chat</button>
-              </section>
               <div id="project-overview" hidden>
                 <section id="project-usage-panel" class="project-usage-panel" aria-labelledby="project-usage-summary-heading">
                   <header class="project-usage-header">
@@ -410,7 +397,7 @@
                 <section class="project-sessions" aria-labelledby="project-sessions-heading">
                   <header class="dashboard-toolbar">
                     <div class="session-filters">
-                      <h2 id="project-sessions-heading">Sessions</h2>
+                      <h2 id="project-sessions-heading" tabindex="-1">Sessions</h2>
                       <div class="session-tabs" role="group" aria-label="Session status"><button class="session-tab" data-session-state="active" aria-pressed="true">Active</button><button class="session-tab" data-session-state="archived" aria-pressed="false">Archived</button><button class="session-tab" data-session-state="deleted" aria-pressed="false">Trash</button></div>
                     </div>
                     <div class="action-row" id="dashboard-new-chat">
@@ -437,6 +424,13 @@
               </div>
             </section>
           </div>
+          <div id="first-chat-preparation" class="first-chat-preparation" hidden>
+            <div id="first-chat-boot-surface"></div>
+            <div class="first-chat-preparation-actions">
+              <p id="first-chat-queued" class="support-text" role="status" hidden>Your chat will open when setup finishes.</p>
+              <button id="first-chat-view-progress" class="secondary-button" hidden>Open setup terminal</button>
+            </div>
+          </div>
           <section class="terminal-panel" id="terminal-panel" aria-label="Terminal" hidden>
             <div class="terminal-toolbar"><span id="terminal-status" role="status">Local terminal</span><div class="terminal-actions"><button class="secondary-button" id="show-preparation-output" hidden>Show setup output</button><button class="secondary-button" id="cancel-preparation" hidden>Cancel preparation</button><button class="secondary-button" id="hide-terminal">Return to project</button><button class="secondary-button" id="close-terminal">Close terminal</button></div></div>
             <div id="terminal-surface" aria-label="Terminal surface">
@@ -450,7 +444,23 @@
             </div>
           </section>
         </section>
-        <section id="help-view" class="help-view" aria-labelledby="help-heading" hidden></section>
+        <section id="help-view" class="help-view" aria-labelledby="help-heading" hidden>
+          <header class="help-header">
+            <div class="help-width">
+              <h1 id="help-heading" tabindex="-1">Help</h1>
+              <button class="secondary-button" id="help-all-topics" type="button" hidden>All topics</button>
+            </div>
+          </header>
+          <div class="help-width help-content">
+            <div id="help-index">
+              <label class="visually-hidden" for="help-search">Search help</label>
+              <input class="text-field help-search" id="help-search" type="search" placeholder="Search help" autocomplete="off" aria-controls="help-topics">
+              <nav class="help-topics" id="help-topics" aria-label="Help topics"></nav>
+              <p id="help-search-status" role="status"></p>
+            </div>
+            <div class="help-articles" id="help-articles" hidden></div>
+          </div>
+        </section>
     <section id="settings-view" class="settings-dialog" role="dialog" aria-labelledby="settings-heading" data-inline-modal hidden>
       <header class="dialog-header"><h2 id="settings-heading" tabindex="-1">Settings</h2><button type="button" id="close-settings" class="icon-button" title="Close settings" aria-label="Close settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
       <nav id="settings-tabs" class="settings-nav" aria-label="Settings sections">
@@ -676,18 +686,23 @@
     <dialog id="project-usage-dialog" class="session-usage-dialog" aria-labelledby="project-usage-heading">
       <header class="dialog-header"><h2 id="project-usage-heading">Project usage breakdown</h2><button id="close-project-usage" class="icon-button" aria-label="Close project usage breakdown" autofocus><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
       <div class="dialog-content">
-        <div class="project-usage-controls">
-          <label for="project-usage-group"><span class="field-label">Group by</span><select id="project-usage-group" class="text-field"><option value="agentKind">Agent</option><option value="model">Model</option><option value="effort">Effort</option><option value="all">Agent, model and effort</option></select></label>
-          <label for="project-usage-sort"><span class="field-label">Sort by</span><select id="project-usage-sort" class="text-field"><option value="tokens">Total tokens (highest first)</option><option value="cost">Estimated cost (highest first)</option><option value="group">Group name</option><option value="agentKind" hidden disabled>Agent</option><option value="model" hidden disabled>Model</option><option value="effort" hidden disabled>Effort</option></select></label>
+        <div class="project-usage-filters">
+          <div class="project-usage-controls" role="group" aria-label="Usage options">
+            <label for="project-usage-date-range">Date range<select id="project-usage-date-range" class="text-field" aria-describedby="project-usage-date-summary"><option value="all-time">All time</option><option value="today">Today</option><option value="last-7-days">Last 7 days</option><option value="last-30-days">Last 30 days</option><option value="this-month">This month</option><option value="custom">Custom range</option></select></label>
+            <label for="project-usage-group">Group by<select id="project-usage-group" class="text-field"><option value="agentKind">Agent</option><option value="model">Model</option><option value="effort">Effort</option><option value="all">Agent, model and effort</option></select></label>
+            <label class="project-usage-detail-toggle"><input id="project-usage-token-details" type="checkbox" aria-controls="project-usage-table">Show token details</label>
+          </div>
+          <form id="project-usage-custom-dates" class="project-usage-controls" aria-label="Custom date range" hidden>
+            <label for="project-usage-start-date">Start date<input id="project-usage-start-date" type="date" class="text-field" min="0001-01-01" max="9999-12-31" required></label>
+            <label for="project-usage-end-date">End date<input id="project-usage-end-date" type="date" class="text-field" min="0001-01-01" max="9999-12-31" required></label>
+            <button type="submit" class="secondary-button">Apply</button>
+          </form>
+          <p id="project-usage-date-summary" class="support-text" hidden></p>
         </div>
         <p id="project-usage-status" class="support-text" role="status" hidden></p>
         <button id="retry-project-usage" class="secondary-button" hidden>Retry</button>
-        <div id="project-usage-results" hidden>
-          <h3 id="project-usage-chart-heading">Share of measured tokens</h3>
-          <ul id="project-usage-chart" role="list" aria-labelledby="project-usage-chart-heading" tabindex="0"></ul>
-          <div class="table-scroll" tabindex="0" role="region" aria-label="Project usage by group">
-            <table class="data-table usage-scope-table project-usage-table" aria-label="Project usage by group"><thead><tr></tr></thead><tbody></tbody></table>
-          </div>
+        <div id="project-usage-results" class="table-scroll" tabindex="0" role="region" aria-label="Project usage results" hidden>
+          <table id="project-usage-table" class="data-table project-usage-table" aria-label="Project usage by group"><thead><tr></tr></thead><tbody></tbody></table>
         </div>
       </div>
     </dialog>

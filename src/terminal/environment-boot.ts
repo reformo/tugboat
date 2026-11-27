@@ -5,6 +5,7 @@ import type { TerminalRectangle } from './terminal-adapter';
 type BootProject = Pick<Project, 'id' | 'environmentId'>;
 type Attempt = { project: BootProject; startedAt: number };
 type ConfirmedPhase = 'starting' | 'booting' | 'verifying';
+type BootSurface = 'hidden' | 'project' | 'terminal';
 type BootState = { phase: 'idle' } | ({ phase: 'starting'; verificationId?: number } & Attempt)
   | ({ phase: 'booting' | 'verifying' | 'cancelling' | 'awaiting-result'; identifier: number } & Attempt)
   | { phase: 'settled'; project: BootProject; identifier: number | null; confirmed: ConfirmedPhase; elapsed: string };
@@ -26,6 +27,8 @@ export class EnvironmentBoot {
   private state: BootState = { phase: 'idle' };
   private view = {
     overlay: document.getElementById('environment-boot-overlay')!,
+    projectSurface: document.getElementById('first-chat-boot-surface')!,
+    terminalSurface: document.getElementById('terminal-surface')!,
     card: document.getElementById('environment-boot-card')!,
     message: document.getElementById('environment-boot-message')!,
     elapsed: document.getElementById('environment-boot-elapsed')!,
@@ -81,14 +84,18 @@ export class EnvironmentBoot {
     this.hide();
   }
 
-  render(project: Project | null, identifier: number | null, visible: boolean): void {
-    if (!visible || !this.matches(project) || this.state.phase === 'idle' || this.state.phase === 'settled') { this.hide(); return; }
+  render(project: Project | null, identifier: number | null, surface: BootSurface): void {
+    if (surface === 'hidden' || !this.matches(project) || this.state.phase === 'idle' || this.state.phase === 'settled') { this.hide(); return; }
     if ('identifier' in this.state && project?.stage !== 'environment-starting') {
       this.finish(this.state.project.id, this.state.project.environmentId, this.state.identifier);
       return;
     }
-    if (this.view.output || ('identifier' in this.state && this.state.identifier !== identifier)) { this.hide(); return; }
-    if (this.state.phase === 'starting' && identifier !== null) { this.hide(); return; }
+    if (surface === 'terminal') {
+      const expectedIdentifier = 'identifier' in this.state ? this.state.identifier : null;
+      if (this.view.output || identifier !== expectedIdentifier) { this.hide(); return; }
+    }
+    const parent = surface === 'project' ? this.view.projectSurface : this.view.terminalSurface;
+    if (this.view.overlay.parentElement !== parent) parent.append(this.view.overlay);
     const message = messages[this.state.phase];
     if (this.view.message.textContent !== message) this.view.message.textContent = message;
     this.view.overlay.hidden = false;
@@ -98,7 +105,7 @@ export class EnvironmentBoot {
   }
 
   bounds(surface: DOMRect): TerminalRectangle | undefined {
-    if (this.view.overlay.hidden) return;
+    if (this.view.overlay.hidden || this.view.overlay.parentElement !== this.view.terminalSurface) return;
     const card = this.view.card.getBoundingClientRect();
     const left = Math.max(surface.left, card.left), top = Math.max(surface.top, card.top);
     const right = Math.min(surface.right, card.right), bottom = Math.min(surface.bottom, card.bottom);
@@ -106,7 +113,7 @@ export class EnvironmentBoot {
   }
 
   blocksFocus(identifier: number): boolean {
-    if (this.view.overlay.hidden || this.state.phase === 'idle' || this.state.phase === 'settled') return false;
+    if (this.view.overlay.hidden || this.view.overlay.parentElement !== this.view.terminalSurface || this.state.phase === 'idle' || this.state.phase === 'settled') return false;
     return this.state.phase === 'starting' || this.state.identifier === identifier;
   }
 

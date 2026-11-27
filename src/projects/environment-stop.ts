@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { StopImpact } from './operations';
 
 type Target = { identifier: string; environmentId: string };
-export type StopResult = { kind: 'cancelled' } | { kind: 'stopped'; note: string } | { kind: 'not-running' };
+type StopResult = { kind: 'cancelled' } | { kind: 'stopped'; note: string } | { kind: 'not-running' };
 
 function stopNote(idleChats: number): string {
   if (idleChats === 0) return 'Tugboat stopped the environment.';

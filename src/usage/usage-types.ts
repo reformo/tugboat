@@ -1,11 +1,11 @@
 // Frozen P03 wire contract. Additions use serde camelCase in Rust.
-export type LineageKind = 'primary' | 'subagent' | 'unknown';
-export type RelationStatus = 'root' | 'resolved' | 'orphan' | 'invalid' | 'unknown';
+type LineageKind = 'primary' | 'subagent' | 'unknown';
+type RelationStatus = 'root' | 'resolved' | 'orphan' | 'invalid' | 'unknown';
 export type Coverage = 'complete' | 'partial' | 'unknown';
 export type SessionState = 'active' | 'archived' | 'deleted';
-export type TurnStatus = string; // Known: in-progress, complete, interrupted; retain legacy values.
+type TurnStatus = string; // Known: in-progress, complete, interrupted; retain legacy values.
 
-export interface Lineage {
+interface Lineage {
   kind: LineageKind;
   parentSessionId: string | null;
   agentPath: string | null;
@@ -14,7 +14,7 @@ export interface Lineage {
   lineageVersion: 1;
 }
 
-export interface RequestSource {
+interface RequestSource {
   guestNamespace: string;
   modelProvider: string;
   originThreadId: string;
@@ -23,12 +23,12 @@ export interface RequestSource {
   responseId: string;
 }
 
-export interface Tokens {
+interface Tokens {
   input: number; cached: number; cacheWrite: number; output: number; reasoning: number;
   write12h: number | null; cacheKnown: boolean;
   cachedKnown: boolean | null; cacheWriteKnown: boolean | null;
 }
-export interface RateSnapshot {
+interface RateSnapshot {
   date: string; source: string; input: number; cached: number;
   write30m: number; write12h: number; output: number;
   tier: string; tierAssumed: boolean; longContext: boolean;
@@ -39,19 +39,19 @@ export interface RateSnapshot {
     assumptions: string[];
   };
 }
-export interface AnthropicMetadata {
+interface AnthropicMetadata {
   cacheCreation: { ephemeral5mInputTokens: number; ephemeral1hInputTokens: number } | null;
   speed: string | null; serviceTier: string | null; inferenceGeo: string | null;
   invalidFields: string[];
 }
-export interface AnthropicCorrection {
+interface AnthropicCorrection {
   previousMetadata: AnthropicMetadata | null; previousModel: string | null;
   previousRates: RateSnapshot | null; previousCostUsd: number | null; reason: string;
 }
-export interface RateCorrection {
+interface RateCorrection {
   previousRates: RateSnapshot; previousCostUsd: number | null; reason: string;
 }
-export interface AmountCorrection {
+interface AmountCorrection {
   previousTokens: Tokens;
   previousCostUsd: number | null;
   previousPartial: boolean;
@@ -120,7 +120,7 @@ export interface PromptUsage {
   requestRefs: RequestRef[];
   unmeasuredTurnRefs: TurnRef[];
 }
-export interface UnassignedUsage {
+interface UnassignedUsage {
   usage: UsageSummary;
   requestRefs: RequestRef[];
   unmeasuredTurnRefs: TurnRef[];

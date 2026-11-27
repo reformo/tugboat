@@ -88,13 +88,13 @@
     <section id="feature">
       <h2>Add a feature</h2>
       <ol class="steps">
-        <li><strong>Describe one observable outcome.</strong> For a guest Git action, specify the selected project, the selected agent, the command result, and where the user can read it.</li>
+        <li><strong>Describe one observable outcome.</strong> For a guest Git action, specify the selected project, its shared environment, the command result, and where the user can read it.</li>
         <li><strong>Trace one similar action end to end.</strong> Follow its control, controller, native command registration, domain operation and result. Reuse that path when its permissions and lifetime match the requested behavior.</li>
         <li><strong>Define the affected transitions.</strong> List the initial state, the event, its preconditions, the success state and the failure state. Include cancel, retry, and late completion when the operation can outlive its view.</li>
         <li><strong>Validate at the boundary.</strong> Check external arguments, paths, Brig responses and persisted input before mutating state. Preserve the wire names shared by Rust and TypeScript. Add a schema change only when the existing facts cannot represent the feature.</li>
         <li><strong>Choose the smallest change.</strong> Extend the owning module, type or reducer. Keep public behavior and old records compatible where the user requested no change. Leave unrelated work in place.</li>
         <li><strong>Test the behavior at the relevant layer.</strong> For the guest action, inspect the command target with a fixture. Exercise a changed plan and a project switch during launch. Confirm that a different environment's terminal keeps its state.</li>
-        <li><strong>Update the relevant guide.</strong> Change user steps when a control or its effects change. Update the developer route when ownership changes. Record a durable new architectural decision in the single ADR file using the next unused ID.</li>
+        <li><strong>Update the relevant guide.</strong> Change <code>docs/user-guide.html</code> when a control or its effects change. The desktop Help view uses the same file. Update the developer route when ownership changes. Record a durable new architectural decision in the single ADR file using the next unused ID.</li>
       </ol>
       <p>For a reproducible defect, first capture the failing behavior in a regression test. Confirm the fix through the normal entry point. A test for a new helper alone can miss the original failure.</p>
       <p class="source"><a href="developer-guide.html#guest-action">Worked example for a guest Git action</a> · <a href="developer-guide.html#usage-measure">Worked example for usage display</a> · <a href="../tests/frontend/workflow-states.test.mjs">Workflow tests</a> · <a href="../src/ui/request-state.ts">Request revisions</a></p>

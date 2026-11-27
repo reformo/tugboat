@@ -1427,7 +1427,9 @@ pub async fn project_library_costs(app: AppHandle) -> Result<Vec<ProjectLibraryC
 pub async fn project_usage_breakdown(
     app: AppHandle,
     identifier: String,
+    date_range: Option<crate::usage_store::project_usage::DateRangeInput>,
 ) -> Result<Vec<crate::usage_store::project_usage::BreakdownRow>, String> {
+    let date_range = date_range.map(|range| range.parse()).transpose()?;
     tauri::async_runtime::spawn_blocking(move || {
         let registry = projects::Registry::load(&projects::file(&app)?)?;
         let projects = registry.agent_views(&identifier)?;
@@ -1436,7 +1438,8 @@ pub async fn project_usage_breakdown(
             let mut rows = Vec::new();
             for project in &projects {
                 let target = environment_history::Target::for_project(project);
-                rows.extend(store.usage_breakdown(&target.usage_environment()?)?);
+                let environment = target.usage_environment()?;
+                rows.extend(store.usage_breakdown(&environment, date_range.as_ref())?);
             }
             Ok(rows)
         })

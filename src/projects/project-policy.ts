@@ -9,7 +9,7 @@ export interface NetworkAccess { publicInternet: boolean; hosts: { packageManage
 interface Policy { document: unknown; fingerprint: string; editable: boolean; attached: boolean; access: NetworkAccess | null; defaultHosts: string[]; publicInternetRestricted: boolean }
 type Action = 'save' | 'attach' | 'detach' | 'accept';
 
-export function domainList(text: string): string[] {
+function domainList(text: string): string[] {
   return [...new Set(text.split(/[\s,]+/).map(host => host.trim()).filter(Boolean))];
 }
 

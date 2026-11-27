@@ -44,7 +44,7 @@ function enter(harness, id, value) {
   field.dispatchEvent(new harness.dom.window.Event('change'));
 }
 
-function saving(t) {
+function saving() {
   const saved = { [project.id]: structuredClone(defaults) };
   return {
     saved,
@@ -62,7 +62,7 @@ function saving(t) {
 }
 
 test('provider tabs show one agent at a time and support arrow keys', async t => {
-  const store = saving(t);
+  const store = saving();
   const harness = await setup(t, { read_agent_settings: store.read_agent_settings });
   await openSettings(harness, project);
   const claude = harness.element('agent-tab-claude');
@@ -86,7 +86,7 @@ test('provider tabs show one agent at a time and support arrow keys', async t =>
 });
 
 test('shows the defaults and saves each field for the selected environment', async t => {
-  const store = saving(t);
+  const store = saving();
   const harness = await setup(t, { ...store, stop_project: () => { throw new Error('An agent setting must not stop the environment.'); } });
   await openSettings(harness, project);
   for (const id of fields) assert.equal(harness.element(id).disabled, false, id);
@@ -193,7 +193,7 @@ test('model lists offer the current models and keep a saved model that is not li
 });
 
 test('Ultra reasoning is unavailable for the Luna models', async t => {
-  const store = saving(t);
+  const store = saving();
   const harness = await setup(t, { ...store });
   await openSettings(harness, project);
   const ultra = harness.element('codex-reasoning-effort').querySelector('option[value="ultra"]');

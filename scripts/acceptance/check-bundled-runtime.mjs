@@ -14,7 +14,7 @@ const homebrewExecutables = homebrewPrefixes.flatMap(prefix => [path.join(prefix
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
-export const homebrewDeniedProfile = '(version 1)\n(allow default)\n(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local"))\n(deny process-exec (subpath "/opt/homebrew") (subpath "/usr/local"))\n';
+const homebrewDeniedProfile = '(version 1)\n(allow default)\n(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local"))\n(deny process-exec (subpath "/opt/homebrew") (subpath "/usr/local"))\n';
 
 export async function checkBundledRuntime(application, requestedRoot, { cleanMac = false, cachedStore = null } = {}) {
   assert.equal(process.platform, 'darwin', 'The runtime acceptance needs macOS.');
@@ -189,7 +189,7 @@ export async function checkBundledRuntime(application, requestedRoot, { cleanMac
         const gatewayRecord = gatewaySocket.slice(0, -'.sock.qemu'.length) + '.pid';
         agent.processesBeforeStop = { hvi: instance.pid, gateway: Number(fs.readFileSync(gatewayRecord, 'utf8').trim()) };
         assert.equal(instance.cmdLine.includes('--no-sandbox'), false, 'The hvi guest must retain its own sandbox.');
-        const disks = instance.cmdLine.filter((value, index) => instance.cmdLine[index - 1] === '--disk');
+        const disks = instance.cmdLine.filter((_, index) => instance.cmdLine[index - 1] === '--disk');
         assert.equal(disks.length, 2, 'The guest must use read-only lower and writable upper ext4 disks.');
         assert.match(disks[0], /\/rootfs\.ext4,readonly=on,serial=disk0$/);
         assert.match(disks[1], /\/rootfs-upper\.ext4,serial=disk1$/);

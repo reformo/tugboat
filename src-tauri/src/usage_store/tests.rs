@@ -152,7 +152,7 @@ fn usage_breakdown_upgrades_v2_without_changing_saved_prices() {
     assert_eq!(fs::read(path).unwrap(), before_move);
 
     let upgraded = Store::open(&records).unwrap();
-    let rows = serde_json::to_value(upgraded.usage_breakdown(&environment).unwrap()).unwrap();
+    let rows = serde_json::to_value(upgraded.usage_breakdown(&environment, None).unwrap()).unwrap();
     let measured = &rows[1];
     assert_eq!(measured["model"], "removed-model");
     assert!(measured["effort"].is_null());
@@ -194,7 +194,7 @@ fn usage_breakdown_includes_historical_own_usage_and_excludes_other_projects() {
     .unwrap();
     store.save_environment(&sibling, &ledger).unwrap();
 
-    let rows = serde_json::to_value(store.usage_breakdown(&environment).unwrap()).unwrap();
+    let rows = serde_json::to_value(store.usage_breakdown(&environment, None).unwrap()).unwrap();
     assert_eq!(rows.as_array().unwrap().len(), 3);
     assert_eq!(rows[0]["usage"]["unmeasuredTurns"], 2);
     for row in [&rows[1], &rows[2]] {
@@ -205,6 +205,63 @@ fn usage_breakdown_includes_historical_own_usage_and_excludes_other_projects() {
     }
     assert!(rows[1]["effort"].is_null());
     assert_eq!(rows[2]["effort"], "high");
+}
+
+#[test]
+fn usage_breakdown_filters_request_instants_and_keeps_undated_usage_in_all_time() {
+    let fixture = Fixture::new();
+    let (_, mut store) = fixture.store();
+    let environment = environment(AgentKind::Codex);
+    let mut ledger = Ledger::default();
+    let mut saved = record();
+    saved.project_exclusion = None;
+    let turn = saved.turns.get_mut("bucket-differs").unwrap();
+    let template = turn.requests[0].clone();
+    turn.requests = [
+        ("before", "2026-03-08T07:59:59.999999999Z"),
+        ("first", "2026-03-08T00:00:00-08:00"),
+        ("last", "2026-03-08T23:59:59.999999999-07:00"),
+        ("after", "2026-03-09T07:00:00Z"),
+        ("undated", ""),
+    ]
+    .into_iter()
+    .map(|(model, at)| {
+        let mut request = template.clone();
+        request.model = Some(model.into());
+        request.at = at.into();
+        request.source.as_mut().unwrap().response_id = model.into();
+        request
+    })
+    .collect();
+    ledger.sessions.insert(SESSION.into(), saved);
+    store.save_environment(&environment, &ledger).unwrap();
+
+    let milliseconds = |at| {
+        chrono::DateTime::parse_from_rfc3339(at)
+            .unwrap()
+            .timestamp_millis()
+    };
+    let date_range = serde_json::from_value::<project_usage::DateRangeInput>(json!({
+        "startMilliseconds": milliseconds("2026-03-08T08:00:00Z"),
+        "endExclusiveMilliseconds": milliseconds("2026-03-09T07:00:00Z"),
+    }))
+    .unwrap()
+    .parse()
+    .unwrap();
+    let rows = store
+        .usage_breakdown(&environment, Some(&date_range))
+        .unwrap();
+    let rows = serde_json::to_value(rows).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 2);
+    assert_eq!(rows[0]["model"], "first");
+    assert_eq!(rows[1]["model"], "last");
+    assert_eq!(rows[0]["usage"]["total"], 118);
+    assert_eq!(rows[1]["usage"]["total"], 118);
+
+    let rows = serde_json::to_value(store.usage_breakdown(&environment, None).unwrap()).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 6);
+    assert_eq!(rows[0]["usage"]["unmeasuredTurns"], 1);
+    assert_eq!(rows[5]["model"], "undated");
 }
 
 #[test]

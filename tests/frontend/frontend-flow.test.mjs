@@ -56,8 +56,45 @@ test('library costs distinguish zero, unpriced, and missing usage and explain ma
 const newChatProject = { ...project, stage: 'selected', policy: null, approvedPlan: undefined };
 const signedOutChatgpt = { ...sharedAccount, state: 'signed-out', email: null };
 const signedOutClaude = { ...sharedClaudeAccount, state: 'signed-out', email: null };
+function chooseChatAgent(harness, agent) {
+  const choice = harness.element('agent-choice');
+  choice.value = agent;
+  choice.dispatchEvent(new harness.dom.window.Event('change', { bubbles: true }));
+}
 
-test('connecting Claude prepares the selected project and opens a requested chat once after verification', async t => {
+test('adding a project to a populated library opens Sessions and waits for New Chat', async t => {
+  const added = { ...newChatProject, id: 'new-project', environmentId: 'b'.repeat(32), name: 'New project', path: '/fixture/new' };
+  let records = [project];
+  const h = await interfaceHarness({
+    recent_projects: () => records,
+    choose_project_folder: () => added.path,
+    register_project: () => { records = [added, project]; return added; },
+    prepare_project: ({ identifier }) => ({
+      project: identifier === added.id ? { ...added, stage: 'environment-ready' } : project,
+      plan, fingerprint: 'plan-a', message: null,
+    }),
+  });
+  t.after(() => h.dom.window.close());
+  await h.ready;
+  assert.equal(h.element('empty-projects').hidden, true);
+  h.element('choose-folder').click(); await flush();
+  assert.equal(h.element('project-sessions-heading').closest('[hidden]'), null);
+  assert.equal(h.element('start-codex').closest('[hidden]'), null);
+  assert.equal(h.dom.window.document.activeElement, h.element('project-sessions-heading'));
+  assert.equal(h.dom.window.document.getElementById('first-chat-setup'), null);
+  assert.equal(h.calls.some(call => call.command === 'start_agent_session'), false);
+  h.element('start-codex').click(); await flush();
+  const launch = h.calls.find(call => call.command === 'start_agent_session');
+  assert.equal(launch.args.identifier, added.id);
+  assert.equal(launch.args.environmentId, added.environmentId);
+  h.element('hide-terminal').click(); await flush();
+  assert.equal(h.element('project-overview').hidden, false);
+  h.element('project-navigation').click(); await flush();
+  h.element('recent-project-list').querySelector('[data-project-id="project-a"]').click(); await flush();
+  assert.equal(h.element('project-overview').hidden, false);
+});
+
+test('connecting Claude shows setup progress until verification makes the first chat available', async t => {
   const boot = deferred();
   let current = newChatProject;
   const result = () => ({ project: current, plan, fingerprint: 'plan-a', message: null });
@@ -71,26 +108,46 @@ test('connecting Claude prepares the selected project and opens a requested chat
   });
   t.after(() => h.dom.window.close());
   await h.ready; h.element('choose-first-chat').click(); await flush();
+  assert.equal(h.element('project-sessions-heading').closest('[hidden]'), null);
   await h.listeners.get('shared-claude-changed')({ payload: { ...sharedClaudeAccount, generation: 2 } });
   await flush();
   assert.equal(h.calls.filter(call => call.command === 'prepare_environment').length, 1);
   assert.equal(h.element('project-settings-dialog').hidden, true);
   assert.equal(h.element('terminal-panel').hidden, true);
-  assert.equal(h.element('first-chat-agent').value, 'claude-code');
-  const chat = h.element('first-chat-open');
-  assert.equal(chat.closest('[hidden]'), null);
-  assert.equal(chat.disabled, false);
-  chat.click(); chat.click(); await flush();
+  const progress = h.element('first-chat-preparation');
+  const header = h.element('project-heading').closest('header');
+  assert.equal(header.closest('[hidden]'), null);
+  assert.equal(progress.parentElement, header.parentElement);
+  assert.ok(h.element('project-sessions-heading').closest('[hidden]'));
+  const overlay = h.element('environment-boot-overlay');
+  assert.equal(overlay.closest('[hidden]'), null);
+  assert.equal(overlay.parentElement, h.element('first-chat-boot-surface'));
+  assert.equal(h.element('environment-boot-message').textContent, 'Waiting for Brig to start');
+  assert.equal(h.dom.window.document.activeElement, h.element('environment-boot-card'));
+  assert.equal(h.element('agent-choice').value, 'claude-code');
+  const chat = h.element('start-codex');
   assert.equal(h.calls.some(call => call.command === 'start_agent_session'), false);
   current = { ...current, stage: 'environment-starting' };
   h.setTerminal({ identifier: 70, projectId: current.id, environmentId: current.environmentId, purpose: 'environment', running: true });
   boot.resolve(70); await flush();
+  assert.equal(h.element('environment-boot-message').textContent, 'Brig started the guest setup process');
+  await h.listeners.get('environment-preparation-verifying')({ payload: { projectId: current.id, environmentId: current.environmentId, terminalIdentifier: 70 } });
+  assert.equal(h.element('environment-boot-message').textContent, 'Verifying the running guest image');
+  assert.ok(chat.closest('[hidden]'));
   current = { ...current, stage: 'environment-ready' };
   h.setTerminal({ ...h.terminals.get(70), running: false, exitCode: 0 });
   const completed = { payload: { project: current, terminalIdentifier: 70, message: null } };
   await h.listeners.get('environment-preparation-finished')(completed);
   await h.listeners.get('environment-preparation-finished')(completed);
   await flush();
+  assert.equal(overlay.hidden, true);
+  assert.equal(progress.hidden, true);
+  assert.equal(h.dom.window.document.activeElement, h.element('project-sessions-heading'));
+  assert.equal(chat.closest('[hidden]'), null);
+  assert.equal(chat.disabled, false);
+  assert.equal(h.terminals.has(70), false);
+  assert.equal(h.calls.some(call => call.command === 'start_agent_session'), false);
+  chat.click(); chat.click(); await flush();
   const chats = h.calls.filter(call => call.command === 'start_agent_session');
   assert.equal(chats.length, 1);
   assert.equal(chats[0].args.agentKind, 'claude-code');
@@ -98,12 +155,12 @@ test('connecting Claude prepares the selected project and opens a requested chat
   assert.equal(chats[0].args.fingerprint, 'plan-a');
 });
 
-test('first chat chooses a connected agent and prepares once without opening a chat', async t => {
-  for (const [chatgpt, claude, expected] of [
-    [signedOutChatgpt, signedOutClaude, ''],
-    [signedOutChatgpt, sharedClaudeAccount, 'claude-code'],
-    [sharedAccount, signedOutClaude, 'codex'],
-    [sharedAccount, sharedClaudeAccount, 'codex'],
+test('Sessions selects a connected agent and prepares once without opening a chat', async t => {
+  for (const [chatgpt, claude, expected, connected] of [
+    [signedOutChatgpt, signedOutClaude, 'codex', false],
+    [signedOutChatgpt, sharedClaudeAccount, 'claude-code', true],
+    [sharedAccount, signedOutClaude, 'codex', true],
+    [sharedAccount, sharedClaudeAccount, 'codex', true],
   ]) {
     const h = await interfaceHarness({
       register_project: () => newChatProject,
@@ -111,23 +168,48 @@ test('first chat chooses a connected agent and prepares once without opening a c
     });
     t.after(() => h.dom.window.close());
     await h.ready; h.element('choose-first-chat').click(); await flush();
-    assert.equal(h.element('first-chat-setup').hidden, false);
+    assert.equal(h.element('project-sessions-heading').closest('[hidden]'), null);
+    assert.match(h.element('session-list-status').textContent, /no active chats/i);
     assert.equal(h.element('selected-folder').textContent, project.path);
-    const select = h.element('first-chat-agent');
-    assert.equal(select.value, expected);
-    assert.equal(h.element('first-chat-open').hidden, !expected);
-    assert.equal(h.calls.filter(call => call.command === 'prepare_project').length, expected ? 1 : 0);
+    assert.equal(h.element('agent-choice').value, expected);
+    assert.equal(h.element('start-codex').closest('[hidden]'), null);
+    assert.equal(h.element('start-codex').disabled, !connected);
+    assert.equal(h.calls.filter(call => call.command === 'prepare_project').length, connected ? 1 : 0);
     assert.equal(h.element('project-settings-dialog').hidden, true);
     if (expected === 'claude-code') {
-      select.value = 'codex'; select.dispatchEvent(new h.dom.window.Event('change'));
-      assert.equal(h.element('first-chat-chatgpt').hidden, false);
-      assert.equal(h.element('first-chat-open').hidden, true);
-      select.value = 'claude-code'; select.dispatchEvent(new h.dom.window.Event('change'));
-      assert.equal(h.element('first-chat-open').disabled, false);
+      chooseChatAgent(h, 'codex');
+      assert.equal(h.element('project-account-label').textContent, 'Sign in to ChatGPT');
+      assert.equal(h.element('start-codex').disabled, true);
+      chooseChatAgent(h, 'claude-code');
+      assert.equal(h.element('start-codex').disabled, false);
       assert.equal(h.calls.filter(call => call.command === 'prepare_project').length, 1);
     }
     assert.equal(h.calls.some(call => call.command === 'start_agent_session'), false);
   }
+});
+
+test('first chat points to Mac checks when Brig is unavailable', async t => {
+  let brigStatus = 'missing';
+  const h = await interfaceHarness({
+    register_project: () => newChatProject,
+    inspect_host: () => ({ architecture: 'arm64', osVersion: '27.2', tools: {}, brigStatus, version: null, doctor: null, message: null }),
+  });
+  t.after(() => h.dom.window.close());
+  await h.ready; h.element('choose-first-chat').click(); await flush();
+  const check = h.element('project-system-checks');
+  assert.equal(check.closest('[hidden]'), null);
+  assert.equal(h.element('start-codex').disabled, true);
+  assert.equal(h.calls.some(call => call.command === 'prepare_project'), false);
+  check.click(); await flush();
+  assert.equal(h.dom.window.document.activeElement, h.element('check-host'));
+  brigStatus = 'installed';
+  h.element('check-host').click(); await flush();
+  h.element('close-settings').click(); await flush();
+  assert.equal(check.hidden, true);
+  assert.equal(h.element('start-codex').disabled, false);
+  assert.equal(h.element('project-host-status').hidden, true);
+  assert.equal(h.dom.window.document.activeElement, h.element('project-sessions-heading'));
+  assert.equal(h.calls.filter(call => call.command === 'prepare_project').length, 1);
 });
 
 test('first chat retains folder and agent on browser return and cancellation, and prepares only the current project', async t => {
@@ -143,35 +225,39 @@ test('first chat retains folder and agent on browser return and cancellation, an
   });
   t.after(() => h.dom.window.close());
   await h.ready; h.element('choose-first-chat').click(); await flush();
-  const select = h.element('first-chat-agent');
-  function choose(agent) { select.value = agent; select.dispatchEvent(new h.dom.window.Event('change')); }
-  choose('claude-code');
-  h.element('first-chat-claude-sign-in').click(); await flush();
-  assert.equal(h.element('first-chat-claude-sign-in').textContent, 'Return to browser');
-  h.element('first-chat-claude-sign-in').click(); await flush();
+  chooseChatAgent(h, 'claude-code');
+  assert.equal(h.element('project-account-label').textContent, 'Sign in to Claude');
+  h.element('project-account-summary').click();
+  assert.equal(h.element('project-provider-settings').closest('[hidden]'), null);
+  h.element('project-provider-settings').click(); await flush();
+  assert.equal(h.dom.window.document.activeElement, h.element('claude-account-heading'));
+  h.element('claude-sign-in').click(); await flush();
+  assert.equal(h.element('claude-sign-in').textContent, 'Return to browser');
+  h.element('claude-sign-in').click(); await flush();
   assert.ok(h.calls.some(call => call.command === 'open_provider_login' && call.args.provider === 'claude'));
-  h.element('first-chat-claude-cancel').focus();
-  h.element('first-chat-claude-cancel').click(); await flush();
-  assert.equal(h.element('first-chat-claude-sign-in').textContent, 'Sign in with Claude');
-  assert.equal(h.dom.window.document.activeElement, h.element('first-chat-claude-sign-in'));
-  assert.equal(select.value, 'claude-code');
+  h.element('claude-cancel').focus();
+  h.element('claude-cancel').click(); await flush();
+  assert.equal(h.element('claude-sign-in').textContent, 'Sign in with Claude');
+  assert.equal(h.dom.window.document.activeElement, h.element('claude-sign-in'));
+  assert.equal(h.element('agent-choice').value, 'claude-code');
   assert.equal(h.element('selected-folder').textContent, newChatProject.path);
-  h.element('first-chat-claude-sign-in').click(); await flush();
+  h.element('claude-sign-in').click(); await flush();
+  h.element('close-settings').click(); await flush();
   h.element('project-navigation').click(); await flush();
   h.element('recent-project-list').querySelector('[data-project-id="project-b"]').click(); await flush();
-  choose('codex');
+  chooseChatAgent(h, 'codex');
   claude = { ...sharedClaudeAccount, generation: 2 };
   await h.listeners.get('shared-claude-changed')({ payload: claude });
   await h.listeners.get('provider-login-changed')({ payload: providerLogin('claude', 'idle', ++revision) });
   await flush();
-  assert.equal(select.value, 'codex');
-  assert.equal(h.element('first-chat-open').hidden, true);
+  assert.equal(h.element('agent-choice').value, 'codex');
+  assert.equal(h.element('start-codex').disabled, true);
   assert.equal(h.element('selected-folder').textContent, other.path);
   assert.equal(h.calls.some(call => call.command === 'prepare_project' || call.command === 'start_agent_session'), false);
   h.element('project-navigation').click(); await flush();
   h.element('recent-project-list').querySelector('[data-project-id="project-a"]').click(); await flush();
-  assert.equal(select.value, 'claude-code');
-  assert.equal(h.element('first-chat-open').disabled, false);
+  assert.equal(h.element('agent-choice').value, 'claude-code');
+  assert.equal(h.element('start-codex').disabled, false);
   assert.deepEqual(h.calls.filter(call => call.command === 'prepare_project').map(call => call.args.identifier), [newChatProject.id]);
 });
 
@@ -179,7 +265,7 @@ test('a ready project keeps the direct New Chat route', async t => {
   const h = await interfaceHarness();
   t.after(() => h.dom.window.close());
   await h.ready; h.element('choose-folder').click(); await flush();
-  assert.equal(h.element('first-chat-setup').hidden, true);
+  assert.equal(h.element('project-sessions-heading').closest('[hidden]'), null);
   assert.equal(h.element('start-codex').disabled, false);
   h.element('start-codex').click(); await flush();
   assert.ok(h.calls.some(call => call.command === 'start_agent_session' && call.args.action === 'new-chat'));
@@ -215,12 +301,13 @@ test('project settings show the checked first-chat access plan during automatic 
 });
 
 test('a first Codex chat waits for guest verification and the shared account connection', async t => {
+  const planning = deferred();
   const connection = deferred();
   let current = newChatProject;
   const prepared = () => ({ project: current, plan, fingerprint: 'plan-a', message: null });
   const h = await interfaceHarness({
     register_project: () => current,
-    prepare_project: () => { current = { ...current, stage: 'ready', policy: project.policy }; return prepared(); },
+    prepare_project: () => planning.promise,
     preview_project: prepared,
     prepare_environment: () => {
       current = { ...current, stage: 'environment-starting' };
@@ -232,13 +319,15 @@ test('a first Codex chat waits for guest verification and the shared account con
   t.after(() => h.dom.window.close());
   await h.ready; h.element('choose-first-chat').click(); await flush();
   assert.equal(h.element('terminal-panel').hidden, true);
-  const select = h.element('first-chat-agent');
-  assert.equal(select.disabled, false);
-  select.value = 'claude-code'; select.dispatchEvent(new h.dom.window.Event('change'));
-  assert.equal(h.element('first-chat-open').textContent, 'Open Claude Code');
-  select.value = 'codex'; select.dispatchEvent(new h.dom.window.Event('change'));
-  assert.equal(h.element('first-chat-open').textContent, 'Open Codex');
-  h.element('first-chat-open').click(); await flush();
+  assert.equal(h.element('agent-choice').disabled, false);
+  chooseChatAgent(h, 'claude-code');
+  chooseChatAgent(h, 'codex');
+  assert.equal(h.element('start-codex').textContent, 'New Chat');
+  h.element('start-codex').click(); await flush();
+  current = { ...current, stage: 'ready', policy: project.policy };
+  planning.resolve(prepared()); await flush();
+  assert.ok(h.element('project-sessions-heading').closest('[hidden]'));
+  assert.equal(h.element('first-chat-queued').closest('[hidden]'), null);
   current = { ...current, stage: 'environment-ready' };
   h.setTerminal({ ...h.terminals.get(70), running: false, exitCode: 0 });
   await h.listeners.get('environment-preparation-finished')({ payload: { project: current, terminalIdentifier: 70, message: null } }); await flush();
@@ -247,10 +336,9 @@ test('a first Codex chat waits for guest verification and the shared account con
   connection.resolve(sharedAccount); await flush();
   assert.equal(h.calls.filter(call => call.command === 'prepare_environment').length, 1);
   assert.deepEqual(h.calls.filter(call => call.command === 'start_agent_session').map(call => call.args.agentKind), ['codex']);
-  assert.equal(h.element('first-chat-setup').hidden, true);
 });
 
-test('returning from first-chat preparation keeps it running and failure offers retry in the project', async t => {
+test('returning from first-chat preparation keeps it running and shows retry progress in the project', async t => {
   let current = newChatProject;
   const prepared = () => ({ project: current, plan, fingerprint: 'plan-a', message: null });
   const h = await interfaceHarness({
@@ -266,25 +354,153 @@ test('returning from first-chat preparation keeps it running and failure offers 
   });
   t.after(() => h.dom.window.close());
   await h.ready; h.element('choose-first-chat').click(); await flush();
-  h.element('first-chat-open').click(); await flush();
-  h.element('sidebar-terminal-list').querySelector('[data-terminal-id="70"]').click(); await flush();
+  const progress = h.element('first-chat-view-progress');
+  const overlay = h.element('environment-boot-overlay');
+  assert.equal(progress.hidden, false);
+  progress.click(); await flush();
   assert.equal(h.element('terminal-panel').hidden, false);
+  assert.equal(overlay.parentElement, h.element('terminal-surface'));
+  assert.equal(h.dom.window.document.activeElement, h.element('environment-boot-card'));
   h.element('hide-terminal').click(); await flush();
   assert.equal(h.element('terminal-panel').hidden, true);
   assert.equal(h.terminals.get(70).running, true);
-  assert.match(h.element('first-chat-host').textContent, /Preparation continues/);
+  assert.ok(h.element('project-sessions-heading').closest('[hidden]'));
+  assert.equal(overlay.closest('[hidden]'), null);
+  assert.equal(overlay.parentElement, h.element('first-chat-boot-surface'));
   assert.equal(h.calls.some(call => call.command === 'terminal_close'), false);
   current = { ...current, stage: 'ready', environmentAttempt: { terminalIdentifier: 70, completed: true, error: 'Version check failed.' } };
   h.setTerminal({ ...h.terminals.get(70), running: false, exitCode: 2 });
   await h.listeners.get('environment-preparation-finished')({ payload: { project: current, terminalIdentifier: 70, message: 'Version check failed.' } }); await flush();
-  assert.match(h.element('project-plan-status').textContent, /Version check failed/);
-  assert.equal(h.element('retry-project-plan').hidden, false);
-  assert.equal(h.element('first-chat-open').getAttribute('aria-busy'), 'false');
-  assert.equal(h.calls.some(call => call.command === 'start_agent_session'), false);
-  current = { ...current, stage: 'environment-ready', environmentAttempt: null };
-  await h.listeners.get('environment-preparation-finished')({ payload: { project: current, terminalIdentifier: 71, message: null } }); await flush();
+  assert.match(h.element('workspace-status-text').textContent, /Retry 1 of 3/);
+  assert.equal(h.element('retry-project-plan').hidden, true);
+  assert.equal(progress.hidden, true);
+  assert.equal(overlay.hidden, true);
+  assert.equal(h.element('start-codex').closest('[hidden]'), null);
+  assert.equal(h.element('start-codex').getAttribute('aria-busy'), 'false');
   assert.equal(h.calls.some(call => call.command === 'start_agent_session'), false);
   assert.equal(h.calls.filter(call => call.command === 'prepare_environment').length, 1);
+});
+
+test('first-chat startup retries the same plan after the previous Brig process exits', async t => {
+  for (const outcome of ['ready', 'exhausted', 'cancelled', 'switched', 'changed plan', 'stopped', 'already exited', 'stopped after verification']) await t.test(outcome, async t => {
+    let current = newChatProject;
+    let fingerprint = 'plan-a';
+    let identifier = 69;
+    const scheduled = [];
+    const planning = deferred();
+    const queueChat = ['ready', 'exhausted', 'already exited', 'stopped after verification'].includes(outcome);
+    const other = { ...project, id: 'project-b', environmentId: 'b'.repeat(32), name: 'Other project' };
+    const prepared = () => ({ project: current, plan, fingerprint, message: null });
+    const h = await interfaceHarness({
+      recent_projects: () => [other], open_project: () => other,
+      register_project: () => current,
+      prepare_project: async () => {
+        await planning.promise;
+        current = { ...current, stage: 'ready', policy: project.policy };
+        return prepared();
+      },
+      preview_project: ({ identifier }) => identifier === other.id ? { project: other, plan, fingerprint: 'other-plan' } : prepared(),
+      prepare_environment: ({ identifier: projectId, environmentId, fingerprint }) => {
+        const terminalIdentifier = ++identifier;
+        const exited = outcome === 'already exited' && terminalIdentifier === 70;
+        current = { ...current, stage: exited ? 'ready' : 'environment-starting', approvedPlan: fingerprint,
+          environmentAttempt: { terminalIdentifier, completed: exited, error: exited ? 'Brig guest failed to start.' : null } };
+        h.setTerminal({ identifier: terminalIdentifier, projectId, environmentId, purpose: 'environment', running: !exited, exitCode: exited ? 1 : null });
+        return terminalIdentifier;
+      },
+      finish_environment: () => { throw new Error(current.environmentAttempt.error); },
+      cancel_environment_preparation: () => true,
+      stop_project: () => { current = { ...current, stage: 'ready', environmentAttempt: null }; return current; },
+    }, dom => {
+      const setTimeout = dom.window.setTimeout.bind(dom.window);
+      dom.window.setTimeout = (callback, delay, ...args) => {
+        if (![1000, 2000, 4000].includes(delay)) return setTimeout(callback, delay, ...args);
+        scheduled.push({ callback, delay });
+        return -scheduled.length;
+      };
+    });
+    t.after(() => h.dom.window.close());
+    await h.ready; h.element('choose-folder').click(); await flush();
+    if (queueChat) {
+      const chat = h.element('start-codex');
+      assert.equal(chat.closest('[hidden]'), null);
+      chat.click();
+      assert.equal(chat.getAttribute('aria-busy'), 'true');
+    }
+    planning.resolve(); await flush();
+    assert.equal(identifier, 70);
+
+    async function finish(message, stoppedAfterVerification = false) {
+      const terminalIdentifier = identifier;
+      const code = message ? 1 : 0;
+      current = { ...current, stage: message || stoppedAfterVerification ? 'ready' : 'environment-ready',
+        environmentAttempt: { terminalIdentifier, completed: true, error: message } };
+      const payload = { project: stoppedAfterVerification ? { ...current, stage: 'environment-ready' } : current, terminalIdentifier, message };
+      const complete = h.listeners.get('environment-preparation-finished');
+      await complete({ payload }); await complete({ payload }); await flush();
+      assert.equal(scheduled.length, 0);
+      h.setTerminal({ ...h.terminals.get(terminalIdentifier), running: false, exitCode: code });
+      await h.listeners.get('terminal-exit')({ payload: { identifier: terminalIdentifier, projectId: current.id, environmentId: current.environmentId, purpose: 'environment', code } });
+      await flush();
+    }
+
+    if (outcome === 'cancelled') {
+      h.element('first-chat-view-progress').click(); await flush();
+      h.element('cancel-preparation').click(); await flush();
+      await finish('Environment preparation cancelled.');
+      assert.equal(scheduled.length, 0);
+      assert.equal(identifier, 70);
+      return;
+    }
+
+    if (queueChat) assert.equal(h.element('first-chat-queued').hidden, false);
+    if (outcome === 'changed plan') fingerprint = 'different-plan';
+    if (outcome === 'stopped after verification') await finish(null, true);
+    if (!['already exited', 'stopped after verification'].includes(outcome)) await finish('Brig guest failed to start.');
+    if (outcome === 'changed plan') {
+      assert.equal(scheduled.length, 0);
+      assert.equal(h.element('retry-project-plan').hidden, false);
+      return;
+    }
+    assert.equal(h.element('retry-project-plan').hidden, true);
+    assert.match(h.element('project-plan-status').textContent, /retry 1 of 3/i);
+
+    if (outcome === 'switched') {
+      h.element('project-navigation').click(); await flush();
+      h.element('recent-project-list').querySelector('[data-project-id="project-b"]').click(); await flush();
+      await scheduled.shift().callback(); await flush();
+      assert.equal(identifier, 70);
+      assert.equal(h.element('project-heading').textContent, other.name);
+      return;
+    }
+    if (outcome === 'stopped') {
+      h.element('project-settings-button').click(); await flush();
+      h.element('stop-project').click(); await flush();
+      await scheduled.shift().callback(); await flush();
+      assert.equal(identifier, 70);
+      assert.match(h.element('project-plan-status').textContent, /environment is stopped/i);
+      return;
+    }
+
+    for (const delay of (outcome === 'exhausted' ? [1000, 2000, 4000] : [1000])) {
+      assert.equal(scheduled.length, 1);
+      const retry = scheduled.shift();
+      assert.equal(retry.delay, delay);
+      await retry.callback(); await flush();
+      assert.equal(h.element('first-chat-queued').hidden, false);
+      await finish(outcome === 'exhausted' ? `Brig failure ${identifier}.` : null);
+    }
+    const launches = h.calls.filter(call => call.command === 'prepare_environment');
+    assert.equal(launches.length, outcome === 'exhausted' ? 4 : 2);
+    assert.ok(launches.every(call => call.args.identifier === project.id && call.args.environmentId === project.environmentId && call.args.fingerprint === 'plan-a'));
+    assert.equal(scheduled.length, 0);
+    assert.equal(h.calls.filter(call => call.command === 'start_agent_session').length, outcome === 'exhausted' ? 0 : 1);
+    if (outcome === 'exhausted') {
+      assert.match(h.element('project-plan-status').textContent, /Brig failure 73/);
+      assert.equal(h.element('retry-project-plan').hidden, false);
+      assert.equal(h.element('project-preparation-output').hidden, false);
+    }
+  });
 });
 
 test('project folder loading uses the workspace status bar without shifting the library', async () => {
@@ -1034,6 +1250,7 @@ test('the project library sorts by last opening and selected projects replace th
   assert.equal(rows[1].title, older.name + '\n' + older.path);
   const sidebarList = harness.element('sidebar-project-list');
   const sidebarScroll = harness.element('sidebar-projects');
+  const activityScroll = harness.element('sidebar-project-activity');
   const currentProject = harness.element('sidebar-current-project');
   assert.equal(sidebarList.hidden, false);
   assert.equal(currentProject.hidden, true);
@@ -1049,13 +1266,19 @@ test('the project library sorts by last opening and selected projects replace th
   assert.equal(currentProject.textContent, newer.name);
   assert.equal(sidebarScroll.contains(currentProject), false);
   assert.equal(harness.element('refresh-sessions').getAttribute('aria-label'), 'Refresh chats');
+  assert.equal(activityScroll.contains(harness.element('sidebar-chat-count').parentElement), false);
+  assert.equal(activityScroll.contains(harness.element('refresh-sessions')), false);
+  assert.equal(activityScroll.contains(harness.element('sidebar-session-list')), true);
   assert.doesNotMatch(harness.element('sidebar-project-context').textContent, /Older project/);
   assert.equal(harness.element('recent-projects').hidden, true);
+  activityScroll.scrollTop = 32;
   harness.element('project-navigation').click(); await flush();
   assert.equal(harness.element('sidebar-project-list').hidden, false);
   assert.equal(harness.element('sidebar-project-context').hidden, true);
   assert.equal(currentProject.hidden, true);
   assert.equal(harness.element('recent-projects').hidden, false);
+  harness.element('sidebar-project-list').querySelector('[data-project-id="older"]').click(); await flush();
+  assert.equal(activityScroll.scrollTop, 0);
   harness.dom.window.close();
 });
 
@@ -2167,14 +2390,14 @@ test('a failed initial plan disables New Chat and offers a visible retry using t
 });
 
 test('a failed plan refresh cannot retain the old launch fingerprint or be reenabled by terminal updates', async () => {
-  let fail;
   const harness = await interfaceHarness();
   await harness.ready; harness.element('choose-folder').click(); await flush();
-  harness.handlers.preview_project = () => new Promise((resolve, reject) => { fail = reject; });
+  const preview = deferred();
+  harness.handlers.preview_project = () => preview.promise;
   harness.element('refresh-plan').click(); await flush();
   assert.equal(harness.element('start-codex').disabled, true);
   assert.equal(harness.element('sharing-plan').hidden, true);
-  fail(new Error('Current plan is unavailable.')); await flush();
+  preview.reject(new Error('Current plan is unavailable.')); await flush();
   await harness.listeners.get('terminal-sessions-changed')({ payload: project.id });
   assert.equal(harness.element('start-codex').disabled, true);
   assert.equal(harness.element('retry-project-plan').hidden, false);
@@ -3469,13 +3692,13 @@ test('an outdated live refresh error yields one queued refresh without replacing
   const family = contractExample('root-two-children-grandchild-followup');
   const harness = await interfaceHarness({ project_dashboard: () => sessionDashboard(family.conversations), conversation_usage: () => structuredClone(family.details) });
   await harness.ready; harness.element('choose-folder').click(); await flush(); await openUsage(harness, 'Primary R');
-  let rejectOld;
-  harness.handlers.conversation_usage = () => new Promise((resolve, reject) => { rejectOld = reject; });
+  const outdated = deferred();
+  harness.handlers.conversation_usage = () => outdated.promise;
   family.conversations[1].usageRevision = 'queued-error-1'; await publishUsage(harness, family.conversations);
   family.conversations[1].usageRevision = 'queued-error-2'; await publishUsage(harness, family.conversations);
   family.details.agents[1].title = 'Latest after queued failure';
   harness.handlers.conversation_usage = () => structuredClone(family.details);
-  rejectOld(new Error('OUTDATED FAILURE')); await flush();
+  outdated.reject(new Error('OUTDATED FAILURE')); await flush();
   assert.equal(harness.calls.filter(call => call.command === 'conversation_usage').length, 3);
   assert.match(harness.element('session-usage-details').textContent, /Latest after queued failure/);
   assert.doesNotMatch(harness.element('session-usage-status').textContent, /OUTDATED FAILURE|Could not refresh/);

@@ -1,7 +1,7 @@
 import type { Conversation as RecordedConversation, SessionState } from '../usage/usage-types';
 import { createAgentLogo } from '../providers/agent-logo';
 
-export type ProjectStage = 'selected' | 'creating-policy' | 'policy-created' | 'attaching-policy'
+type ProjectStage = 'selected' | 'creating-policy' | 'policy-created' | 'attaching-policy'
   | 'editing-policy' | 'policy-detached' | 'ready' | 'environment-unverified'
   | 'environment-starting' | 'environment-ready' | 'stopping' | 'removing' | 'updating-image';
 
@@ -220,7 +220,10 @@ export function renderProjects(projects: Project[], selected: Project | null, se
   selectedBranch.hidden = !selected || !branch;
   selectedBranch.replaceChildren();
   if (selected && branch) selectedBranch.append(branchLabel(branch));
-  if (contextChanged) document.getElementById('sidebar-projects')!.scrollTop = 0;
+  if (contextChanged) {
+    document.getElementById('sidebar-projects')!.scrollTop = 0;
+    if (projectSelected) document.getElementById('sidebar-project-activity')!.scrollTop = 0;
+  }
   restoreSidebarFocus();
   restoreLibraryFocus();
 }
@@ -229,7 +232,7 @@ export function renderConversations(conversations: Conversation[], selectedId: s
   const list = document.getElementById('sidebar-session-list')!;
   const restoreFocus = preserveListFocus(list, 'sessionId');
   list.replaceChildren();
-  for (const conversation of standaloneConversations(conversations, 'active')) {
+  for (const conversation of conversations) {
     const row = document.createElement('li');
     const button = document.createElement('button');
     button.className = 'sidebar-session';

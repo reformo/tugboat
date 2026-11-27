@@ -105,6 +105,53 @@ test('an earlier warning timer cannot dismiss a newer terminal warning', async (
   harness.dom.window.close();
 });
 
+test('the sidebar reveals ten more active chats at a time and counts the whole list', async () => {
+  const conversations = Array.from({ length: 23 }, (_, index) => ({ id: `chat-${index + 1}`, title: `Chat ${index + 1}`, updatedAt: 1000 - index }));
+  const excluded = [
+    { id: 'archived', title: 'Archived chat', state: 'archived', updatedAt: 1001 },
+    { id: 'deleted', title: 'Deleted chat', state: 'deleted', updatedAt: 1002 },
+    { id: 'child', title: 'Child chat', relationStatus: 'resolved', rootSessionId: 'chat-1', updatedAt: 1003 },
+  ];
+  let dashboard = sessionDashboard([...conversations, ...excluded]);
+  const readDashboard = () => dashboard;
+  const harness = await interfaceHarness({ recent_projects: () => [project], saved_project_dashboard: readDashboard, project_dashboard: readDashboard });
+  await harness.ready;
+  harness.element('choose-folder').click(); await flush();
+  const count = harness.element('sidebar-chat-count');
+  const more = harness.element('show-more-chats');
+  const rows = () => [...harness.element('sidebar-session-list').querySelectorAll('.sidebar-session')];
+  const expected = conversations.map(conversation => fixtureConversationKey(conversation.id));
+  const visible = () => rows().map(row => row.dataset.sessionId);
+
+  assert.deepEqual(visible(), expected.slice(0, 10));
+  assert.equal(count.parentElement.textContent, 'Chats (23)');
+  assert.equal(count.hidden, false);
+  assert.equal(more.hidden, false);
+  more.focus(); more.click();
+  assert.deepEqual(visible(), expected.slice(0, 20));
+  assert.equal(harness.dom.window.document.activeElement, rows()[10]);
+  assert.equal(count.textContent, '(23)');
+  assert.equal(more.hidden, false);
+
+  harness.element('refresh-sessions').click(); await flush();
+  assert.deepEqual(visible(), expected.slice(0, 20));
+  more.click();
+  assert.deepEqual(visible(), expected);
+  assert.equal(harness.dom.window.document.activeElement, rows()[20]);
+  assert.equal(more.hidden, true);
+
+  harness.element('project-navigation').click(); await flush();
+  harness.element('sidebar-project-list').querySelector('button').click(); await flush();
+  assert.deepEqual(visible(), expected.slice(0, 10));
+  assert.equal(more.hidden, false);
+  dashboard = sessionDashboard([]);
+  harness.element('refresh-sessions').click(); await flush();
+  assert.deepEqual(visible(), []);
+  assert.equal(count.textContent, '(0)');
+  assert.equal(more.hidden, true);
+  harness.dom.window.close();
+});
+
 test('a live chat stays reachable while the first history read is pending or fails', async () => {
   const pending = deferred();
   const harness = await interfaceHarness({ project_dashboard: () => pending.promise });

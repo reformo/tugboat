@@ -28,21 +28,18 @@ interface SignInControls {
 
 export async function initializeProviderSignIn(
   provider: Provider,
-  settings: SignInControls,
+  controls: SignInControls,
   changed: () => void,
   completed: () => Promise<void>,
-  setup: SignInControls,
 ): Promise<ProviderSignIn> {
   const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-  const views = [settings, setup].map(identifiers => ({
-    signIn: element<HTMLButtonElement>(identifiers.signIn),
-    cancel: element<HTMLButtonElement>(identifiers.cancel),
-    message: element(identifiers.status),
-    code: identifiers.deviceCode ? {
-      field: element(identifiers.deviceCode.field),
-      input: element<HTMLInputElement>(identifiers.deviceCode.input),
-    } : null,
-  }));
+  const signIn = element<HTMLButtonElement>(controls.signIn);
+  const cancel = element<HTMLButtonElement>(controls.cancel);
+  const message = element(controls.status);
+  const code = controls.deviceCode ? {
+    field: element(controls.deviceCode.field),
+    input: element<HTMLInputElement>(controls.deviceCode.input),
+  } : null;
   const label = provider === 'chatgpt' ? 'ChatGPT' : 'Claude';
   let operation: 'idle' | 'starting' | 'opening' | 'cancelling' = 'idle';
   let account = { signedIn: false, busy: false };
@@ -60,16 +57,14 @@ export async function initializeProviderSignIn(
       : account.signedIn ? 'Sign in with another account' : 'Sign in with ' + label;
     const status = error ?? current?.message ?? '';
     const progress = busy && !waiting && operation !== 'cancelling' && !error ? status || 'Connecting ' + label + '…' : null;
-    for (const { signIn, cancel, message, code } of views) {
-      const inline = signIn.id === setup.signIn;
-      signIn.textContent = action;
-      signIn.disabled = account.busy || busy;
-      cancel.hidden = !active() || current?.phase === 'saving';
-      cancel.disabled = account.busy || operation === 'cancelling';
-      message.textContent = inline ? progress ?? status : status;
-      message.hidden = !inline && progress !== null;
-      setBusy(message, busy && operation !== 'cancelling');
-      if (!code) continue;
+    signIn.textContent = action;
+    signIn.disabled = account.busy || busy;
+    cancel.hidden = !active() || current?.phase === 'saving';
+    cancel.disabled = account.busy || operation === 'cancelling';
+    message.textContent = status;
+    message.hidden = progress !== null;
+    setBusy(message, busy && operation !== 'cancelling');
+    if (code) {
       code.input.value = current?.userCode ?? '';
       code.field.hidden = !waiting || code.input.value === '';
     }
@@ -85,7 +80,7 @@ export async function initializeProviderSignIn(
     if (wasActive && !active()) void completed();
   }
 
-  async function run(action: 'start' | 'open' | 'cancel', { signIn, cancel }: typeof views[number]): Promise<void> {
+  async function run(action: 'start' | 'open' | 'cancel'): Promise<void> {
     if (operation !== 'idle' && action !== 'cancel') return;
     const restoreFocus = action === 'cancel' && document.activeElement === cancel;
     operation = action === 'start' ? 'starting' : action === 'open' ? 'opening' : 'cancelling';
@@ -101,11 +96,9 @@ export async function initializeProviderSignIn(
     }
   }
 
-  for (const view of views) {
-    view.signIn.addEventListener('click', () => { void run(appDataStore.getState().providerLogins[provider]?.phase === 'waiting' ? 'open' : 'start', view); });
-    view.cancel.addEventListener('click', () => { void run('cancel', view); });
-    view.code?.input.addEventListener('focus', () => { view.code?.input.select(); });
-  }
+  signIn.addEventListener('click', () => { void run(appDataStore.getState().providerLogins[provider]?.phase === 'waiting' ? 'open' : 'start'); });
+  cancel.addEventListener('click', () => { void run('cancel'); });
+  code?.input.addEventListener('focus', () => { code.input.select(); });
   await listen<LoginStatus>('provider-login-changed', event => { accept(event.payload); });
   try { accept(await invoke<LoginStatus>('provider_login_status', { provider })); }
   catch (caught) { error = String(caught); render(); }

@@ -19,7 +19,14 @@ test('Help opens the complete bundled user guide and supports view navigation', 
   assert.equal(harness.element('project-navigation').hasAttribute('aria-current'), false);
   assert.equal(document.activeElement, harness.element('help-heading'));
   const guide = new harness.dom.window.DOMParser().parseFromString(fs.readFileSync(root + 'docs/user-guide.html', 'utf8'), 'text/html');
-  assert.equal(help.textContent, guide.querySelector('main').textContent);
+  const sourceSections = [...guide.querySelectorAll('main > section')];
+  const articles = [...help.querySelectorAll('#help-articles > section')];
+  assert.deepEqual(articles.map(article => [article.id, article.textContent]), sourceSections.map(section => [section.id, section.textContent]));
+  const topics = [...help.querySelectorAll('#help-topics a')].map(link => link.hash);
+  assert.deepEqual(topics.sort(), sourceSections.map(section => '#' + section.id).sort());
+  assert.equal(harness.element('help-index').hidden, false);
+  assert.equal(harness.element('help-articles').hidden, true);
+  assert.equal(harness.element('help-all-topics').hidden, true);
   const links = [...help.querySelectorAll('a')];
   assert.ok(links.length > 0);
   for (const link of links) {
@@ -40,6 +47,53 @@ test('Help opens the complete bundled user guide and supports view navigation', 
   assert.equal(harness.element('project-view').hidden, false);
   assert.equal(harness.element('project-navigation').getAttribute('aria-current'), 'page');
   harness.dom.window.close();
+});
+
+test('Help searches guide text and returns from linked articles to the filtered index', async t => {
+  const harness = await interfaceHarness();
+  const { document, Event } = harness.dom.window;
+  t.after(() => harness.dom.window.close());
+  await harness.ready;
+  harness.element('help-navigation').click();
+  const search = harness.element('help-search');
+  const topics = harness.element('help-topics');
+  const articles = harness.element('help-articles');
+  const back = harness.element('help-all-topics');
+  const workspace = harness.element('help-view').closest('main');
+  const visibleTopics = () => [...topics.querySelectorAll('li:not([hidden]) a')];
+  const visibleArticles = () => [...articles.querySelectorAll(':scope > section:not([hidden])')].map(article => article.id);
+  const searchFor = value => { search.value = value; search.dispatchEvent(new Event('input')); };
+
+  searchFor('no-such-help-topic');
+  assert.equal(visibleTopics().length, 0);
+  assert.match(harness.element('help-search-status').textContent, /No topics match/);
+  searchFor('  GATEKEEPER  ');
+  const [troubleshooting] = visibleTopics();
+  assert.deepEqual(visibleTopics().map(link => link.hash), ['#troubleshooting']);
+  assert.equal(harness.element('help-search-status').textContent, '1 topic found.');
+
+  workspace.scrollTop = 120;
+  troubleshooting.click();
+  assert.equal(harness.element('help-index').hidden, true);
+  assert.equal(articles.hidden, false);
+  assert.equal(back.hidden, false);
+  assert.deepEqual(visibleArticles(), ['troubleshooting']);
+  assert.equal(document.activeElement, harness.element('troubleshooting').querySelector('h2'));
+  articles.querySelector('a[href="#fix-operations"]').click();
+  assert.equal(document.activeElement, harness.element('fix-operations'));
+  articles.querySelector('a[href="#settings"]').click();
+  assert.deepEqual(visibleArticles(), ['settings']);
+  assert.equal(document.activeElement, harness.element('settings').querySelector('h2'));
+
+  workspace.scrollTop = 400;
+  back.click();
+  assert.equal(articles.hidden, true);
+  assert.equal(harness.element('help-index').hidden, false);
+  assert.equal(search.value, '  GATEKEEPER  ');
+  assert.equal(workspace.scrollTop, 120);
+  assert.equal(document.activeElement, troubleshooting);
+  searchFor('');
+  assert.equal(visibleTopics().length, articles.children.length);
 });
 
 test('a late project check keeps Help visible and retains the selected project', async () => {

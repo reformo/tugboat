@@ -23,7 +23,7 @@
   <main id="main" tabindex="-1">
     <h1>Architecture decisions</h1>
     <p class="lead">The project folder belongs to the user. Brig runs the agents. Tugboat connects these systems and owns the records that let a user return to a chat.</p>
-    <p>This architecture decision record (ADR) covers the Tugboat 0.3.0 source reviewed on 14 November 2026. Each numbered decision describes behavior implemented in this checkout. A reason marked “inferred” explains the construction seen in code. A recorded reason comes from a project document, implementation comment, or test.</p>
+    <p>These architecture decision records (ADRs) describe Tugboat's design and how it changed. Links between decisions identify changes to earlier behavior. An inferred reason explains what the code does. A recorded reason comes from a project document, implementation comment, or test.</p>
 
     <nav class="contents" aria-label="Decision groups">
       <ul>
@@ -81,12 +81,12 @@
       <h2 id="boot-heading">Environment startup presentation</h2>
       <article id="adr-021">
         <h3>ADR-021 · Reserve a bounded native terminal area for boot status</h3>
-        <p>Environment startup opens its setup terminal in the workspace. A centered web card shows the selected agent and a bundled Three.js animation. The native layout accepts an optional card rectangle relative to the terminal surface.</p>
+        <p>A centered web card shows setup status, elapsed time, and a bundled Three.js animation. On first startup, the card appears in the project workspace. Opening the setup terminal moves it to the terminal surface, where the native layout accepts the card rectangle.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>The AppKit terminal is above the webview. A web stacking order cannot cover it. A bounded drawing exclusion reveals the status card while keeping setup output visible around it.</dd>
           <dt>Consequence</dt>
-          <dd>Rust validates the rectangle. AppKit clips drawing and pointer input to the terminal bounds. Omitting the rectangle restores the full surface. Startup presentation follows project, environment, and terminal identity. Navigation releases the animation without stopping the process. Reduced motion uses a still frame. The setup terminal closes after its process exits. Failures keep their project error and retry action.</dd>
+          <dd>Rust validates the rectangle. AppKit clips drawing and pointer input to the terminal bounds. Omitting the rectangle restores the full surface. Startup presentation follows project, environment, and terminal identity. Navigation releases the animation without stopping the process. Reduced motion uses a still frame. After successful setup, the terminal closes when its process exits. If setup fails, Tugboat retains the available output.</dd>
         </dl>
         <p class="source"><a href="../src/terminal/environment-boot.ts">Boot presentation</a> · <a href="../src/terminal/boot-animation.ts">Three.js scene</a> · <a href="../src-tauri/src/terminal/mod.rs">Native layout contract</a> · <a href="../src-tauri/native/TerminalDrawing.m">Drawing exclusion</a> · <a href="../tests/native/composition.m">Native drawing and input checks</a></p>
       </article>
@@ -106,12 +106,13 @@
         <h3>ADR-023 · Prepare the guest automatically for a connected provider</h3>
         <dl>
           <dt>Decision</dt>
-          <dd>The user connects the provider account. Tugboat checks the project policy, starts or reuses the shared guest, and verifies both agents automatically.</dd>
+          <dd>A successful Mac check and a connected account for the selected agent allow automatic first startup. Tugboat checks the project policy, starts or reuses the shared guest, and checks both agents.</dd>
           <dt>Reason</dt>
           <dd>New Chat specifies the project and the agent. The saved project settings provide the inputs for guest setup.</dd>
           <dt>Consequence</dt>
-          <dd>A chat requested during startup opens once verification and account setup succeed. A failed check displays its error. Project settings provides access to the checked plan and diagnostic output.</dd>
+          <dd>A pending chat opens when its agent is ready. A recorded first-start failure can trigger up to three retries with the same plan. Wait for the previous setup terminal to exit before retrying. Cancel preparation, Stop, and project switches clear pending retries. The project shows the final error and recovery actions.</dd>
         </dl>
+        <p class="source"><a href="../src/main.ts">Automatic startup and retry</a> · <a href="../tests/frontend/frontend-flow.test.mjs">First-chat checks</a></p>
       </article>
 
       <article id="adr-022">
@@ -142,7 +143,7 @@
 
       <article id="adr-005">
         <h3>ADR-005 · Verify the Brig execution plan before starting work</h3>
-        <p>Rust resolves the saved project and environment. It compares the current Brig policy to the saved fingerprint, a hash of its contents. It validates the execution plan and derives a second fingerprint from the project, environment, agent kind, profile, and executable plan fields.</p>
+        <p>Rust resolves the saved project and shared environment. It compares the current Brig policy to the saved fingerprint, a hash of its contents. It validates the execution plan and derives a second fingerprint from the project, environment, profile, and executable plan fields.</p>
         <dl>
           <dt>Reason (inferred)</dt>
           <dd>A policy, folder, or running guest can change after the interface shows a preview. A process launched from an old preview could act on a different target.</dd>
@@ -178,7 +179,7 @@
 
       <article id="adr-008">
         <h3>ADR-008 · Retain ownership and progress through environment removal</h3>
-        <p>Preparation can adopt a matching Brig session. Multiple matches require an explicit choice. The app records ownership of the session, binding, and policy separately. Removal takes a preview for one environment or for all environments in the project. It checks the fingerprint and the typed confirmation against the current target.</p>
+        <p>The app records ownership of the session, binding, and policy separately. Preparation refuses a new project if an existing session uses its reserved reference. Removal previews the shared environment and checks the fingerprint and typed confirmation against the current target.</p>
         <dl>
           <dt>Reason (inferred)</dt>
           <dd>A user can manage Brig outside Tugboat. A removal request spans several external operations. An interruption can leave some steps complete.</dd>
@@ -194,7 +195,7 @@
 
       <article id="adr-009">
         <h3>ADR-009 · Keep one renewable host account per provider</h3>
-        <p>Tugboat stores renewable credentials in private files under the active records folder. ChatGPT uses <code>chatgpt/session.json</code>. Claude uses <code>claude/session.json</code>. Each eligible environment receives access credentials for its own provider. The host retains the refresh token.</p>
+        <p>Tugboat stores renewable credentials in private files under the active records folder. ChatGPT uses <code>chatgpt/session.json</code>. Claude uses <code>claude/session.json</code>. A verified project guest can receive an access copy for each agent. The host retains the refresh tokens.</p>
         <dl>
           <dt>Recorded reason</dt>
           <dd>The user can sign in once across projects while each environment keeps its own configuration, policy, history, and lifecycle.</dd>

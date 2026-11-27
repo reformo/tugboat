@@ -1,7 +1,28 @@
 use super::{codecs, error, Environment, Store};
 use crate::{agents::AgentKind, usage};
-use serde::Serialize;
-use std::collections::BTreeMap;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, ops::Range};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DateRangeInput {
+    start_milliseconds: i64,
+    end_exclusive_milliseconds: i64,
+}
+
+impl DateRangeInput {
+    pub(crate) fn parse(self) -> Result<Range<DateTime<Utc>>, String> {
+        let start = DateTime::from_timestamp_millis(self.start_milliseconds)
+            .ok_or("Invalid start date.")?;
+        let end = DateTime::from_timestamp_millis(self.end_exclusive_milliseconds)
+            .ok_or("Invalid end date.")?;
+        if start > end {
+            return Err("The end date is before the start date.".into());
+        }
+        Ok(start..end)
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +37,7 @@ impl Store {
     pub(crate) fn usage_breakdown(
         &self,
         environment: &Environment,
+        date_range: Option<&Range<DateTime<Utc>>>,
     ) -> Result<Vec<BreakdownRow>, String> {
         self.verify()?;
         let Some(environment_key) = codecs::environment_key(&self.connection, environment)? else {
@@ -37,7 +59,11 @@ impl Store {
             let record_id: i64 = record.get(0).map_err(error)?;
             let session_id: String = record.get(1).map_err(error)?;
             let turns = codecs::read_turns(&self.connection, record_id)?;
-            add_turns(&mut groups, usage::own_turns(&turns, &session_id));
+            add_turns(
+                &mut groups,
+                usage::own_turns(&turns, &session_id),
+                date_range,
+            );
         }
         Ok(groups
             .into_iter()
@@ -54,12 +80,19 @@ impl Store {
 fn add_turns(
     groups: &mut BTreeMap<(Option<String>, Option<String>), usage::Summary>,
     turns: BTreeMap<String, usage::TurnUsage>,
+    date_range: Option<&Range<DateTime<Utc>>>,
 ) {
     for turn in turns.into_values() {
-        if turn.requests.is_empty() {
+        if turn.requests.is_empty() && date_range.is_none() {
             groups.entry((None, None)).or_default().unmeasured_turns += 1;
         }
         for request in turn.requests {
+            if date_range.is_some_and(|range| {
+                !DateTime::parse_from_rfc3339(&request.at)
+                    .is_ok_and(|time| range.contains(&time.to_utc()))
+            }) {
+                continue;
+            }
             let group = (request.model.clone(), request.effort.clone());
             groups.entry(group).or_default().add_request(&request);
         }
